@@ -81,3 +81,8 @@ BundleArtifacts/
 *.msixupload
 *.msixsym
 *.msi
+
+## Agents junk Data
+.claude
+AGENTS.md
+CLAUDE.md
