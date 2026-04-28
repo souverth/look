@@ -2,15 +2,16 @@
 
 <img src="assets/icon.png" alt="look icon" width="96" />
 
-A keyboard-first, local-first macOS launcher. Open apps, files, folders, clipboard history, and quick commands without leaving the keyboard.
+A keyboard-first, local-first launcher for macOS and Windows. Open apps, files, folders, clipboard history, and quick commands without leaving the keyboard.
 
-[![CI](https://github.com/kunkka19xx/look/actions/workflows/ci.yml/badge.svg)](https://github.com/kunkka19xx/look/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Platform](https://img.shields.io/badge/platform-macOS%2015%2B-lightgrey) [![Homebrew](https://img.shields.io/badge/homebrew-cask-orange)](#install) [![Stars](https://img.shields.io/github/stars/kunkka19xx/look?style=flat&logo=github)](https://github.com/kunkka19xx/look/stargazers)
+![Platform](https://img.shields.io/badge/platform-macOS%2015%2B%20%7C%20Windows%2010%2B-lightgrey)
+📘 [Docs](https://noah-code.com/docs/look) · 📖 [User guide](docs/user-guide.md) · 🎬 [Demo video](https://www.youtube.com/watch?v=4Twb4We3PIs)
 
 https://github.com/user-attachments/assets/176a929d-edbe-46a0-a0c5-229eb9b31c1c
 
-> 📘 **Docs:** [noah-code.com/docs/look](https://noah-code.com/docs/look) · 🎬 [Demo on YouTube](https://www.youtube.com/watch?v=4Twb4We3PIs)
-
 ## Install
+
+**macOS:**
 
 ```bash
 brew tap kunkka19xx/tap
@@ -19,7 +20,71 @@ brew install --cask look
 
 Then bind `Cmd+Space` to Look (disable Spotlight's shortcut in `System Settings > Keyboard > Keyboard Shortcuts > Spotlight`). Release builds are signed and notarized — no Gatekeeper bypass needed.
 
-Other install options and manual setup: see [Installation details](#installation-details).
+**Windows:**
+
+The Windows port is in active development on the `big/windows-porting` branch. Install the latest release with one PowerShell line (no admin required):
+
+```powershell
+iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) }"
+```
+
+The script auto-detects x64 vs ARM64, pulls the matching release zip, verifies its SHA256 against the published manifest, extracts to `%LOCALAPPDATA%\Programs\Look`, and creates Start menu + desktop shortcuts. The release bundle is self-contained (`<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>`) so no separate runtime install is needed.
+
+Pin a version, install from a fork, or uninstall:
+
+```powershell
+# pin a version
+iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) } -Version 1.0.0"
+
+# fork
+iex "& { $(irm https://raw.githubusercontent.com/<owner>/<fork>/main/scripts/windows/install-look.ps1) } -Repo <owner>/<fork>"
+
+# uninstall
+iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) } -Uninstall"
+```
+
+SmartScreen may warn on first run while reputation builds — click "More info → Run anyway". The launcher's global hotkey (`Alt+Space`) is configurable in Settings → Appearance.
+
+<details>
+<summary>Other install options (curl, pin version, update/uninstall)</summary>
+
+**macOS — Homebrew update / uninstall:**
+
+```bash
+# update
+brew upgrade --cask kunkka19xx/tap/look
+
+# uninstall
+brew uninstall --cask look
+```
+
+**macOS — curl installer:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/install-look.sh | bash
+```
+
+Pin a specific version or repo fork:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/install-look.sh | bash -s -- --version <version> --repo kunkka19xx/look
+```
+
+Direct URL:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/install-look.sh | bash -s -- --url "https://github.com/kunkka19xx/look/releases/download/v<version>/Look-<version>-macOS.zip"
+```
+
+CLI naming note: macOS ships `/usr/bin/look`, so terminal command examples use `lookapp`.
+
+If Look is fully quit and Spotlight is still unbound, relaunch from Launchpad, or via:
+
+```bash
+open "/Applications/Look.app"
+```
+
+</details>
 
 ## What you can do
 
@@ -44,15 +109,17 @@ If you want a launcher that stays out of your way and does exactly what you aske
 
 ## Essential shortcuts
 
-| Key | Action |
-|---|---|
-| `Cmd+Space` | Toggle launcher |
-| `Enter` | Open / run |
-| `Cmd+Enter` | Web search |
-| `Cmd+F` | Reveal in Finder |
-| `Cmd+/` | Command mode (`calc`, `shell`, `kill`, `sys`) |
-| `Cmd+Shift+,` | Settings |
-| `Escape` | Back / hide |
+| Action                                        | macOS            | Windows             |
+| --------------------------------------------- | ---------------- | ------------------- |
+| Toggle launcher                               | `Cmd+Space`      | `Alt+Space`         |
+| Open / run                                    | `Enter`          | `Enter`             |
+| Web search                                    | `Cmd+Enter`      | `Ctrl+Enter`        |
+| Reveal in file manager                        | `Cmd+F` (Finder) | `Ctrl+F` (Explorer) |
+| Command mode (`calc`, `shell`, `kill`, `sys`) | `Cmd+/`          | `Ctrl+/`            |
+| Settings                                      | `Cmd+Shift+,`    | `Ctrl+Shift+,`      |
+| Back / hide                                   | `Escape`         | `Escape`            |
+
+(Throughout the rest of the docs, `Cmd+X` on macOS maps to `Ctrl+X` on Windows; the launcher-toggle hotkey is the only one that uses a different modifier — `Alt+Space` instead of `Cmd+Space` because Windows reserves `Win+Space`.)
 
 Full reference: [docs/user-guide.md](docs/user-guide.md).
 
@@ -82,48 +149,6 @@ Built-in: Catppuccin, Tokyo Night, Rose Pine, Gruvbox, Dracula, Kanagawa, plus C
 - [Contributing](CONTRIBUTING.md) — how to contribute
 - [Development](DEVELOPMENT.md) — building locally, repo layout, release process
 
-## Installation details
-
-Homebrew (install and update):
-
-```bash
-# install
-brew tap kunkka19xx/tap
-brew install --cask look
-
-# update
-brew upgrade --cask kunkka19xx/tap/look
-
-# uninstall
-brew uninstall --cask look
-```
-
-Curl installer:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/install-look.sh | bash
-```
-
-Pin a specific version or repo fork:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/install-look.sh | bash -s -- --version <version> --repo kunkka19xx/look
-```
-
-Direct URL:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/install-look.sh | bash -s -- --url "https://github.com/kunkka19xx/look/releases/download/v<version>/Look-<version>-macOS.zip"
-```
-
-CLI naming note: macOS ships `/usr/bin/look`, so terminal command examples use `lookapp`.
-
-If Look is fully quit and Spotlight is still unbound, relaunch from Launchpad, or via:
-
-```bash
-open "/Applications/Look.app"
-```
-
 ## Scope
 
 In scope:
@@ -138,7 +163,7 @@ Out of scope for v1:
 - semantic/vector search
 - full content indexing (names and metadata only)
 
-Platform direction: macOS now, Windows next. Linux is not a near-term priority because `rofi` already covers the workflow well.
+Platform direction: macOS shipped, Windows in active development on `big/windows-porting`. Linux is not a near-term priority because `rofi` already covers the workflow well.
 
 ## License
 
