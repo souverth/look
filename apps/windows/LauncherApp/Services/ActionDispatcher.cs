@@ -31,6 +31,7 @@ public sealed class ActionDispatcher
         if (!forceNewWindow && kind == LauncherActionKind.App && TryActivateExistingAppWindow(result.Path, result.Title))
         {
             Log("Dispatch activate-existing succeeded");
+            RecordUsage(result, kind);
             return true;
         }
 
@@ -45,10 +46,17 @@ public sealed class ActionDispatcher
         };
 
         if (opened)
+        {
+            RecordUsage(result, kind);
             return true;
+        }
 
         bool fallback = _shellExecute.Open(result.Path);
         Log($"Dispatch fallback open result={fallback}");
+        if (fallback)
+        {
+            RecordUsage(result, kind);
+        }
         return fallback;
     }
 
@@ -218,6 +226,42 @@ public sealed class ActionDispatcher
         return LauncherActionKind.Unknown;
     }
 
+    // Records a successful launch so the Rust engine's rank_score (core/ranking/src/lib.rs)
+    // sees the use_count bump. UWP entries are seeded into sqlite as `app:uwp:<AUMID>` by
+    // UwpAppService on startup, so they go through this same FFI path with no special-casing.
+    private static void RecordUsage(LauncherResult result, LauncherActionKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(result.Id))
+        {
+            Log("Dispatch record_usage skipped: empty id");
+            return;
+        }
+
+        string? action = kind switch
+        {
+            LauncherActionKind.App => "open_app",
+            LauncherActionKind.File => "open_file",
+            LauncherActionKind.Folder => "open_folder",
+            LauncherActionKind.Setting => "open",
+            _ => null,
+        };
+
+        if (action is null)
+        {
+            return;
+        }
+
+        try
+        {
+            bool ok = LauncherApp.Bridge.FfiBindings.look_record_usage(result.Id, action);
+            Log($"Dispatch record_usage: id='{result.Id}' action='{action}' ok={ok}");
+        }
+        catch (Exception ex)
+        {
+            Log($"Dispatch record_usage threw: {ex.Message}");
+        }
+    }
+
     private bool OpenSetting(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -233,6 +277,17 @@ public sealed class ActionDispatcher
     {
         if (string.IsNullOrWhiteSpace(path))
             return false;
+
+        // UWP entries: shell:AppsFolder\<PackageFamilyName>!<AppId>. Process.GetProcessesByName(title)
+        // misses these whenever the AppX display name and the executable basename diverge —
+        // Windows Terminal ("Terminal" vs "WindowsTerminal.exe"), Photos, Snipping Tool, etc.
+        // So we scan all running processes and match the WindowsApps install dir's package
+        // name prefix against MainModule.FileName, which always contains the package full name
+        // (e.g. C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_<ver>_<arch>__<hash>\WindowsTerminal.exe).
+        if (TryActivateUwpByAumid(path))
+        {
+            return true;
+        }
 
         string resolved = ResolveExecutablePath(path);
         string normalizedPath = NormalizePath(resolved);
@@ -297,6 +352,123 @@ public sealed class ActionDispatcher
         }
 
         return false;
+    }
+
+    private static bool TryActivateUwpByAumid(string path)
+    {
+        const string prefix = "shell:AppsFolder\\";
+        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        string targetAumid = path.Substring(prefix.Length).Trim();
+        if (targetAumid.IndexOf('!') <= 0)
+        {
+            return false;
+        }
+
+        Process[] processes;
+        try
+        {
+            processes = Process.GetProcesses();
+        }
+        catch
+        {
+            return false;
+        }
+
+        // Exact-match by full AUMID (PackageFamilyName!AppId) via GetApplicationUserModelId
+        // on each candidate process. Matching only on the package family name was ambiguous
+        // when a single package exposes multiple AppIds (e.g. utilities that ship a "Settings"
+        // entry alongside the main app) — selecting one would activate the other's window
+        // and report success. Pre-filter by `\WindowsApps\` in the exe path so we only call
+        // the kernel32 API on processes that could plausibly host a UWP entrypoint.
+        foreach (var process in processes)
+        {
+            try
+            {
+                if (process.MainWindowHandle == IntPtr.Zero)
+                    continue;
+
+                string? processPath;
+                try
+                {
+                    processPath = process.MainModule?.FileName;
+                }
+                catch
+                {
+                    // Access-denied on processes from other users / elevated; skip.
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(processPath))
+                    continue;
+
+                if (processPath.IndexOf("\\WindowsApps\\", StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                string? processAumid = TryGetProcessAumid(process.Id);
+                if (processAumid is null)
+                    continue;
+
+                if (!string.Equals(processAumid, targetAumid, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                ActivateWindow(process.MainWindowHandle);
+                return true;
+            }
+            catch
+            {
+            }
+            finally
+            {
+                try { process.Dispose(); } catch { }
+            }
+        }
+
+        return false;
+    }
+
+    private static string? TryGetProcessAumid(int processId)
+    {
+        IntPtr handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)processId);
+        if (handle == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            uint length = 0;
+            int sizeProbeRc = GetApplicationUserModelId(handle, ref length, null);
+            // ERROR_INSUFFICIENT_BUFFER (122) is the only path that gives us the real length
+            // for non-empty AUMIDs. Anything else (APPMODEL_ERROR_NO_APPLICATION = 15700,
+            // success with length=0, etc.) means there's no AUMID to match against.
+            if (sizeProbeRc != ERROR_INSUFFICIENT_BUFFER || length == 0)
+            {
+                return null;
+            }
+
+            char[] buffer = new char[length];
+            int rc = GetApplicationUserModelId(handle, ref length, buffer);
+            if (rc != 0 || length == 0)
+            {
+                return null;
+            }
+
+            // Returned length includes the trailing null terminator; trim it.
+            int actual = (int)length;
+            if (actual > 0 && buffer[actual - 1] == '\0')
+            {
+                actual -= 1;
+            }
+            return actual <= 0 ? null : new string(buffer, 0, actual);
+        }
+        finally
+        {
+            CloseHandle(handle);
+        }
     }
 
     private static IEnumerable<string> EnumerateProcessNameCandidates(string? normalizedExePath, string? title)
@@ -410,6 +582,9 @@ public sealed class ActionDispatcher
 
     private const int SW_RESTORE = 9;
 
+    private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    private const int ERROR_INSUFFICIENT_BUFFER = 122;
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
@@ -421,4 +596,17 @@ public sealed class ActionDispatcher
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetApplicationUserModelId(
+        IntPtr hProcess,
+        ref uint applicationUserModelIdLength,
+        [Out] char[]? applicationUserModelId);
 }
