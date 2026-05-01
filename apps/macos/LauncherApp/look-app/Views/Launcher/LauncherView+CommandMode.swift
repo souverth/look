@@ -35,8 +35,15 @@ extension LauncherView {
         isCommandMode = true
         commandInput = ""
         commandFeedback = ""
-        activeCommandID = AppConstants.Launcher.Command.calc
-        selectedCommandID = AppConstants.Launcher.Command.calc
+        // Reopen the last-visited command panel; fall back to /calc on
+        // first run (or if the persisted id refers to a command no
+        // longer in the catalog).
+        let preferred = appUIState.lastCommandID ?? AppConstants.Launcher.Command.calc
+        let resolved = commandCatalog.contains { $0.id == preferred }
+            ? preferred
+            : AppConstants.Launcher.Command.calc
+        activeCommandID = resolved
+        selectedCommandID = resolved
         focusActiveInput(recoveryDelays: [0.0, 0.04], activateApp: false)
     }
 
@@ -219,27 +226,39 @@ extension LauncherView {
 
     @ViewBuilder
     var commandModeView: some View {
-        GeometryReader { proxy in
-            let splitSpacing: CGFloat = 8
-            let dividerWidth: CGFloat = 1
-            let usableWidth = max(0, proxy.size.width - splitSpacing - dividerWidth)
-            let leftWidth = max(170, usableWidth * 0.25)
+        // Fixed sidebar width — the launcher window is non-resizable
+        // (minWidth 620) so the previous GeometryReader-driven formula
+        // (`max(170, usableWidth * 0.25)`) always evaluated to 170 in
+        // practice. GeometryReader inside a hidden-titlebar window
+        // re-measures during AppKit layout passes (including window
+        // drag), which caused visible flicker on this screen. Drop it.
+        let splitSpacing: CGFloat = 8
+        let dividerWidth: CGFloat = 1
+        let leftWidth: CGFloat = 170
 
-            HStack(spacing: splitSpacing) {
-                CommandListView(
-                    commands: commandCatalog,
-                    selectedID: selectedCommandID,
-                    activeID: activeCommandID,
-                    themeStore: themeStore,
-                    onSelect: selectCommand
-                )
-                .frame(width: leftWidth)
-                .frame(maxHeight: .infinity, alignment: .topLeading)
+        // Hide the command sidebar while /pomo is in standby/idle mode
+        // — keeps the user's focus on the clock + music card with no
+        // distractions. Other commands keep the sidebar always visible.
+        let hideSidebar = activeCommandID == AppConstants.Launcher.Command.pomo
+            && PomoSharedState.shared.idle
 
-                Rectangle()
-                    .fill(themeStore.dividerColor())
-                    .frame(width: dividerWidth)
-                    .padding(.vertical, 2)
+        HStack(spacing: splitSpacing) {
+                if !hideSidebar {
+                    CommandListView(
+                        commands: commandCatalog,
+                        selectedID: selectedCommandID,
+                        activeID: activeCommandID,
+                        themeStore: themeStore,
+                        onSelect: selectCommand
+                    )
+                    .frame(width: leftWidth)
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
+
+                    Rectangle()
+                        .fill(themeStore.dividerColor())
+                        .frame(width: dividerWidth)
+                        .padding(.vertical, 2)
+                }
 
                 VStack(alignment: .leading, spacing: 6) {
                     if let activeCommand {
@@ -251,7 +270,9 @@ extension LauncherView {
                                 themeStore: themeStore,
                                 onSubmit: handleSubmit
                             )
-                        } else {
+                        } else if activeCommandID != AppConstants.Launcher.Command.pomo {
+                            // /pomo renders its own header (with "Running: <name>"
+                            // status) inside its panel — skip the redundant outer one.
                             CommandHeaderBar(
                                 command: activeCommand,
                                 themeStore: themeStore,
@@ -261,8 +282,13 @@ extension LauncherView {
                     }
 
                     ZStack(alignment: .topLeading) {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(themeStore.panelFillColor())
+                        // Command mode now has a solid opaque backdrop at
+                        // the launcher level (themedBackground branches on
+                        // isCommandMode), so the previous outer panel-fill
+                        // RoundedRectangle isn't needed — its only purpose
+                        // was layering a card over the visualEffect blur,
+                        // which is no longer present here. Each command
+                        // owns its own card-style backdrops where wanted.
 
                     if activeCommandID == AppConstants.Launcher.Command.kill {
                         let killSearchTerm = commandArgsPart.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -290,6 +316,9 @@ extension LauncherView {
                         } else if activeCommandID == AppConstants.Launcher.Command.sys {
                             SystemInfoView(themeStore: themeStore)
                                 .padding(8)
+                        } else if activeCommandID == AppConstants.Launcher.Command.pomo {
+                            PomoView(themeStore: themeStore)
+                                .padding(2)
                         } else {
                             VStack(alignment: .leading, spacing: 0) {
                                 CommandFeedbackView(
@@ -306,6 +335,5 @@ extension LauncherView {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
     }
 }

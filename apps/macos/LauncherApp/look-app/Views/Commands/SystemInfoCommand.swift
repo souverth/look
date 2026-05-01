@@ -79,7 +79,7 @@ struct SystemInfoView: View {
     }
 }
 
-enum SystemInfoCommand {
+nonisolated enum SystemInfoCommand {
     struct Snapshot {
         let items: [SystemInfoItem]
         let cpuLoad: host_cpu_load_info?
@@ -138,7 +138,7 @@ enum SystemInfoCommand {
         sysctlbyname("hw.model", nil, &size, nil, 0)
         var model = [CChar](repeating: 0, count: size)
         sysctlbyname("hw.model", &model, &size, nil, 0)
-        return String(cString: model)
+        return cStringArrayToString(model)
     }
 
     private static func getMacOSName(osVersion: OperatingSystemVersion) -> String {
@@ -176,7 +176,11 @@ enum SystemInfoCommand {
         var cachedMB: Double = 0
 
         if result == KERN_SUCCESS {
-            let pageSize = vm_kernel_page_size
+            // vm_kernel_page_size is a global var; Swift 6 flags it as
+            // not concurrency-safe. Use the host_page_size() function
+            // (process-local, sendable-safe) instead.
+            var pageSize: vm_size_t = 0
+            host_page_size(mach_host_self(), &pageSize)
             let activePages = Double(vmStats.active_count)
             let wirePages = Double(vmStats.wire_count)
             let compressedPages = Double(vmStats.compressor_page_count)
@@ -204,7 +208,7 @@ enum SystemInfoCommand {
         if size > 0 {
             var brand = [CChar](repeating: 0, count: size)
             sysctlbyname("machdep.cpu.brand_string", &brand, &size, nil, 0)
-            cpuBrand = String(cString: brand)
+            cpuBrand = cStringArrayToString(brand)
         }
 
         if cpuBrand == "Unknown" {
@@ -212,7 +216,7 @@ enum SystemInfoCommand {
             sysctlbyname("hw.machine", nil, &size, nil, 0)
             var machine = [CChar](repeating: 0, count: size)
             sysctlbyname("hw.machine", &machine, &size, nil, 0)
-            cpuBrand = String(cString: machine)
+            cpuBrand = cStringArrayToString(machine)
         }
 
         let usage = formatCPUUsage(current: currentLoad, previous: previousLoad)
@@ -348,5 +352,10 @@ enum SystemInfoCommand {
         }
 
         return items
+    }
+
+    private static func cStringArrayToString(_ buffer: [CChar]) -> String {
+        let bytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+        return String(decoding: bytes, as: UTF8.self)
     }
 }

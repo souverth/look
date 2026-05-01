@@ -1,14 +1,17 @@
 import AppKit
 import Darwin
+import UserNotifications
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotKeyManager = GlobalHotKeyManager()
+    private let pomoMenuBarItem = PomoMenuBarItem()
 
     // Grace period allows macOS "Quit & Reopen" handoff to release the previous process lock.
     private static let relaunchGracePeriodSeconds: TimeInterval = 0.8
     private static let contentionRetrySeconds: TimeInterval = 0.25
     private static let lockPollIntervalMicros: useconds_t = 50_000
-    private static var singletonLockFD: CInt = -1
+    nonisolated(unsafe) private static var singletonLockFD: CInt = -1
 
     deinit {
         SingleInstanceLock.release(Self.singletonLockFD)
@@ -23,6 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         hotKeyManager.registerToggleHotKey()
         NSApp.setActivationPolicy(.accessory)
+        pomoMenuBarItem.install()
+
+        // Notifications: ask for permission early (so the prompt isn't
+        // tied to the user being mid-pomodoro) and forward foreground
+        // deliveries through a delegate so banners aren't suppressed
+        // when the launcher window is the active app.
+        UNUserNotificationCenter.current().delegate = PomoNotifications.foregroundDelegate
+        PomoNotifications.requestPermissionEarly()
     }
 
     private func shouldTerminateDuplicateInstance() -> Bool {

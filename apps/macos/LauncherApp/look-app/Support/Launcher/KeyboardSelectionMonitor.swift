@@ -2,41 +2,42 @@ import AppKit
 import Foundation
 import OSLog
 
+@MainActor
 final class KeyboardSelectionMonitor {
     private var monitor: Any?
-    private var isKillConfirmationActive: () -> Bool = { false }
-    private static let logger = Logger(subsystem: "noah-code.Look", category: "ui-key")
-    private static let debugKeyLoggingEnabled: Bool = {
+    private var isKillConfirmationActive: @MainActor () -> Bool = { false }
+    nonisolated private static let logger = Logger(subsystem: "noah-code.Look", category: "ui-key")
+    nonisolated private static let debugKeyLoggingEnabled: Bool = {
         let env = ProcessInfo.processInfo.environment
         let raw = env["LOOK_UI_DEBUG_EVENTS"] ?? env["LOOK_DEV_HINT"] ?? ""
         return ["1", "true", "yes", "on"].contains(raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
     }()
 
-    private static func logKey(_ message: String) {
+    nonisolated private static func logKey(_ message: String) {
         guard Self.debugKeyLoggingEnabled else { return }
         Self.logger.notice("\(message, privacy: .public)")
     }
 
     func start(
-        onNext: @escaping () -> Void,
-        onPrevious: @escaping () -> Void,
-        onArrowDown: (() -> Void)? = nil,
-        onArrowUp: (() -> Void)? = nil,
-        onEnterCommandMode: @escaping () -> Void,
-        onExitCommandMode: @escaping () -> Void,
-        onHideLauncher: @escaping () -> Void,
-        inCommandMode: @escaping () -> Bool,
-        onWebSearch: @escaping () -> Void,
-        onRevealInFinder: @escaping () -> Void,
-        onCopySelection: @escaping () -> Bool,
-        onTogglePick: @escaping () -> Void,
-        onClearPicked: @escaping () -> Void,
-        onToggleHelp: @escaping () -> Void,
-        onDismissHelpIfVisible: @escaping () -> Bool,
-        onSelectCommandByIndex: @escaping (Int) -> Void,
-        onConfirmKill: (() -> Void)? = nil,
-        onCancelKill: (() -> Void)? = nil,
-        killConfirmationActive: @escaping () -> Bool = { false }
+        onNext: @escaping @MainActor () -> Void,
+        onPrevious: @escaping @MainActor () -> Void,
+        onArrowDown: (@MainActor () -> Void)? = nil,
+        onArrowUp: (@MainActor () -> Void)? = nil,
+        onEnterCommandMode: @escaping @MainActor () -> Void,
+        onExitCommandMode: @escaping @MainActor () -> Void,
+        onHideLauncher: @escaping @MainActor () -> Void,
+        inCommandMode: @escaping @MainActor () -> Bool,
+        onWebSearch: @escaping @MainActor () -> Void,
+        onRevealInFinder: @escaping @MainActor () -> Void,
+        onCopySelection: @escaping @MainActor () -> Bool,
+        onTogglePick: @escaping @MainActor () -> Void,
+        onClearPicked: @escaping @MainActor () -> Void,
+        onToggleHelp: @escaping @MainActor () -> Void,
+        onDismissHelpIfVisible: @escaping @MainActor () -> Bool,
+        onSelectCommandByIndex: @escaping @MainActor (Int) -> Void,
+        onConfirmKill: (@MainActor () -> Void)? = nil,
+        onCancelKill: (@MainActor () -> Void)? = nil,
+        killConfirmationActive: @escaping @MainActor () -> Bool = { false }
     ) {
         guard monitor == nil else { return }
         self.isKillConfirmationActive = killConfirmationActive
@@ -114,9 +115,17 @@ final class KeyboardSelectionMonitor {
             }
 
             if event.modifierFlags.contains(.command) && !event.modifierFlags.contains(.control) && !event.modifierFlags.contains(.option) {
-                let keyNumber = Int(event.keyCode)
-                if keyNumber >= 18 && keyNumber <= 21 {
-                    let index = keyNumber - 17
+                // macOS digit keyCodes are not contiguous: 1=18, 2=19, 3=20, 4=21, 5=23.
+                let mappedIndex: Int?
+                switch event.keyCode {
+                case 18: mappedIndex = 1
+                case 19: mappedIndex = 2
+                case 20: mappedIndex = 3
+                case 21: mappedIndex = 4
+                case 23: mappedIndex = 5
+                default: mappedIndex = nil
+                }
+                if let index = mappedIndex {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
                         onSelectCommandByIndex(index)
                     }

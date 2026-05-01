@@ -56,8 +56,10 @@ final class ClipboardHistoryStore: ObservableObject {
     private let maxEntries = AppConstants.Launcher.Clipboard.maxEntries
     private let maxStoredCharacters = AppConstants.Launcher.Clipboard.maxStoredCharacters
     private var monitoringMode: MonitoringMode = .foreground
-    private var timer: Timer?
-    private var burstTimer: Timer?
+    // nonisolated(unsafe) so the nonisolated deinit can call invalidate()
+    // on these without going through the actor.
+    nonisolated(unsafe) private var timer: Timer?
+    nonisolated(unsafe) private var burstTimer: Timer?
     private var remainingBurstSamples = 0
     private var lastChangeCount: Int
 
@@ -93,7 +95,11 @@ final class ClipboardHistoryStore: ObservableObject {
     private func startMonitoring() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: monitoringMode.interval, repeats: true) { [weak self] _ in
-            self?.captureLatestClipboardIfNeeded()
+            // Timer fires on RunLoop.main; assumeIsolated avoids a needless
+            // Task hop while satisfying Swift 6's Sendable-closure check.
+            MainActor.assumeIsolated {
+                self?.captureLatestClipboardIfNeeded()
+            }
         }
         if let timer {
             RunLoop.main.add(timer, forMode: .common)
@@ -153,20 +159,19 @@ final class ClipboardHistoryStore: ObservableObject {
         burstTimer = Timer.scheduledTimer(
             withTimeInterval: AppConstants.Launcher.Clipboard.burstPollInterval,
             repeats: true
-        ) { [weak self] timer in
-            guard let self else {
-                timer.invalidate()
-                return
-            }
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
 
-            if self.remainingBurstSamples <= 0 {
-                timer.invalidate()
-                self.burstTimer = nil
-                return
-            }
+                if self.remainingBurstSamples <= 0 {
+                    self.burstTimer?.invalidate()
+                    self.burstTimer = nil
+                    return
+                }
 
-            self.remainingBurstSamples -= 1
-            self.captureLatestClipboardIfNeeded()
+                self.remainingBurstSamples -= 1
+                self.captureLatestClipboardIfNeeded()
+            }
         }
 
         if let burstTimer {

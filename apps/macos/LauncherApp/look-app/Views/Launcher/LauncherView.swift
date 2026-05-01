@@ -4,6 +4,7 @@ import OSLog
 import SwiftUI
 
 struct LauncherView: View {
+
     enum TranslationCommand {
         case network(String)
         case lookup(String)
@@ -270,9 +271,12 @@ struct LauncherView: View {
                 return ["Y confirm", "N cancel", "Tab/Cmd+1-4 switch", "Esc back"]
             }
             if activeCommandID == AppConstants.Launcher.Command.sys {
-                return ["Esc back", "Tab/Cmd+1-4 switch", "Cmd+/ command mode", "Cmd+Shift+, settings"]
+                return ["Esc back", "Tab/Cmd+1-5 switch", "Cmd+/ command mode", "Cmd+Shift+, settings"]
             }
-            return ["Enter run", "Tab select", "Cmd+1-4 switch", "Esc back"]
+            if activeCommandID == AppConstants.Launcher.Command.pomo {
+                return ["Space start/pause", "R reset", "P music", "Esc back", "Tab/Cmd+1-5 switch"]
+            }
+            return ["Enter run", "Tab select", "Cmd+1-5 switch", "Esc back"]
         }
 
         if let command = extractTranslationQuery(from: query.trimmingCharacters(in: .whitespacesAndNewlines)) {
@@ -319,7 +323,9 @@ struct LauncherView: View {
 
     var activeCommandAcceptsInput: Bool {
         guard let activeCommandID else { return false }
-        return activeCommandID != AppConstants.Launcher.Command.sys
+        if activeCommandID == AppConstants.Launcher.Command.sys { return false }
+        if activeCommandID == AppConstants.Launcher.Command.pomo { return false }
+        return true
     }
 
     var isKillConfirmationVisible: Bool {
@@ -594,6 +600,11 @@ struct LauncherView: View {
                 setInitialSelection()
             }
         }
+        .onChange(of: activeCommandID) { _, newID in
+            // Remember which command was last open so re-entering
+            // command mode resumes there instead of always /calc.
+            if let newID { appUIState.lastCommandID = newID }
+        }
         .onChange(of: appUIState.showsThemeSettings) { _, showsSettings in
             if showsSettings {
                 showsHelpScreen = false
@@ -636,6 +647,17 @@ struct LauncherView: View {
         .onReceive(NotificationCenter.default.publisher(for: .lookToggleWindowRequested)) { _ in
             toggleWindowVisibility()
             refreshClipboardMonitoringMode()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lookOpenPomoRequested)) { _ in
+            // Menu-bar mini-timer click → land directly inside /pomo command panel.
+            DispatchQueue.main.async {
+                if !isCommandMode {
+                    enterCommandMode(commandID: AppConstants.Launcher.Command.pomo, prefilledInput: "")
+                } else {
+                    activeCommandID = AppConstants.Launcher.Command.pomo
+                    selectedCommandID = AppConstants.Launcher.Command.pomo
+                }
+            }
         }
     }
 }
