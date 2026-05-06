@@ -1,4 +1,4 @@
-import { getIcon, getFileMeta, getAppVersion } from './ipc.js';
+import { getIcon, getFileMeta, getAppVersion } from '../ipc.js';
 
 let panel = null;
 let currentPath = null;

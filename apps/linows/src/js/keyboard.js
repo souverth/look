@@ -1,4 +1,4 @@
-import * as results from './results.js';
+import * as results from './components/results.js';
 import { openPath, recordUsage, revealPath, hideWindow } from './ipc.js';
 
 let queryInput = null;

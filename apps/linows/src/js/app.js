@@ -1,7 +1,7 @@
-import * as results from './results.js';
+import * as results from './components/results.js';
 import * as search from './search.js';
 import * as keyboard from './keyboard.js';
-import * as preview from './preview.js';
+import * as preview from './components/preview.js';
 import { onWindowShown, getHomeDir } from './ipc.js';
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -1,4 +1,4 @@
-import { getIcon } from './ipc.js';
+import { getIcon } from '../ipc.js';
 
 const iconCache = new Map();
 
