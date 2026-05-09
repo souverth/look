@@ -74,8 +74,15 @@ jobs:
       - name: Set release version in tauri.conf.json
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          # Strip v prefix if present, ensure semver
+          VERSION="${VERSION#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "::error::Invalid semver: $VERSION"
+            exit 1
+          fi
           cd apps/linows/src-tauri
           sed -i "s/\"version\": \".*\"/\"version\": \"${VERSION}\"/" tauri.conf.json
+          echo "Set version to: $VERSION"
 
       - name: Build Tauri app
         working-directory: apps/linows

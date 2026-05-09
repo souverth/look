@@ -4,14 +4,14 @@
 
 A keyboard-first, local-first launcher for macOS, Windows, and Linux. Open apps, files, folders, clipboard history, and quick commands without leaving the keyboard.
 
-![Platform](https://img.shields.io/badge/platform-macOS%2015%2B%20%7C%20Windows%2010%2B%20%7C%20Linux-lightgrey)
+[macOS](#macos) · [Windows](#windows) · [Linux](#linux-under-development)
 📘 [Docs](https://noah-code.com/docs/look) · 📖 [User guide](docs/user-guide.md) · 🎬 [Demo video](https://www.youtube.com/watch?v=4Twb4We3PIs)
 
 https://github.com/user-attachments/assets/176a929d-edbe-46a0-a0c5-229eb9b31c1c
 
 ## Install
 
-**macOS:**
+### macOS
 
 ```bash
 brew tap kunkka19xx/tap
@@ -20,7 +20,7 @@ brew install --cask look
 
 Then bind `Cmd+Space` to Look (disable Spotlight's shortcut in `System Settings > Keyboard > Keyboard Shortcuts > Spotlight`). Release builds are signed and notarized — no Gatekeeper bypass needed.
 
-**Windows:**
+### Windows
 
 Install the latest release with one PowerShell line (no admin required):
 
@@ -38,7 +38,7 @@ iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/wi
 
 SmartScreen may warn on first run while reputation builds — click "More info → Run anyway". The launcher's global hotkey (`Alt+Space`) is configurable in Settings → Appearance.
 
-**Linux (under development):**
+### Linux (under development)
 
 Download `.deb` or `.AppImage` from [Releases](https://github.com/kunkka19xx/look/releases):
 
@@ -60,6 +60,8 @@ sudo dpkg -r look-desktop
 # AppImage — just delete the file
 rm Look_*.AppImage
 ```
+
+> **NixOS:** AppImage does not work on NixOS due to the non-FHS filesystem layout. Build from source instead: `cd apps/linows && nix develop -c cargo tauri build`. A flake package (`nix run`) is planned.
 
 More install methods coming soon (AUR, NixOS flake). To build from source, see [apps/linows/BUILDING.md](apps/linows/BUILDING.md).
 
