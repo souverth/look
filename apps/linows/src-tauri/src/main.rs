@@ -6,6 +6,10 @@ mod clipboard;
 mod commands;
 mod config;
 mod files;
+#[cfg(target_os = "linux")]
+mod linux_transparency;
+#[cfg(target_os = "linux")]
+mod linux_window_focus;
 mod music;
 mod platform;
 mod process;
@@ -21,6 +25,10 @@ use tauri::{Emitter, Manager, PhysicalPosition};
 
 /// Timestamp (ms) of last window show, used to debounce focus-loss auto-hide.
 static LAST_SHOWN_AT: AtomicU64 = AtomicU64::new(0);
+/// Timestamp (ms) of last auto-hide.  When Alt+Space fires and the window is
+/// already hidden, we check this to avoid re-showing a window that auto-hide
+/// just closed (the GNOME X11 race: Focused(false) fires before the shortcut).
+static LAST_AUTO_HIDDEN_AT: AtomicU64 = AtomicU64::new(0);
 
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -37,22 +45,7 @@ fn supports_transparency() -> bool {
 
     #[cfg(target_os = "linux")]
     {
-        // Wayland compositors generally support transparency
-        if std::env::var("XDG_SESSION_TYPE")
-            .map(|v| v == "wayland")
-            .unwrap_or(false)
-        {
-            return true;
-        }
-        // X11: only if a compositor is running
-        std::process::Command::new("sh")
-            .args([
-                "-c",
-                "pgrep -x picom || pgrep -x compton || pgrep -x compiz",
-            ])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
+        linux_transparency::has_compositor()
     }
 }
 
@@ -90,6 +83,7 @@ fn main() {
         .manage(AppState::new())
         .manage(platform::IconCache::new())
         .setup(|app| {
+            AppState::init_app_handle(app);
             clipboard::start_monitor();
             let app_handle = app.handle().clone();
 
@@ -102,18 +96,17 @@ fn main() {
                     }
                     if let Some(window) = app_handle.get_webview_window("main") {
                         if window.is_visible().unwrap_or(false) {
+                            #[cfg(target_os = "linux")]
+                            linux_window_focus::notify_hidden();
                             let _ = window.hide();
-                        } else {
+                        } else if now_ms() - LAST_AUTO_HIDDEN_AT.load(Ordering::Relaxed) > 200 {
+                            // Only show if auto-hide didn't JUST fire.
+                            // On GNOME X11, Focused(false) races with this handler —
+                            // auto-hide hides the window before we run, so is_visible
+                            // is false.  The 200ms guard prevents re-showing.
                             LAST_SHOWN_AT.store(now_ms(), Ordering::Relaxed);
+                            let _ = window.set_always_on_top(true);
                             let _ = window.show();
-                            let _ = window.set_focus();
-                            // Ensure search input gets focus inside the webview
-                            let w = window.clone();
-                            std::thread::spawn(move || {
-                                std::thread::sleep(std::time::Duration::from_millis(50));
-                                let _ = w.set_focus();
-                                let _ = w.eval("document.getElementById('query')?.focus()");
-                            });
                             if let Ok(Some(monitor)) = window.current_monitor() {
                                 let screen = monitor.size();
                                 let scale = monitor.scale_factor();
@@ -125,12 +118,36 @@ fn main() {
                                 let _ = window.set_position(PhysicalPosition::new(x, y));
                             }
                             let _ = window.emit("window-shown", ());
+
+                            // On Linux, bypass Mutter's focus-stealing prevention
+                            // by bumping _NET_WM_USER_TIME before activation.
+                            #[cfg(target_os = "linux")]
+                            {
+                                linux_window_focus::activate_self();
+                                linux_window_focus::notify_shown();
+                            }
+
+                            let _ = window.set_focus();
                         }
                     }
                 })?;
 
+            // Cache Look's X11 window ID for later focus activation,
+            // and start monitoring _NET_ACTIVE_WINDOW for auto-hide.
+            #[cfg(target_os = "linux")]
+            {
+                linux_window_focus::cache_self_window();
+                let w_monitor = app.get_webview_window("main").expect("main window missing");
+                linux_window_focus::start_active_window_monitor(move || {
+                    if now_ms() - LAST_SHOWN_AT.load(Ordering::Relaxed) > 300 {
+                        LAST_AUTO_HIDDEN_AT.store(now_ms(), Ordering::Relaxed);
+                        let _ = w_monitor.hide();
+                    }
+                });
+            }
+
             // Scale window for current monitor on startup
-            let window = app.get_webview_window("main").unwrap();
+            let window = app.get_webview_window("main").expect("main window missing");
             if let Ok(Some(monitor)) = window.current_monitor() {
                 let screen = monitor.size();
                 let scale = monitor.scale_factor();
@@ -147,19 +164,32 @@ fn main() {
             if supports_transparency {
                 let _ = window
                     .eval("document.documentElement.setAttribute('data-transparent', 'true')");
-                // Auto-hide on focus loss (works on macOS/Windows/Wayland)
-                let w = window.clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Focused(false) = event
-                        && now_ms() - LAST_SHOWN_AT.load(Ordering::Relaxed) > 300
-                    {
-                        let _ = w.hide();
-                    }
-                });
             } else {
                 let _ = window
                     .eval("document.documentElement.setAttribute('data-transparent', 'false')");
             }
+
+            // Window event handler
+            let w = window.clone();
+            window.on_window_event(move |event| {
+                match event {
+                    tauri::WindowEvent::Focused(true) => {
+                        let _ = w.eval("{ let q = document.getElementById('query'); if (q) { q.focus(); q.select(); } }");
+                    }
+                    // On Linux, Focused(false) fires on mouse-leave (GNOME/Mutter
+                    // with undecorated always-on-top windows), so auto-hide is
+                    // handled entirely by the X11 active-window monitor instead.
+                    // TODO: add Wayland auto-hide when Wayland support is added.
+                    #[cfg(not(target_os = "linux"))]
+                    tauri::WindowEvent::Focused(false) => {
+                        if now_ms() - LAST_SHOWN_AT.load(Ordering::Relaxed) > 300 {
+                            LAST_AUTO_HIDDEN_AT.store(now_ms(), Ordering::Relaxed);
+                            let _ = w.hide();
+                        }
+                    }
+                    _ => {}
+                }
+            });
 
             Ok(())
         })

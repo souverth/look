@@ -10,7 +10,7 @@ import * as translatePanel from './components/translate.js';
 import * as platform from './platform.js';
 import { load } from './html-loader.js';
 import {
-  onWindowShown, getHomeDir, copyFilesToClipboard,
+  onWindowShown, onIndexReady, getHomeDir, copyFilesToClipboard,
   evalCalc, runShellCommand, getSystemInfo,
   listProcesses, listProcessesOnPort, killProcess, getIcon,
   copyToClipboard, deleteClipboardEntry,
@@ -184,6 +184,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   onWindowShown(() => {
     queryInput.focus();
     queryInput.select();
+  });
+
+  onIndexReady(() => {
+    search.handleQueryInput(queryInput.value);
+  });
+
+  // Guard: if focus drifts to another element on the main screen,
+  // pull it back to the search input.
+  document.addEventListener('focusin', (e) => {
+    if (e.target !== queryInput
+        && !commands.isActive()
+        && !settings.isActive()
+        && !helpScreen?.contains(e.target)) {
+      queryInput.focus();
+    }
   });
 
   // Load home dir for quick folders, then initial search

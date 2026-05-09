@@ -94,6 +94,47 @@ pub fn open_path(
     kind: Option<String>,
     id: Option<String>,
 ) -> Result<(), String> {
+    // Linux system settings: settings://panel → gnome-control-center panel
+    #[cfg(target_os = "linux")]
+    if let Some(panel) = path.strip_prefix("settings://") {
+        let _ = window.hide();
+        let panel = panel.to_string();
+        std::thread::spawn(move || {
+            // D-Bus activation: works on GNOME, properly focuses the window.
+            let dbus_ok = std::process::Command::new("gdbus")
+                .args([
+                    "call",
+                    "--session",
+                    "--dest",
+                    "org.gnome.Settings",
+                    "--object-path",
+                    "/org/gnome/Settings",
+                    "--method",
+                    "org.freedesktop.Application.ActivateAction",
+                    "launch-panel",
+                    &format!("[<'{panel}'>, <@av []>]"),
+                    "{}",
+                ])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+
+            // Fallback: direct command (KDE, non-GNOME desktops)
+            if !dbus_ok {
+                let _ = std::process::Command::new("gnome-control-center")
+                    .arg(&panel)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+            }
+        });
+        return Ok(());
+    }
+
     if kind.as_deref() == Some("app") && !path.contains("://") {
         let result = launch_app(&path, id.as_deref());
         if result.is_ok() {
@@ -114,7 +155,23 @@ pub fn open_path(
     } else {
         let _ = window.hide();
         std::thread::spawn(move || {
-            let _ = open::that(&path);
+            #[cfg(target_os = "linux")]
+            {
+                // Clear LD_LIBRARY_PATH so child processes use system libraries.
+                // On NixOS, the Tauri dev shell may set paths that conflict with
+                // system apps (glibc version mismatch).
+                let _ = std::process::Command::new("xdg-open")
+                    .arg(&path)
+                    .env_remove("LD_LIBRARY_PATH")
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                let _ = open::that(&path);
+            }
         });
         Ok(())
     }
@@ -250,6 +307,7 @@ fn launch_app(exec: &str, id: Option<&str>) -> Result<(), String> {
 }
 
 fn try_focus_window(wm_class: &str) -> bool {
+    // i3 window manager
     if let Ok(output) = std::process::Command::new("i3-msg")
         .arg(format!("[class=\"(?i){wm_class}\"] focus"))
         .stdout(std::process::Stdio::piped())
@@ -262,21 +320,10 @@ fn try_focus_window(wm_class: &str) -> bool {
         }
     }
 
-    if let Ok(output) = std::process::Command::new("xdotool")
-        .args(["search", "--class", wm_class])
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output()
-    {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        if let Some(wid) = stdout.lines().next() {
-            let _ = std::process::Command::new("xdotool")
-                .args(["windowactivate", wid])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn();
-            return true;
-        }
+    // Linux: xdotool → wmctrl → xprop (covers GNOME, KDE, NixOS, etc.)
+    #[cfg(target_os = "linux")]
+    if crate::linux_window_focus::try_focus(wm_class) {
+        return true;
     }
 
     false
