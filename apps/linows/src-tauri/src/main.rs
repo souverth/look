@@ -117,7 +117,8 @@ fn main() {
                             if let Ok(Some(monitor)) = window.current_monitor() {
                                 let screen = monitor.size();
                                 let scale = monitor.scale_factor();
-                                let (win_w, win_h) = scaled_window_size(screen.width, screen.height, scale);
+                                let (win_w, win_h) =
+                                    scaled_window_size(screen.width, screen.height, scale);
                                 let _ = window.set_size(tauri::PhysicalSize::new(win_w, win_h));
                                 let x = ((screen.width as f64 - win_w as f64) / 2.0) as i32;
                                 let y = ((screen.height as f64 - win_h as f64) / 2.0) as i32;
@@ -149,10 +150,10 @@ fn main() {
                 // Auto-hide on focus loss (works on macOS/Windows/Wayland)
                 let w = window.clone();
                 window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Focused(false) = event {
-                        if now_ms() - LAST_SHOWN_AT.load(Ordering::Relaxed) > 300 {
-                            let _ = w.hide();
-                        }
+                    if let tauri::WindowEvent::Focused(false) = event
+                        && now_ms() - LAST_SHOWN_AT.load(Ordering::Relaxed) > 300
+                    {
+                        let _ = w.hide();
                     }
                 });
             } else {

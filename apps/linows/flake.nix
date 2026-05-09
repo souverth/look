@@ -2,10 +2,12 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
-    { nixpkgs, ... }:
+    { nixpkgs, rust-overlay, ... }:
     let
       systems = [
         "x86_64-linux"
@@ -19,14 +21,17 @@
       devShells = forAllSystems (
         system:
         let
-          pkgs = import nixpkgs { inherit system; };
+          pkgs = import nixpkgs {
+            inherit system;
+            overlays = [ rust-overlay.overlays.default ];
+          };
+          rustToolchain = pkgs.rust-bin.stable."1.95.0".default;
         in
         {
           default = pkgs.mkShell {
             nativeBuildInputs = with pkgs; [
               pkg-config
-              cargo
-              rustc
+              rustToolchain
               cargo-tauri
               xdg-desktop-portal
               xdg-desktop-portal-gtk
@@ -45,6 +50,7 @@
               harfbuzz
               librsvg
               alsa-lib
+              libappindicator-gtk3
             ];
 
             shellHook = ''
@@ -62,6 +68,7 @@
                   pkgs.harfbuzz
                   pkgs.librsvg
                   pkgs.alsa-lib
+                  pkgs.libappindicator-gtk3
                 ]
               }:$LD_LIBRARY_PATH"
               export GSETTINGS_SCHEMA_DIR="${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}/glib-2.0/schemas''${GSETTINGS_SCHEMA_DIR:+:$GSETTINGS_SCHEMA_DIR}"

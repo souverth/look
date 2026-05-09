@@ -50,7 +50,11 @@ pub fn search(state: State<'_, AppState>, query: String, limit: u32) -> SearchPa
 }
 
 #[tauri::command]
-pub fn record_usage(state: State<'_, AppState>, candidate_id: String, action: String) -> UsageResult {
+pub fn record_usage(
+    state: State<'_, AppState>,
+    candidate_id: String,
+    action: String,
+) -> UsageResult {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
@@ -187,18 +191,17 @@ fn launch_app(exec: &str, id: Option<&str>) -> Result<(), String> {
         .and_then(find_desktop_file);
 
     if let Some(ref real_path) = desktop_file {
-        if let Some(wm_class) = parse_desktop_field(real_path, "StartupWMClass") {
-            if try_focus_window(&wm_class) {
-                return Ok(());
-            }
+        if let Some(wm_class) = parse_desktop_field(real_path, "StartupWMClass")
+            && try_focus_window(&wm_class)
+        {
+            return Ok(());
         }
         if let Some(name) = std::path::Path::new(real_path)
             .file_stem()
             .and_then(|f| f.to_str())
+            && try_focus_window(name)
         {
-            if try_focus_window(name) {
-                return Ok(());
-            }
+            return Ok(());
         }
     }
 

@@ -61,7 +61,7 @@ pub fn translate(text: String, target_lang: String) -> TranslateResult {
                     original: text,
                     translated: String::new(),
                     error: Some("Response decode failed".into()),
-                }
+                };
             }
         },
         _ => {
@@ -69,7 +69,7 @@ pub fn translate(text: String, target_lang: String) -> TranslateResult {
                 original: text,
                 translated: String::new(),
                 error: Some("Translation request failed".into()),
-            }
+            };
         }
     };
 
@@ -80,7 +80,7 @@ pub fn translate(text: String, target_lang: String) -> TranslateResult {
                 original: text,
                 translated: String::new(),
                 error: Some("Response parse failed".into()),
-            }
+            };
         }
     };
 
@@ -111,10 +111,10 @@ fn extract_translation(value: &serde_json::Value) -> String {
     };
     let mut result = String::new();
     for group in translations {
-        if let Some(parts) = group.as_array() {
-            if let Some(s) = parts.first().and_then(|v| v.as_str()) {
-                result.push_str(s);
-            }
+        if let Some(parts) = group.as_array()
+            && let Some(s) = parts.first().and_then(|v| v.as_str())
+        {
+            result.push_str(s);
         }
     }
     result
