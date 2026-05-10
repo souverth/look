@@ -121,6 +121,7 @@ jobs:
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"
           sed -i "s/\"version\": \".*\"/\"version\": \"${VERSION}\"/" apps/linows/src-tauri/tauri.conf.json
+          git add apps/linows/src-tauri/tauri.conf.json
 
       - uses: DeterminateSystems/nix-installer-action@main
 
