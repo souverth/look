@@ -4,12 +4,20 @@ on:
   pull_request:
     paths:
       - "core/**"
-      - "apps/linows/**"
+      - "apps/linows/src-tauri/**"
+      - "apps/linows/src/**"
+      - "apps/linows/nix/**"
+      - "apps/linows/flake.nix"
+      - "apps/linows/flake.lock"
   push:
     branches: [main]
     paths:
       - "core/**"
-      - "apps/linows/**"
+      - "apps/linows/src-tauri/**"
+      - "apps/linows/src/**"
+      - "apps/linows/nix/**"
+      - "apps/linows/flake.nix"
+      - "apps/linows/flake.lock"
 
 jobs:
   build:
