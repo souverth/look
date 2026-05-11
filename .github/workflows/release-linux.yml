@@ -18,19 +18,15 @@ on:
       - "v*"
 
 jobs:
-  # Commit the version bump so both deb and nix builds use the same source.
-  # This ensures the nix derivation hash matches cachix.
-  bump-version:
-    name: Bump version in tauri.conf.json
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      sha: ${{ steps.commit.outputs.sha }}
+  build-release:
+    name: Build Linux release artifacts
+    runs-on: ubuntu-22.04
+    concurrency:
+      group: release-linux-${{ github.ref }}
+      cancel-in-progress: true
+
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
-          token: ${{ secrets.RELEASE_PAT }}
 
       - name: Resolve version
         id: version
@@ -42,45 +38,6 @@ jobs:
             VERSION="${VERSION#v}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Update tauri.conf.json
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            echo "::error::Invalid semver: $VERSION"
-            exit 1
-          fi
-          sed -i "s/\"version\": \".*\"/\"version\": \"${VERSION}\"/" apps/linows/src-tauri/tauri.conf.json
-          echo "Set version to: $VERSION"
-
-      - name: Commit version bump
-        id: commit
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apps/linows/src-tauri/tauri.conf.json
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          else
-            git commit -m "chore: bump linows version to ${VERSION}"
-            git push origin main
-            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          fi
-
-  build-release:
-    name: Build Linux release artifacts
-    runs-on: ubuntu-22.04
-    needs: bump-version
-    concurrency:
-      group: release-linux-${{ github.ref }}
-      cancel-in-progress: true
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.bump-version.outputs.sha }}
 
       - name: Install system dependencies
         run: |
@@ -114,13 +71,22 @@ jobs:
       - name: Install cargo-tauri
         run: cargo install tauri-cli --version "^2" --locked
 
+      - name: Verify version matches tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CONF_VERSION=$(grep '"version"' apps/linows/src-tauri/tauri.conf.json | head -1 | sed 's/.*"\([0-9][^"]*\)".*/\1/')
+          if [[ "$VERSION" != "$CONF_VERSION" ]]; then
+            echo "::error::Version mismatch! Tag=$VERSION but tauri.conf.json=$CONF_VERSION. Update tauri.conf.json before tagging."
+            exit 1
+          fi
+
       - name: Build Tauri app
         working-directory: apps/linows
         run: cargo tauri build
 
       - name: Collect artifacts
         run: |
-          VERSION="${{ needs.bump-version.outputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
           mkdir -p dist
           cp apps/linows/src-tauri/target/release/bundle/deb/*.deb dist/ 2>/dev/null || true
           cp apps/linows/src-tauri/target/release/bundle/appimage/*.AppImage dist/ 2>/dev/null || true
@@ -129,7 +95,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: look-linux-${{ needs.bump-version.outputs.version }}
+          name: look-linux-${{ steps.version.outputs.version }}
           path: dist/
           retention-days: 14
 
@@ -142,11 +108,8 @@ jobs:
   nix-build:
     name: Build and push Nix package to Cachix
     runs-on: ubuntu-latest
-    needs: bump-version
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.bump-version.outputs.sha }}
 
       - uses: DeterminateSystems/nix-installer-action@main
 
