@@ -131,7 +131,11 @@ jobs:
     needs: build-release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    container: archlinux:base
     steps:
+      - name: Install dependencies
+        run: pacman -Syu --noconfirm git openssh pacman-contrib
+
       - uses: actions/checkout@v4
 
       - name: Resolve version
@@ -141,14 +145,14 @@ jobs:
           VERSION="${VERSION#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Download .deb from release
+      - name: Download .deb and compute checksum
+        id: artifact
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           curl -fSL -o "Look_${VERSION}_amd64.deb" \
             "https://github.com/kunkka19xx/look/releases/download/v${VERSION}/Look_${VERSION}_amd64.deb"
           SHA256=$(sha256sum "Look_${VERSION}_amd64.deb" | awk '{print $1}')
           echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
-        id: artifact
 
       - name: Template PKGBUILD
         run: |
@@ -159,12 +163,31 @@ jobs:
             packaging/aur/PKGBUILD > aur-staging/PKGBUILD
 
       - name: Publish to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
-        with:
-          pkgname: look-bin
-          pkgbuild: aur-staging/PKGBUILD
-          commit_username: ${{ secrets.AUR_USERNAME }}
-          commit_email: nobita079x@gmail.com
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "Update to ${{ steps.version.outputs.version }}"
-          ssh_keyscan_types: rsa,ecdsa,ed25519
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
+        run: |
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
+          printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+          # Clone AUR repo
+          git clone ssh://aur@aur.archlinux.org/look-bin.git aur-repo
+          cp aur-staging/PKGBUILD aur-repo/PKGBUILD
+
+          # Generate .SRCINFO (makepkg can't run as root)
+          useradd -m builder
+          chown -R builder:builder aur-repo
+          su builder -c 'cd aur-repo && makepkg --printsrcinfo > .SRCINFO'
+
+          # Commit and push
+          cd aur-repo
+          git config user.name "$AUR_USERNAME"
+          git config user.email "nobita079x@gmail.com"
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to ${{ steps.version.outputs.version }}"
+          git push
