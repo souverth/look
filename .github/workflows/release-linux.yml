@@ -168,14 +168,12 @@ jobs:
           AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
         run: |
           # Setup SSH
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          echo "$AUR_SSH_KEY" > ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
-          ssh-keyscan -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
-          chmod 644 ~/.ssh/known_hosts
-          printf '%s\n' 'Host aur.archlinux.org' '  IdentityFile ~/.ssh/aur' '  User aur' '  StrictHostKeyChecking accept-new' > ~/.ssh/config
-          chmod 600 ~/.ssh/config
+          mkdir -p /root/.ssh
+          chmod 700 /root/.ssh
+          echo "$AUR_SSH_KEY" > /root/.ssh/aur
+          chmod 600 /root/.ssh/aur
+          ssh-keyscan -t rsa,ecdsa,ed25519 aur.archlinux.org >> /root/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i /root/.ssh/aur -o StrictHostKeyChecking=accept-new"
 
           # Clone AUR repo
           git clone ssh://aur@aur.archlinux.org/look-bin.git aur-repo
