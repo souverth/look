@@ -20,24 +20,6 @@ brew install --cask look
 
 Then bind `Cmd+Space` to Look (disable Spotlight's shortcut in `System Settings > Keyboard > Keyboard Shortcuts > Spotlight`). Release builds are signed and notarized — no Gatekeeper bypass needed.
 
-### Windows
-
-Install the latest release with one PowerShell line (no admin required):
-
-```powershell
-iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) }"
-```
-
-The script auto-detects x64 vs ARM64, pulls the matching release zip, verifies its SHA256 against the published manifest, extracts to `%LOCALAPPDATA%\Programs\Look`, and creates Start menu + desktop shortcuts. The release bundle is self-contained (`<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>`) so no separate runtime install is needed.
-
-Uninstall:
-
-```powershell
-iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) } -Uninstall"
-```
-
-SmartScreen may warn on first run while reputation builds — click "More info → Run anyway". The launcher's global hotkey (`Alt+Space`) is configurable in Settings → Appearance.
-
 ### Linux
 
 **Arch Linux (AUR):**
@@ -148,6 +130,24 @@ exec-once = lookapp
 
 To build from source, see [apps/linows/BUILDING.md](apps/linows/BUILDING.md).
 
+### Windows
+
+Install the latest release with one PowerShell line (no admin required):
+
+```powershell
+iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) }"
+```
+
+The script auto-detects x64 vs ARM64, pulls the matching release zip, verifies its SHA256 against the published manifest, extracts to `%LOCALAPPDATA%\Programs\Look`, and creates Start menu + desktop shortcuts. The release bundle is self-contained (`<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>`) so no separate runtime install is needed.
+
+Uninstall:
+
+```powershell
+iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) } -Uninstall"
+```
+
+SmartScreen may warn on first run while reputation builds — click "More info → Run anyway". The launcher's global hotkey (`Alt+Space`) is configurable in Settings → Appearance.
+
 <details>
 <summary>Other install options (curl, pin version, update/uninstall)</summary>
 
@@ -212,15 +212,15 @@ If you want a launcher that stays out of your way and does exactly what you aske
 
 ## Essential shortcuts
 
-| Action                                        | macOS            | Windows             | Linux               |
-| --------------------------------------------- | ---------------- | ------------------- | ------------------- |
-| Toggle launcher                               | `Cmd+Space`      | `Alt+Space`         | `Alt+Space`         |
-| Open / run                                    | `Enter`          | `Enter`             | `Enter`             |
-| Web search                                    | `Cmd+Enter`      | `Ctrl+Enter`        | `Ctrl+Enter`        |
-| Reveal in file manager                        | `Cmd+F` (Finder) | `Ctrl+F` (Explorer) | `Ctrl+F` (Files)    |
-| Command mode (`calc`, `shell`, `kill`, `sys`) | `Cmd+/`          | `Ctrl+/`            | `Ctrl+/`            |
-| Settings                                      | `Cmd+Shift+,`    | `Ctrl+Shift+,`      | `Ctrl+Shift+,`      |
-| Back / hide                                   | `Escape`         | `Escape`            | `Escape`            |
+| Action                                        | macOS            | Windows             | Linux            |
+| --------------------------------------------- | ---------------- | ------------------- | ---------------- |
+| Toggle launcher                               | `Cmd+Space`      | `Alt+Space`         | `Alt+Space`      |
+| Open / run                                    | `Enter`          | `Enter`             | `Enter`          |
+| Web search                                    | `Cmd+Enter`      | `Ctrl+Enter`        | `Ctrl+Enter`     |
+| Reveal in file manager                        | `Cmd+F` (Finder) | `Ctrl+F` (Explorer) | `Ctrl+F` (Files) |
+| Command mode (`calc`, `shell`, `kill`, `sys`) | `Cmd+/`          | `Ctrl+/`            | `Ctrl+/`         |
+| Settings                                      | `Cmd+Shift+,`    | `Ctrl+Shift+,`      | `Ctrl+Shift+,`   |
+| Back / hide                                   | `Escape`         | `Escape`            | `Escape`         |
 
 (Throughout the rest of the docs, `Cmd+X` on macOS maps to `Ctrl+X` on Windows and Linux; the launcher-toggle hotkey uses `Alt+Space` on Windows/Linux instead of `Cmd+Space` because `Win+Space` / `Super+Space` are typically reserved by the OS or desktop environment.)
 
