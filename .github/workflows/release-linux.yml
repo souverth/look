@@ -169,10 +169,12 @@ jobs:
         run: |
           # Setup SSH
           mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           echo "$AUR_SSH_KEY" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
-          ssh-keyscan -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts
-          printf 'Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur\n' > ~/.ssh/config
+          ssh-keyscan -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 644 ~/.ssh/known_hosts
+          printf '%s\n' 'Host aur.archlinux.org' '  IdentityFile ~/.ssh/aur' '  User aur' '  StrictHostKeyChecking accept-new' > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
           # Clone AUR repo
