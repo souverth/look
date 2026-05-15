@@ -1,8 +1,24 @@
 # look User Guide
 
-`look` is a keyboard-first launcher for macOS and Windows focused on fast local actions.
+`look` is a keyboard-first launcher for macOS, Windows, and Linux focused on fast local actions.
 
-> **Cross-platform shortcut note.** Examples in this guide are written with macOS modifiers (`Cmd+...`). On Windows, read **`Cmd+X` as `Ctrl+X`** in every shortcut **except the launcher toggle**, which is `Alt+Space` on Windows (because `Win+Space` is reserved by the OS for input switching). Specifically: `Cmd+Space` → `Alt+Space`, `Cmd+Enter` → `Ctrl+Enter`, `Cmd+F` → `Ctrl+F`, `Cmd+/` → `Ctrl+/`, `Cmd+Shift+,` → `Ctrl+Shift+,`, `Cmd+P` → `Ctrl+P`, `Cmd+Shift+P` → `Ctrl+Shift+P`, etc. "Reveal in Finder" reads as "Reveal in Explorer" on Windows.
+> **Cross-platform shortcut note.** Examples are written with macOS modifiers (`Cmd+...`). On Windows and Linux, read `Cmd` as `Ctrl` — except the launcher toggle, which is `Alt+Space` (since `Win+Space` / `Super+Space` are reserved by the OS or desktop environment).
+>
+> | macOS           | Windows / Linux  |
+> | --------------- | ---------------- |
+> | `Cmd+Space`     | `Alt+Space`      |
+> | `Cmd+Enter`     | `Ctrl+Enter`     |
+> | `Cmd+F`         | `Ctrl+F`         |
+> | `Cmd+C`         | `Ctrl+C`         |
+> | `Cmd+/`         | `Ctrl+/`         |
+> | `Cmd+0`         | `Ctrl+0`         |
+> | `Cmd+1`…`Cmd+5` | `Ctrl+1`…`Ctrl+5`|
+> | `Cmd+P`         | `Ctrl+P`         |
+> | `Cmd+Shift+P`   | `Ctrl+Shift+P`   |
+> | `Cmd+Shift+,`   | `Ctrl+Shift+,`   |
+> | `Cmd+Shift+;`   | `Ctrl+Shift+;`   |
+>
+> "Reveal in Finder" reads as "Reveal in Explorer" on Windows and "Show in Files" on Linux.
 
 ## First run
 
@@ -270,6 +286,13 @@ Note: `Settings Blur` is stored as local app UI state (UserDefaults) and is not 
 
 - translation requires network; check connectivity and retry
 - corporate proxies and VPNs can block the translation endpoint
+
+**Linux only — ghost slider trails or overlapping popovers in Settings.**
+
+- observed on Arch GNOME 50 + webkit2gtk 2.52.3; Ubuntu 26.04 and NixOS 2.50.6 on identical webkit are unaffected, so this is a stack-interaction bug we can't auto-detect
+- open **Settings > Advanced > Arch** and flip one toggle:
+  - **Disable GPU compositing** — keeps blur, fixes the ghost. Requires restart.
+  - **Disable blur effect** — drops blur, keeps tint. Takes effect immediately.
 
 **I want to reset everything to defaults.**
 

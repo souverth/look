@@ -121,6 +121,8 @@ exec-once = lookapp
 # (Alt+Space, float, and border rules are injected automatically via hyprctl)
 ```
 
+> **Hyprland 0.55+ only.** Focus-existing-window uses the `wlr-foreign-toplevel-management` protocol. Older Hyprland versions relied on the legacy `hyprctl dispatch focuswindow` syntax which was deprecated in 0.55; selecting an already-running app on <0.55 may launch a second instance instead of focusing. Upgrade to 0.55+ for correct behavior.
+
 More install methods coming soon (AUR). To build from source, see [apps/linows/BUILDING.md](apps/linows/BUILDING.md).
 
 <details>
@@ -187,17 +189,17 @@ If you want a launcher that stays out of your way and does exactly what you aske
 
 ## Essential shortcuts
 
-| Action                                        | macOS            | Windows             |
-| --------------------------------------------- | ---------------- | ------------------- |
-| Toggle launcher                               | `Cmd+Space`      | `Alt+Space`         |
-| Open / run                                    | `Enter`          | `Enter`             |
-| Web search                                    | `Cmd+Enter`      | `Ctrl+Enter`        |
-| Reveal in file manager                        | `Cmd+F` (Finder) | `Ctrl+F` (Explorer) |
-| Command mode (`calc`, `shell`, `kill`, `sys`) | `Cmd+/`          | `Ctrl+/`            |
-| Settings                                      | `Cmd+Shift+,`    | `Ctrl+Shift+,`      |
-| Back / hide                                   | `Escape`         | `Escape`            |
+| Action                                        | macOS            | Windows             | Linux               |
+| --------------------------------------------- | ---------------- | ------------------- | ------------------- |
+| Toggle launcher                               | `Cmd+Space`      | `Alt+Space`         | `Alt+Space`         |
+| Open / run                                    | `Enter`          | `Enter`             | `Enter`             |
+| Web search                                    | `Cmd+Enter`      | `Ctrl+Enter`        | `Ctrl+Enter`        |
+| Reveal in file manager                        | `Cmd+F` (Finder) | `Ctrl+F` (Explorer) | `Ctrl+F` (Files)    |
+| Command mode (`calc`, `shell`, `kill`, `sys`) | `Cmd+/`          | `Ctrl+/`            | `Ctrl+/`            |
+| Settings                                      | `Cmd+Shift+,`    | `Ctrl+Shift+,`      | `Ctrl+Shift+,`      |
+| Back / hide                                   | `Escape`         | `Escape`            | `Escape`            |
 
-(Throughout the rest of the docs, `Cmd+X` on macOS maps to `Ctrl+X` on Windows; the launcher-toggle hotkey is the only one that uses a different modifier — `Alt+Space` instead of `Cmd+Space` because Windows reserves `Win+Space`.)
+(Throughout the rest of the docs, `Cmd+X` on macOS maps to `Ctrl+X` on Windows and Linux; the launcher-toggle hotkey uses `Alt+Space` on Windows/Linux instead of `Cmd+Space` because `Win+Space` / `Super+Space` are typically reserved by the OS or desktop environment.)
 
 Full reference: [docs/user-guide.md](docs/user-guide.md).
 
