@@ -38,11 +38,13 @@ cd look-bin
 makepkg -si
 ```
 
-**Ubuntu/Debian (.deb)** — download from [Releases](https://github.com/kunkka19xx/look/releases):
+**Ubuntu/Debian:**
 
 ```bash
-sudo dpkg -i Look_*.deb
+curl -fsSL https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/linux/install-look.sh | bash
 ```
+
+Or download the `.deb` manually from [Releases](https://github.com/kunkka19xx/look/releases) and run `sudo dpkg -i Look_*.deb`.
 
 **Any distro (AppImage):**
 
