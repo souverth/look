@@ -162,7 +162,15 @@ fn is_wayland() -> bool {
 /// SAFETY: Must be called at startup before any threads are spawned.
 #[cfg(debug_assertions)]
 fn setup_dev_env() {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    // Resolve home/data dirs per platform. On Linux cmd shells set HOME; on
+    // Windows cmd/PowerShell set USERPROFILE instead — falling back to "."
+    // would land dev artifacts inside the repo.
+    let home = std::env::var("HOME")
+        .ok()
+        .or_else(|| std::env::var("USERPROFILE").ok())
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| ".".to_string());
+
     if std::env::var("LOOK_CONFIG_PATH")
         .unwrap_or_default()
         .trim()
@@ -180,10 +188,20 @@ fn setup_dev_env() {
         .trim()
         .is_empty()
     {
+        #[cfg(target_os = "windows")]
+        let db_dir = std::env::var("LOCALAPPDATA")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from(&home).join("AppData").join("Local"))
+            .join("look");
+
+        #[cfg(not(target_os = "windows"))]
         let db_dir = std::env::var("XDG_DATA_HOME")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| std::path::PathBuf::from(&home).join(".local").join("share"))
             .join("look");
+
         let _ = std::fs::create_dir_all(&db_dir);
         unsafe {
             std::env::set_var("LOOK_DB_PATH", db_dir.join("look.dev.db"));
@@ -457,6 +475,10 @@ fn main() {
             }
             center_and_scale_window(&window);
             apply_transparency(&window);
+            #[cfg(target_os = "windows")]
+            if let Err(e) = platform::windows::effects::apply_round_corners(&window) {
+                eprintln!("[effects] round corners failed: {e}");
+            }
             setup_window_events(&window);
 
             Ok(())
@@ -492,6 +514,7 @@ fn main() {
             // Platform: icons, detection, window effects
             platform::get_icon,
             platform::get_platform,
+            platform::list_candidate_drives,
             platform::set_window_effect,
             // Commands
             calc::eval_calc,

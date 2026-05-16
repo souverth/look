@@ -117,6 +117,10 @@ export async function getPlatform() {
   return invoke('get_platform');
 }
 
+export async function listCandidateDrives() {
+  return invoke('list_candidate_drives');
+}
+
 export async function setWindowEffect(effect) {
   return invoke('set_window_effect', { effect });
 }
