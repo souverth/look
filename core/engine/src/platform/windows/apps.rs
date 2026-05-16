@@ -70,12 +70,12 @@ fn emit_uwp_candidates(
 
         let path = format!("shell:AppsFolder\\{}", app.aumid);
         let key = format!("{APP_CANDIDATE_ID_PREFIX}uwp:{}", app.aumid);
-        let _ = tx.send(Candidate::new(
-            &key,
-            CandidateKind::App,
-            &app.title,
-            &path,
-        ));
+        let mut candidate = Candidate::new(&key, CandidateKind::App, &app.title, &path);
+        // Default subtitle would be the raw AUMID — useless in the result list.
+        // Mirror linux/apps.rs and use the kind label instead; right-hand detail
+        // panel still shows the full path.
+        candidate.subtitle = Some("App".into());
+        let _ = tx.send(candidate);
     }
 }
 
@@ -260,7 +260,11 @@ fn emit_windows_app_candidate(
     // Globally unique candidate id
     let key = format!("{APP_CANDIDATE_ID_PREFIX}{normalized_identity}_{path_id}");
 
-    let _ = tx.send(Candidate::new(&key, CandidateKind::App, &title, path));
+    let mut candidate = Candidate::new(&key, CandidateKind::App, &title, path);
+    // Default subtitle would be the Start Menu .lnk path — long and redundant
+    // (right-hand detail panel already shows it). Mirror linux/apps.rs.
+    candidate.subtitle = Some("App".into());
+    let _ = tx.send(candidate);
 }
 
 fn is_windows_noise_executable(path: &str) -> bool {

@@ -40,22 +40,19 @@ pub fn get_file_meta(path: String) -> FileMeta {
 
 #[tauri::command]
 pub fn get_app_version(path: String) -> Option<String> {
-    let bin = path.split_whitespace().next()?;
-
-    let resolved = if bin.starts_with('/') {
-        std::fs::canonicalize(bin).ok()
-    } else {
-        resolve_in_path(bin).and_then(|p| std::fs::canonicalize(p).ok())
-    };
-
-    if let Some(real) = resolved {
-        let real_str = real.to_string_lossy();
-        if let Some(v) = extract_nix_version(&real_str) {
-            return Some(v);
-        }
+    #[cfg(target_os = "linux")]
+    {
+        crate::platform::linux::version::read(&path)
     }
-
-    None
+    #[cfg(target_os = "windows")]
+    {
+        crate::platform::windows::version::read(&path)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    {
+        let _ = path;
+        None
+    }
 }
 
 #[tauri::command]
@@ -135,19 +132,18 @@ pub async fn pick_folder(app: tauri::AppHandle) -> Option<String> {
 
 #[tauri::command]
 pub fn list_fonts() -> Vec<String> {
-    let output = std::process::Command::new("fc-list")
-        .args(["--format", "%{family}\n"])
-        .output();
-    let Ok(output) = output else { return vec![] };
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut fonts: Vec<String> = stdout
-        .lines()
-        .flat_map(|line| line.split(',').map(|s| s.trim().to_string()))
-        .filter(|s| !s.is_empty())
-        .collect();
-    fonts.sort();
-    fonts.dedup();
-    fonts
+    #[cfg(target_os = "linux")]
+    {
+        crate::platform::linux::fonts::list()
+    }
+    #[cfg(target_os = "windows")]
+    {
+        crate::platform::windows::fonts::list()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    {
+        Vec::new()
+    }
 }
 
 #[tauri::command]
@@ -166,36 +162,6 @@ pub async fn pick_image(app: tauri::AppHandle) -> Option<String> {
             let _ = tx.send(result);
         });
     rx.recv().ok().flatten()
-}
-
-fn resolve_in_path(bin: &str) -> Option<std::path::PathBuf> {
-    let path_var = std::env::var("PATH").ok()?;
-    for dir in path_var.split(':') {
-        let candidate = std::path::Path::new(dir).join(bin);
-        if candidate.exists() {
-            return Some(candidate);
-        }
-    }
-    None
-}
-
-fn extract_nix_version(path: &str) -> Option<String> {
-    let store_prefix = "/nix/store/";
-    let rest = path.strip_prefix(store_prefix)?;
-    let dir_part = rest.split('/').next()?;
-    let after_hash = dir_part.get(33..)?;
-    let mut version_start = None;
-    for (i, _) in after_hash.match_indices('-') {
-        if after_hash
-            .get(i + 1..i + 2)
-            .map(|c| c.chars().next().unwrap_or(' ').is_ascii_digit())
-            .unwrap_or(false)
-        {
-            version_start = Some(i + 1);
-        }
-    }
-    let start = version_start?;
-    Some(after_hash[start..].to_string())
 }
 
 fn time_from_unix(secs: u64) -> String {

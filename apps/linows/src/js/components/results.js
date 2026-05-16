@@ -150,6 +150,26 @@ function updatePickedIndicators() {
 
 // --- Row creation ---
 
+// Settings entries pack their full alias list into `subtitle` so the engine
+// can fuzzy-match on keywords ("wifi", "ssid", "captions" …). That's great
+// for search but renders as a long noisy line ("Windows Settings settings
+// wifi wireless network ssid"). Trim the alias tail at render time — engine
+// keeps the full string for scoring.
+const SETTINGS_SUBTITLE_PREFIXES = ['Windows Settings', 'System Settings'];
+
+function displaySubtitle(result) {
+  if (result.kind === 'clipboard') return result.subtitle;
+  if (result.subtitle) {
+    for (const prefix of SETTINGS_SUBTITLE_PREFIXES) {
+      if (result.subtitle.startsWith(prefix + ' ')) return prefix;
+    }
+    return result.subtitle;
+  }
+  if (result.kind === 'file' || result.kind === 'folder') return result.path;
+  const kindLabels = { app: 'App', setting: 'Setting' };
+  return kindLabels[result.kind] || result.kind;
+}
+
 function createRow(result, index) {
   const row = document.createElement('div');
   row.className = 'result-row';
@@ -187,16 +207,7 @@ function createRow(result, index) {
 
   const subtitle = document.createElement('div');
   subtitle.className = 'result-path';
-  if (result.kind === 'clipboard') {
-    subtitle.textContent = result.subtitle;
-  } else if (result.subtitle) {
-    subtitle.textContent = result.subtitle;
-  } else if (result.kind === 'file' || result.kind === 'folder') {
-    subtitle.textContent = result.path;
-  } else {
-    const kindLabels = { app: 'App', setting: 'Setting' };
-    subtitle.textContent = kindLabels[result.kind] || result.kind;
-  }
+  subtitle.textContent = displaySubtitle(result);
   text.appendChild(subtitle);
 
   row.appendChild(text);
