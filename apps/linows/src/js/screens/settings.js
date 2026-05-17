@@ -141,6 +141,9 @@ export function init(exitFn) {
         }
       }
       if (platform.hasCompositor()) applytint();
+      // Drive actual CSS --blur-radius from the chosen style (Windows uses
+      // a fixed per-style map; Linux uses the provided radius arg).
+      platform.applyBlur(0, style);
       saveConfig({ ...preset, ui_blur_style: style });
     }
   });
@@ -581,7 +584,10 @@ export async function restoreOnStartup() {
       document.documentElement.style.setProperty('--font-family', `"${map.ui_font_name}", system-ui, sans-serif`);
     }
 
-    // Blur
+    // Blur — drive --blur-radius from saved style so the launcher renders
+    // with the user's blur on first paint, not only after they open Settings.
+    platform.applyBlur(0, map.ui_blur_style || 'high_contrast');
+
     // Border thickness
     if (map.ui_border_thickness) {
       CSS_MAP.ui_border_thickness(map.ui_border_thickness);
@@ -918,8 +924,13 @@ function applyBorderFromMap(map) {
 
 function applyBackgroundImage(path) {
   if (!path) return;
-  const url = `url("asset://localhost/${encodeURI(path)}")`;
-  document.documentElement.style.setProperty('--bg-image', url);
+  // Use Tauri's convertFileSrc instead of hand-rolling asset://: it
+  // normalizes path separators (`C:\Users\…` → `C:/Users/…`), URL-encodes
+  // correctly per platform, and emits the right protocol scheme
+  // (`asset://localhost/` on most platforms, `http://asset.localhost/`
+  // on Windows so WebView2 doesn't reject the custom scheme).
+  const src = window.__TAURI__.core.convertFileSrc(path);
+  document.documentElement.style.setProperty('--bg-image', `url("${src}")`);
 }
 
 function clearBackgroundImage() {
