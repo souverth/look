@@ -20,7 +20,6 @@
 //! `SetForegroundWindow` only succeeds while we still hold foreground.
 
 use windows::Win32::Foundation::{CloseHandle, FALSE, HANDLE, HWND, LPARAM, MAX_PATH, TRUE};
-use windows::core::BOOL;
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, IPersistFile,
     STGM_READ,
@@ -36,6 +35,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SW_RESTORE,
     SetForegroundWindow, ShowWindowAsync,
 };
+use windows::core::BOOL;
 use windows::core::{HSTRING, Interface, PWSTR};
 
 // GetApplicationUserModelId lives in kernel32 but the windows crate doesn't

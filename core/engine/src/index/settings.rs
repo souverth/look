@@ -33,14 +33,16 @@ pub fn discover_system_settings_entries(tx: mpsc::SyncSender<Candidate>) {
 fn emit_windows_control_panel_entries(tx: &mpsc::SyncSender<Candidate>) {
     for entry in platform::windows_control_panel_catalog() {
         let mut candidate = Candidate::new(
-            &format!("{SETTINGS_CANDIDATE_ID_PREFIX}{}", entry.candidate_id_suffix),
+            &format!(
+                "{SETTINGS_CANDIDATE_ID_PREFIX}{}",
+                entry.candidate_id_suffix
+            ),
             CandidateKind::App,
             entry.title,
             &platform::windows_control_panel_target_path(entry),
         );
-        candidate.subtitle = Some(
-            format!("{}{}", platform::settings_subtitle_prefix(), entry.aliases).into(),
-        );
+        candidate.subtitle =
+            Some(format!("{}{}", platform::settings_subtitle_prefix(), entry.aliases).into());
         let _ = tx.send(candidate);
     }
 }

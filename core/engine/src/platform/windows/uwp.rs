@@ -5,9 +5,7 @@
 //! reachable only via the Shell namespace at `shell:AppsFolder\{AUMID}`.
 //! Ported from `apps/windows/LauncherApp/Services/UwpAppService.cs`.
 
-use windows::Win32::System::Com::{
-    COINIT_APARTMENTTHREADED, CoInitializeEx, CoTaskMemFree,
-};
+use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoTaskMemFree};
 use windows::Win32::UI::Shell::{
     BHID_EnumItems, IEnumShellItems, IShellItem, SHCreateItemFromParsingName, SIGDN,
     SIGDN_NORMALDISPLAY, SIGDN_PARENTRELATIVEPARSING,
@@ -25,13 +23,11 @@ pub(crate) fn enumerate_apps_folder() -> Vec<UwpApp> {
         // Re-init is idempotent; RPC_E_CHANGED_MODE is harmless and ignored.
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
-        let folder: IShellItem = match SHCreateItemFromParsingName(
-            &HSTRING::from("shell:AppsFolder"),
-            None,
-        ) {
-            Ok(f) => f,
-            Err(_) => return out,
-        };
+        let folder: IShellItem =
+            match SHCreateItemFromParsingName(&HSTRING::from("shell:AppsFolder"), None) {
+                Ok(f) => f,
+                Err(_) => return out,
+            };
 
         let enumerator: IEnumShellItems = match folder.BindToHandler(None, &BHID_EnumItems) {
             Ok(e) => e,

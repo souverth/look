@@ -57,8 +57,7 @@ pub(crate) fn copy_files(paths: &[String]) -> Result<(), String> {
 
     unsafe {
         // HWND::default() = null is a valid clipboard owner (system-wide handoff).
-        OpenClipboard(Some(HWND::default()))
-            .map_err(|e| format!("OpenClipboard failed: {e}"))?;
+        OpenClipboard(Some(HWND::default())).map_err(|e| format!("OpenClipboard failed: {e}"))?;
 
         // Wrap so we always close, even on early return.
         let result = (|| -> Result<(), String> {
@@ -66,8 +65,7 @@ pub(crate) fn copy_files(paths: &[String]) -> Result<(), String> {
 
             // GHND = GMEM_MOVEABLE | GMEM_ZEROINIT. Zero-init lets us skip
             // writing the POINT/BOOL fields of DROPFILES (they're already 0/FALSE).
-            let hmem =
-                GlobalAlloc(GHND, total).map_err(|e| format!("GlobalAlloc failed: {e}"))?;
+            let hmem = GlobalAlloc(GHND, total).map_err(|e| format!("GlobalAlloc failed: {e}"))?;
             if hmem.is_invalid() {
                 return Err("GlobalAlloc returned null".to_string());
             }

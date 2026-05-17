@@ -24,14 +24,14 @@ pub(crate) fn list() -> Vec<String> {
             return Vec::new();
         }
 
-        let mut lf = LOGFONTW {
+        let lf = LOGFONTW {
             lfCharSet: DEFAULT_CHARSET,
             ..Default::default()
         };
 
         EnumFontFamiliesExW(
             hdc,
-            &mut lf,
+            &lf,
             Some(enum_proc),
             LPARAM(&mut families as *mut _ as isize),
             0,

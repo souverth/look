@@ -199,9 +199,7 @@ fn walk_windows_fallback_roots(
             // walk_windows_app_entries planted a `target_path:{normalized}`
             // lock for every resolvable shortcut target.
             let normalized = crate::platform::windows::lnk::normalize_for_compare(path_str);
-            if !normalized.is_empty()
-                && seen_ids.contains(&format!("target_path:{normalized}"))
-            {
+            if !normalized.is_empty() && seen_ids.contains(&format!("target_path:{normalized}")) {
                 continue;
             }
             emit_windows_app_candidate(path_str, tx, app_exclude_names, seen_ids, false);
@@ -543,20 +541,15 @@ mod tests {
 
     #[test]
     fn fallback_title_dedupe_applies_to_windowsapps_and_system32() {
-        assert_eq!(
-            should_apply_windows_fallback_title_dedupe("C:/Windows/System32/notepad.exe"),
-            true
-        );
-        assert_eq!(
-            should_apply_windows_fallback_title_dedupe(
-                "C:/Program Files/WindowsApps/Microsoft.WindowsNotepad_11.0.0.0_x64__8wekyb3d8bbwe/notepad.exe"
-            ),
-            true
-        );
-        assert_eq!(
-            should_apply_windows_fallback_title_dedupe("C:/Program Files/Notepad++/notepad++.exe"),
-            false
-        );
+        assert!(should_apply_windows_fallback_title_dedupe(
+            "C:/Windows/System32/notepad.exe"
+        ));
+        assert!(should_apply_windows_fallback_title_dedupe(
+            "C:/Program Files/WindowsApps/Microsoft.WindowsNotepad_11.0.0.0_x64__8wekyb3d8bbwe/notepad.exe"
+        ));
+        assert!(!should_apply_windows_fallback_title_dedupe(
+            "C:/Program Files/Notepad++/notepad++.exe"
+        ));
     }
 
     #[test]

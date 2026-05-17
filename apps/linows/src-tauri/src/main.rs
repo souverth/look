@@ -193,7 +193,11 @@ fn setup_dev_env() {
             .ok()
             .filter(|s| !s.trim().is_empty())
             .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| std::path::PathBuf::from(&home).join("AppData").join("Local"))
+            .unwrap_or_else(|| {
+                std::path::PathBuf::from(&home)
+                    .join("AppData")
+                    .join("Local")
+            })
             .join("look");
 
         #[cfg(not(target_os = "windows"))]

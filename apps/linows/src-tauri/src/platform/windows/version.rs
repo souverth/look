@@ -93,7 +93,10 @@ fn read_fixed_file_info(path: &str) -> Option<String> {
             &mut ptr,
             &mut len,
         );
-        if !ok.as_bool() || ptr.is_null() || (len as usize) < std::mem::size_of::<VS_FIXEDFILEINFO>() {
+        if !ok.as_bool()
+            || ptr.is_null()
+            || (len as usize) < std::mem::size_of::<VS_FIXEDFILEINFO>()
+        {
             return None;
         }
 
