@@ -40,7 +40,7 @@ rustPlatform.buildRustPackage {
   };
 
   cargoRoot = "apps/linows/src-tauri";
-  cargoHash = lib.fakeHash;
+  cargoHash = "sha256-u6VWNd32uNaBwleCnh/eoFRnBZqDmxyItYCLkdfONXc=";
 
   buildAndTestSubdir = "apps/linows/src-tauri";
 

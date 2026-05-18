@@ -94,32 +94,41 @@ pub fn open_path(
     kind: Option<String>,
     #[cfg_attr(not(target_os = "linux"), allow(unused_variables))] id: Option<String>,
 ) -> Result<(), String> {
-    // Windows classic applets: look-cmd://program[?args] → spawn directly.
-    // ShellExecute can't parse argv-style commands, so we split program + args
-    // and use Command::new. Program alone (e.g. "devmgmt.msc") works via the
-    // App Paths registry / PATH; for entries with `?args` the args go as a
-    // single argv slot which matches how rundll32 and friends expect them.
+    // Windows classic applets: look-cmd://program[?args].
+    // - `program` alone (e.g. "devmgmt.msc", "appwiz.cpl", "regedit.exe") →
+    //   open::that → ShellExecuteW, which does file-association lookup. This is
+    //   required for .msc / .cpl because CreateProcessW (what Command::new
+    //   uses) won't launch non-executable data files directly.
+    // - `program?args` (e.g. rundll32.exe with a DLL+entry) → Command::new,
+    //   because ShellExecute can't argv-parse a rundll32 command line.
     #[cfg(target_os = "windows")]
     if let Some(rest) = path.strip_prefix("look-cmd://") {
         let _ = window.hide();
-        let (program, args) = match rest.split_once('?') {
-            Some((p, a)) => (p.to_string(), Some(a.to_string())),
-            None => (rest.to_string(), None),
-        };
-        std::thread::spawn(move || {
-            let mut cmd = std::process::Command::new(&program);
-            if let Some(args) = args.as_deref() {
-                cmd.arg(args);
+        match rest.split_once('?') {
+            Some((program, args)) => {
+                let program = program.to_string();
+                let args = args.to_string();
+                std::thread::spawn(move || {
+                    if let Err(e) = std::process::Command::new(&program)
+                        .arg(&args)
+                        .stdin(std::process::Stdio::null())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .spawn()
+                    {
+                        eprintln!("[open_path] look-cmd spawn {program:?} failed: {e}");
+                    }
+                });
             }
-            if let Err(e) = cmd
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-            {
-                eprintln!("[open_path] look-cmd spawn {program:?} failed: {e}");
+            None => {
+                let program = rest.to_string();
+                std::thread::spawn(move || {
+                    if let Err(e) = open::that(&program) {
+                        eprintln!("[open_path] look-cmd open {program:?} failed: {e}");
+                    }
+                });
             }
-        });
+        }
         return Ok(());
     }
 
