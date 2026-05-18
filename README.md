@@ -22,6 +22,8 @@ Then bind `Cmd+Space` to Look (disable Spotlight's shortcut in `System Settings 
 
 ### Linux
 
+Released artifacts are **x86_64 only**. ARM builds aren't published; if you need one, please open an issue.
+
 **Arch Linux (AUR):**
 
 ```bash
@@ -134,13 +136,15 @@ To build from source, see [apps/linows/BUILDING.md](apps/linows/BUILDING.md).
 
 ### Windows
 
-Install the latest release with one PowerShell line (no admin required):
+Released artifacts are **x86_64 only**. Windows on ARM (Surface Pro X / Snapdragon X) can run the x64 build under emulation; native ARM builds aren't published — open an issue if you need one.
+
+One PowerShell line, no admin required:
 
 ```powershell
 iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) }"
 ```
 
-The script auto-detects x64 vs ARM64, pulls the matching release zip, verifies its SHA256 against the published manifest, extracts to `%LOCALAPPDATA%\Programs\Look`, and creates Start menu + desktop shortcuts. The release bundle is self-contained (`<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>`) so no separate runtime install is needed.
+The script resolves the latest release, downloads the NSIS installer, verifies its SHA256 against the published checksums, and runs it silently into `%LOCALAPPDATA%\Programs\Look`. SmartScreen will warn on the first download while reputation builds — click "More info → Run anyway" if Windows blocks the script itself.
 
 Uninstall:
 
@@ -148,7 +152,7 @@ Uninstall:
 iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) } -Uninstall"
 ```
 
-SmartScreen may warn on first run while reputation builds — click "More info → Run anyway". The launcher's global hotkey (`Alt+Space`) is configurable in Settings → Appearance.
+The launcher's global hotkey is `Alt+Space` (not user-configurable yet — if it conflicts with another app you use, remap that one). For a manual install: download `Look_<version>_x64-setup.exe` from [Releases](https://github.com/kunkka19xx/look/releases/latest), verify the SHA256 against the published `Look-<version>-windows-checksums.txt`, then run. Uninstall via Settings → Apps or `%LOCALAPPDATA%\Programs\Look\uninstall.exe`. To wipe user data: `Remove-Item -Recurse "$env:LOCALAPPDATA\look"`.
 
 <details>
 <summary>Other install options (curl, pin version, update/uninstall)</summary>
