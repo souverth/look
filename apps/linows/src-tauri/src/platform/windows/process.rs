@@ -13,7 +13,7 @@ use std::sync::Mutex;
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HWND, LPARAM, MAX_PATH, TRUE};
 use windows::Win32::NetworkManagement::IpHelper::{
-    GetExtendedTcpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCP_STATE_LISTEN, MIB_TCPROW_OWNER_PID,
+    GetExtendedTcpTable, MIB_TCP_STATE_LISTEN, MIB_TCP6ROW_OWNER_PID, MIB_TCPROW_OWNER_PID,
     TCP_TABLE_OWNER_PID_LISTENER,
 };
 use windows::Win32::System::Diagnostics::ToolHelp::{

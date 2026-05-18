@@ -31,7 +31,9 @@ pub(crate) fn list() -> Vec<(String, String)> {
             // Skip folders that don't actually exist (uncommon but possible
             // when a known folder GUID is registered but the directory was
             // deleted manually).
-            Path::new(&path).is_dir().then_some(((*title).to_string(), path))
+            Path::new(&path)
+                .is_dir()
+                .then_some(((*title).to_string(), path))
         })
         .collect()
 }

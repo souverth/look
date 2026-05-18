@@ -146,9 +146,23 @@ pub fn get_quick_folders() -> Vec<QuickFolder> {
         // the platform's native file manager shows so typing what the user
         // sees pins it.
         #[cfg(target_os = "macos")]
-        let names: &[&str] = &["Desktop", "Documents", "Downloads", "Pictures", "Movies", "Music"];
+        let names: &[&str] = &[
+            "Desktop",
+            "Documents",
+            "Downloads",
+            "Pictures",
+            "Movies",
+            "Music",
+        ];
         #[cfg(not(target_os = "macos"))]
-        let names: &[&str] = &["Desktop", "Documents", "Downloads", "Pictures", "Videos", "Music"];
+        let names: &[&str] = &[
+            "Desktop",
+            "Documents",
+            "Downloads",
+            "Pictures",
+            "Videos",
+            "Music",
+        ];
 
         names
             .iter()
