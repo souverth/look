@@ -5,7 +5,7 @@
 A keyboard-first, local-first launcher for macOS, Windows, and Linux. Open apps, files, folders, clipboard history, and quick commands without leaving the keyboard.
 
 [macOS](#macos) · [Windows](#windows) · [Linux](#linux-under-development)
-📘 [Docs](https://noah-code.com/docs/look) · 📖 [User guide](docs/user-guide.md) · 🎬 [Demo video](https://www.youtube.com/watch?v=4Twb4We3PIs)
+📘 [Docs](https://noah-code.com/docs/look) · 📖 [User guide](docs/user-guide.md) · 🎬 [Demo video](https://www.youtube.com/watch?v=NBB5bmjnLFU)
 
 https://github.com/user-attachments/assets/176a929d-edbe-46a0-a0c5-229eb9b31c1c
 
