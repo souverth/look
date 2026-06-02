@@ -7,6 +7,7 @@ import * as banner from './components/banner.js';
 import * as commands from './screens/commands/index.js';
 import * as settings from './screens/settings.js';
 import * as translatePanel from './components/translate.js';
+import * as runningApps from './components/running-apps.js';
 import * as platform from './platform.js';
 import { load } from './html-loader.js';
 import {
@@ -14,6 +15,7 @@ import {
   evalCalc, runShellCommand, getSystemInfo,
   listProcesses, listProcessesOnPort, killProcess, getIcon,
   copyToClipboard, deleteClipboardEntry, isDevBuild,
+  getConfig,
 } from './ipc.js';
 
 // Item count and structure mirror the macOS app's `LauncherView.hintItems`
@@ -100,6 +102,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   settings.restoreOnStartup();
 
+  // Running apps strip
+  runningApps.init(document.getElementById('running-apps-strip'));
+  getConfig().then((cfg) => {
+    const placement = cfg.entries.find((e) => e.key === 'running_apps_placement');
+    const on = !placement || placement.value !== 'none';
+    runningApps.setEnabled(on);
+    if (on) runningApps.refresh();
+  });
+
   // Show DEV badge when running in dev mode (cargo tauri dev)
   isDevBuild().then((isDev) => {
     if (isDev) {
@@ -185,14 +196,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       setHint(hintMessage, HINT_TRANSLATE);
       resultsList.hidden = true;
       previewPanel.hidden = true;
+      runningApps.setSuspended(true);
       if (!translatePanel.isActive()) translatePanel.showPlaceholder();
     } else if (search.isClipboardMode()) {
       setHint(hintMessage, HINT_CLIPBOARD);
       resultsList.hidden = false;
+      runningApps.setSuspended(false);
+      if (runningApps.isEnabled()) runningApps.refresh();
       translatePanel.hide();
     } else {
       setHint(hintMessage, HINT_MAIN);
       resultsList.hidden = false;
+      runningApps.setSuspended(false);
+      if (runningApps.isEnabled()) runningApps.refresh();
       translatePanel.hide();
     }
   });
@@ -214,6 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     queryInput.focus();
     queryInput.select();
     requestIndexRefresh();
+    runningApps.refresh();
   });
 
   onIndexReady(() => {
@@ -245,6 +262,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function enterCommandMode() {
     resultsList.hidden = true;
     previewPanel.hidden = true;
+    runningApps.setSuspended(true);
     updateCommandHintBar();
     commands.enter();
     commands.setOnCommandChange(updateCommandHintBar);
@@ -282,6 +300,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     queryInput.value = '';
     search.handleQueryInput('');
     queryInput.focus();
+    runningApps.setSuspended(false);
+    if (runningApps.isEnabled()) runningApps.refresh();
   }
 
   async function executeCommand(cmdId, input) {
@@ -371,6 +391,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         break;
     }
   }
+
+  // Sync running apps strip when config is reloaded from file
+  settings.setOnConfigReload((map) => {
+    const on = (map.running_apps_placement || 'right') !== 'none';
+    runningApps.setEnabled(on);
+    if (on) runningApps.refresh();
+  });
+
+  // Live-update when the Settings → Appearance → Running Apps toggle changes.
+  document.addEventListener('look:running-apps-changed', (e) => {
+    const enabled = e.detail.enabled;
+    runningApps.setEnabled(enabled);
+    if (enabled) runningApps.refresh();
+  });
 
   // Expose enterCommandMode and settings for keyboard
   keyboard.setEnterCommandMode(enterCommandMode);

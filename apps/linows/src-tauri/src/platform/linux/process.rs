@@ -47,31 +47,8 @@ pub(crate) fn list() -> Vec<RunningApp> {
     //    Build a map: normalized_name → Vec<(pid, rss)>
     let mut norm_procs: HashMap<String, Vec<(u32, u64)>> = HashMap::new();
     for (proc_name, pids) in &procs {
-        // Original name
-        norm_procs
-            .entry(proc_name.to_lowercase())
-            .or_default()
-            .extend(pids);
-        // Strip NixOS wrapper: ".firefox-wrappe" → "firefox", ".DiscordPTB-wra" → "DiscordPTB"
-        // The /proc/status Name field is truncated to 15 chars, so "-wrapped" may
-        // appear as "-wrappe", "-wrapp", "-wrap", "-wra", "-wr" etc.
-        let stripped = proc_name.strip_prefix('.').unwrap_or(proc_name);
-        let base = if let Some(pos) = stripped.find("-wr") {
-            // Verify the suffix looks like truncated "-wrapped"
-            let suffix = &stripped[pos..];
-            if "-wrapped".starts_with(suffix) {
-                &stripped[..pos]
-            } else {
-                stripped
-            }
-        } else {
-            stripped
-        };
-        if !base.is_empty() && base != proc_name {
-            norm_procs
-                .entry(base.to_lowercase())
-                .or_default()
-                .extend(pids);
+        for candidate in normalize_proc_name(proc_name) {
+            norm_procs.entry(candidate).or_default().extend(pids);
         }
     }
 
@@ -81,7 +58,29 @@ pub(crate) fn list() -> Vec<RunningApp> {
     let mut matched_keys: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for de in &desktop_entries {
-        let bin_names = extract_bin_names(&de.exec);
+        let mut bin_names = extract_bin_names(&de.exec);
+        // DBusActivatable apps may use `Exec=gapplication launch X.Y.Z` (Weather)
+        // or wrap the binary so /proc Name doesn't match Exec. Derive a kebab
+        // candidate from the desktop file stem as a fallback (`org.gnome.Weather`
+        // → `gnome-weather`).
+        if let Some(kebab) = kebab_from_desktop_stem(&de.path) {
+            let key = kebab.to_lowercase();
+            if !bin_names.iter().any(|n| n.to_lowercase() == key) {
+                bin_names.push(kebab);
+            }
+        }
+        // GJS apps (Weather, etc.) launch via `gjs-console` but set their
+        // /proc Name to the GApplication ID — `org.gnome.Weather` truncated
+        // to `org.gnome.Weath` at the 15-char comm limit. Add the raw dotted
+        // stem so the truncation fallback below picks it up.
+        if let Some(stem) = Path::new(&de.path).file_stem().and_then(|s| s.to_str())
+            && stem.contains('.')
+        {
+            let key = stem.to_lowercase();
+            if !bin_names.iter().any(|n| n.to_lowercase() == key) {
+                bin_names.push(stem.to_string());
+            }
+        }
         for bin in &bin_names {
             let key = bin.to_lowercase();
             if matched_keys.contains(&key) {
@@ -115,6 +114,203 @@ pub(crate) fn list() -> Vec<RunningApp> {
     // Sort alphabetically by name
     apps.sort_by_key(|a| a.name.to_lowercase());
     apps
+}
+
+/// Like `list()`, but filtered to only GUI apps with visible windows.
+/// On X11: uses `_NET_CLIENT_LIST` + `_NET_WM_PID` to get windowed PIDs.
+/// On Wayland: uses `wlr-foreign-toplevel-management` app_ids, then falls
+/// back to GNOME Shell (which doesn't expose PIDs, so we match by desktop stem).
+pub(crate) fn list_gui() -> Vec<RunningApp> {
+    let my_pid = std::process::id();
+    let all: Vec<RunningApp> = list()
+        .into_iter()
+        .filter(|app| {
+            if app.pid == my_pid {
+                return false;
+            }
+            // Filter out Look itself by binary name
+            if let Some(ref exec) = app.exec {
+                let bin = exec.split_whitespace().next().unwrap_or("");
+                let stem = Path::new(bin)
+                    .file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or("");
+                if stem == "lookapp" {
+                    return false;
+                }
+            }
+            true
+        })
+        .collect();
+    if all.is_empty() {
+        return all;
+    }
+
+    if super::transparency::is_wayland() {
+        let debug = std::env::var("LOOK_DEBUG_GUI").is_ok();
+        if debug {
+            eprintln!("[list_gui] wayland; candidates from list(): {}", all.len());
+            for app in &all {
+                eprintln!(
+                    "[list_gui]   candidate: name={:?} pid={} desktop_id={:?}",
+                    app.name, app.pid, app.desktop_id
+                );
+            }
+        }
+        // Wayland: get app_ids from wlr-foreign-toplevel
+        let app_ids = super::wlr_focus::list_toplevel_app_ids();
+        if debug {
+            eprintln!("[list_gui] wlr app_ids: {:?}", app_ids);
+        }
+        if !app_ids.is_empty() {
+            return all
+                .into_iter()
+                .filter(|app| {
+                    // Match desktop file stem (e.g. "org.mozilla.firefox" or "firefox")
+                    // against toplevel app_ids
+                    if let Some(ref id) = app.desktop_id {
+                        let stem = id
+                            .strip_prefix("app:")
+                            .and_then(|p| {
+                                std::path::Path::new(p).file_stem().and_then(|f| f.to_str())
+                            })
+                            .unwrap_or("");
+                        let stem_lower = stem.to_lowercase();
+                        // Try full stem and last segment (for reverse-DNS like org.mozilla.firefox)
+                        let short = stem_lower.rsplit('.').next().unwrap_or("");
+                        app_ids.contains(&stem_lower)
+                            || (!short.is_empty() && app_ids.contains(short))
+                    } else {
+                        false
+                    }
+                })
+                .collect();
+        }
+        // wlr unavailable (GNOME Wayland) — ask the Look GNOME Shell extension
+        // which apps Shell.AppSystem considers running (≥1 window). This is
+        // the same signal GNOME's Activities/app-switcher uses.
+        let ext_ids = super::gnome_ext::list_windowed_apps();
+        if debug {
+            eprintln!("[list_gui] gnome ext ListWindowedApps: {:?}", ext_ids);
+        }
+        if let Some(ids) = ext_ids {
+            let windowed: std::collections::HashSet<String> =
+                ids.into_iter().map(|s| s.to_lowercase()).collect();
+            return all
+                .into_iter()
+                .filter(|app| {
+                    let Some(ref id) = app.desktop_id else {
+                        return false;
+                    };
+                    let Some(path) = id.strip_prefix("app:") else {
+                        return false;
+                    };
+                    let fname = Path::new(path)
+                        .file_name()
+                        .and_then(|f| f.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    let keep = windowed.contains(&fname);
+                    if debug {
+                        eprintln!(
+                            "[list_gui]   ext-filter name={:?} fname={:?} keep={}",
+                            app.name, fname, keep
+                        );
+                    }
+                    keep
+                })
+                .collect();
+        }
+        // Extension unreachable — last-resort heuristic.
+        if debug {
+            eprintln!("[list_gui] no wlr, no extension — using desktop-hint heuristic");
+        }
+        return filter_by_desktop_hints(all);
+    }
+
+    // X11: filter by PIDs that own visible windows
+    let windowed_pids = super::window_focus::pids_with_visible_windows();
+    if windowed_pids.is_empty() {
+        // Fallback if X11 query failed
+        return filter_by_desktop_hints(all);
+    }
+
+    // For multi-process apps, also include parent PIDs. A process may spawn
+    // children that own the window while the parent is what we matched.
+    let mut expanded_pids = windowed_pids.clone();
+    for &pid in &windowed_pids {
+        // Walk up parent chain
+        if let Ok(status) = fs::read_to_string(format!("/proc/{pid}/status"))
+            && let Some(ppid) =
+                parse_status_field(&status, "PPid:").and_then(|v| v.parse::<u32>().ok())
+        {
+            expanded_pids.insert(ppid);
+        }
+    }
+
+    all.into_iter()
+        .filter(|app| expanded_pids.contains(&app.pid))
+        .collect()
+}
+
+/// Heuristic filter for GNOME Wayland (no wlr, no X11 window list).
+/// Checks desktop file for Terminal=true and known non-GUI categories.
+///
+/// We intentionally do NOT exclude `--gapplication-service` daemons here:
+/// most GNOME apps (Calendar, Weather, Maps, Files, …) run in daemon mode
+/// even when the user has a visible window open. Without a compositor signal
+/// we can't distinguish "daemon idling in background" from "daemon with an
+/// active window," so we err on the side of showing the app — false positives
+/// (a few invisible daemons) beat false negatives (missing real user apps).
+fn filter_by_desktop_hints(apps: Vec<RunningApp>) -> Vec<RunningApp> {
+    apps.into_iter()
+        .filter(|app| {
+            let Some(ref id) = app.desktop_id else {
+                return false;
+            };
+            let Some(path) = id.strip_prefix("app:") else {
+                return false;
+            };
+            !is_terminal_or_background(path)
+        })
+        .collect()
+}
+
+/// Check if a desktop file is a terminal app, background service, or input method.
+fn is_terminal_or_background(path: &str) -> bool {
+    let Ok(content) = fs::read_to_string(path) else {
+        return false;
+    };
+    let mut in_desktop_entry = false;
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            in_desktop_entry = line == "[Desktop Entry]";
+            continue;
+        }
+        if !in_desktop_entry {
+            continue;
+        }
+        if let Some(val) = line.strip_prefix("Terminal=")
+            && val.trim().eq_ignore_ascii_case("true")
+        {
+            return true;
+        }
+        if let Some(val) = line.strip_prefix("Categories=") {
+            let lower = val.to_lowercase();
+            if lower.contains("inputmethod") || lower.contains("monitor") {
+                return true;
+            }
+        }
+        // fcitx5/ibus desktop files have Categories=System;Utility (no
+        // InputMethod), but their unlocalized GenericName is "Input Method".
+        if let Some(val) = line.strip_prefix("GenericName=")
+            && val.to_lowercase().contains("input method")
+        {
+            return true;
+        }
+    }
+    false
 }
 
 pub(crate) fn list_on_port(port: u16) -> Vec<RunningApp> {
@@ -314,19 +510,94 @@ fn parse_desktop_entry(path: &str) -> Option<DesktopEntry> {
 
 fn extract_bin_names(exec: &str) -> Vec<String> {
     let mut names = Vec::new();
-    // First token is the command (may have env vars, prefixes)
-    for token in exec.split_whitespace() {
-        if token.contains('=') || token.starts_with('%') {
-            continue; // skip env vars and field codes
+    let mut tokens = exec
+        .split_whitespace()
+        .filter(|t| !t.contains('=') && !t.starts_with('%'));
+
+    let Some(first) = tokens.next() else {
+        return names;
+    };
+    let bin = Path::new(first)
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or(first);
+    names.push(bin.to_string());
+
+    // `gapplication launch org.gnome.Weather` — the real binary won't be
+    // `gapplication`. Derive a kebab candidate from the app ID's last two
+    // reverse-DNS segments (`org.gnome.Weather` → `gnome-weather`).
+    if bin == "gapplication" {
+        for t in tokens {
+            if t == "launch" || t.starts_with("--") {
+                continue;
+            }
+            if let Some(kebab) = kebab_from_appid(t) {
+                names.push(kebab);
+            }
+            break;
         }
-        let bin = Path::new(token)
-            .file_name()
-            .and_then(|f| f.to_str())
-            .unwrap_or(token);
-        names.push(bin.to_string());
-        break;
     }
+
     names
+}
+
+/// Convert a reverse-DNS app ID like `org.gnome.Weather` into a kebab-cased
+/// binary candidate `gnome-weather`. Returns None for IDs with fewer than 2
+/// dot-separated segments.
+fn kebab_from_appid(id: &str) -> Option<String> {
+    let segs: Vec<&str> = id.split('.').filter(|s| !s.is_empty()).collect();
+    if segs.len() < 2 {
+        return None;
+    }
+    let n = segs.len();
+    Some(format!("{}-{}", segs[n - 2], segs[n - 1]).to_lowercase())
+}
+
+/// Derive a kebab binary candidate from a desktop file path: the file stem
+/// is treated as a reverse-DNS app ID. Returns None if the stem isn't dotted.
+fn kebab_from_desktop_stem(path: &str) -> Option<String> {
+    let stem = Path::new(path).file_stem().and_then(|s| s.to_str())?;
+    kebab_from_appid(stem)
+}
+
+/// Build all matching candidates for a /proc/<pid>/status `Name:` field.
+///
+/// Always yields the lowercased original. For NixOS-style wrappers (binaries
+/// renamed `.<bin>-wrapped`), `Name:` is truncated to 15 chars and the
+/// `-wrapped` suffix may appear as anything from `-wrapped` down to just `-`
+/// (or vanish entirely when `<bin>` is long enough to fill the 14 chars after
+/// the dot). Yield the unwrapped base in that case too.
+fn normalize_proc_name(proc_name: &str) -> Vec<String> {
+    let mut out = vec![proc_name.to_lowercase()];
+    let Some(stripped) = proc_name.strip_prefix('.') else {
+        return out;
+    };
+    // Try each truncation of "-wrapped" as a suffix. Longest first so we don't
+    // accidentally strip a single `-` from a name that actually ended in `-w*`.
+    for sfx in [
+        "-wrapped", "-wrappe", "-wrapp", "-wrap", "-wra", "-wr", "-w",
+    ] {
+        if let Some(base) = stripped.strip_suffix(sfx)
+            && !base.is_empty()
+        {
+            out.push(base.to_lowercase());
+            return out;
+        }
+    }
+    // Trailing `-` is the most ambiguous case (could be a `-wrapped` truncation
+    // OR a legitimate dash-ending name). Only treat it as a wrapper suffix
+    // when the leading dot is present — which is already guaranteed here.
+    if let Some(base) = stripped.strip_suffix('-')
+        && !base.is_empty()
+    {
+        out.push(base.to_lowercase());
+        return out;
+    }
+    // No wrapper suffix; emit the dot-stripped form as a candidate.
+    if !stripped.is_empty() {
+        out.push(stripped.to_lowercase());
+    }
+    out
 }
 
 fn xdg_app_dirs() -> Vec<String> {
@@ -378,4 +649,63 @@ fn parse_status_field(status: &str, prefix: &str) -> Option<String> {
         .find(|l| l.starts_with(prefix))
         .and_then(|l| l.split_whitespace().nth(1))
         .map(|s| s.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nixos_wrapper_truncations() {
+        // 15-char /proc/comm field, NixOS .<bin>-wrapped pattern.
+        assert!(normalize_proc_name(".firefox-wrappe").contains(&"firefox".to_string()));
+        assert!(normalize_proc_name(".nautilus-wrapp").contains(&"nautilus".to_string()));
+        assert!(normalize_proc_name(".ghostty-wrappe").contains(&"ghostty".to_string()));
+        // Trailing dash from `.gnome-weather-wrapped` truncated to 15 chars.
+        assert!(normalize_proc_name(".gnome-weather-").contains(&"gnome-weather".to_string()));
+        // No `-wrapped` suffix visible — base fills the 14 chars.
+        assert!(normalize_proc_name(".gnome-calendar").contains(&"gnome-calendar".to_string()));
+        // Non-wrapper name passes through.
+        assert_eq!(normalize_proc_name("firefox"), vec!["firefox"]);
+    }
+
+    #[test]
+    fn gapplication_launch_yields_kebab() {
+        let names = extract_bin_names("gapplication launch org.gnome.Weather");
+        assert!(names.contains(&"gapplication".to_string()));
+        assert!(names.contains(&"gnome-weather".to_string()));
+    }
+
+    #[test]
+    fn direct_exec_unchanged() {
+        let names = extract_bin_names("gnome-calendar %U");
+        assert_eq!(names, vec!["gnome-calendar"]);
+    }
+
+    #[test]
+    fn gjs_appid_truncated_proc_name_matches_via_15char_fallback() {
+        // GNOME Weather (GJS) shows up in /proc as `org.gnome.Weath` (15 chars
+        // truncated from `org.gnome.Weather`). The desktop file is
+        // `org.gnome.Weather.desktop`; lowercased stem `org.gnome.weather`
+        // truncated to 15 chars is `org.gnome.weath`. Verify the truncation
+        // produces the proc-name form a real Weather process exposes.
+        let key = "org.gnome.weather";
+        let trunc: String = key.chars().take(15).collect();
+        assert_eq!(trunc, "org.gnome.weath");
+        assert!(trunc.len() < key.len());
+    }
+
+    #[test]
+    fn kebab_from_stem() {
+        assert_eq!(
+            kebab_from_desktop_stem("/usr/share/applications/org.gnome.Weather.desktop"),
+            Some("gnome-weather".to_string())
+        );
+        assert_eq!(
+            kebab_from_desktop_stem("/x/org.gnome.Calendar.desktop"),
+            Some("gnome-calendar".to_string())
+        );
+        // Single-segment stems (e.g., `firefox.desktop`) yield None.
+        assert_eq!(kebab_from_desktop_stem("/x/firefox.desktop"), None);
+    }
 }

@@ -53,7 +53,7 @@ fn supports_transparency() -> bool {
 }
 
 const BASE_W: f64 = 860.0;
-const BASE_H: f64 = 580.0;
+const BASE_H: f64 = 600.0;
 /// Grace period (ms) after show — ignore focus-loss within this window.
 const AUTO_HIDE_GRACE_MS: u64 = 300;
 /// Guard (ms) to prevent re-showing after auto-hide (GNOME X11 race).
@@ -144,7 +144,7 @@ fn center_and_scale_window(window: &tauri::WebviewWindow) {
     let size = tauri::LogicalSize::new(win_w as f64, win_h as f64);
     let _ = window.set_size(size);
     // Lock min/max to the scaled size: on Wayland, hide()/show() can
-    // otherwise revert to tauri.conf's default (860×580) on remap,
+    // otherwise revert to tauri.conf's default (860×600) on remap,
     // producing a visible "big rectangle then snap" on toggle.
     let _ = window.set_min_size(Some(tauri::Size::Logical(size)));
     let _ = window.set_max_size(Some(tauri::Size::Logical(size)));
@@ -413,6 +413,15 @@ fn disable_gpu_acceleration(app: &tauri::App) {
 /// On subsequent launches — re-sync the registry/desktop-entry with the current
 /// exe path so it stays valid after updates or reinstalls (matches WinUI3 behavior).
 fn sync_autostart() {
+    // Debug builds live under target/debug and (when produced by `tauri dev`)
+    // load the frontend from devUrl. If we wrote them into autostart, login
+    // would launch a binary that fails with "Could not connect to 127.0.0.1"
+    // because the dev server isn't running. Leave the installed binary's
+    // autostart entry alone.
+    if cfg!(debug_assertions) {
+        return;
+    }
+
     const KEY: &str = "launch_at_login";
 
     let config_path = config::config_file_path();
@@ -682,6 +691,8 @@ fn main() {
             process::list_processes,
             process::list_processes_on_port,
             process::kill_process,
+            process::list_running_apps,
+            process::activate_running_app,
             // Translation
             translate::translate,
             // Clipboard

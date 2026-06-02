@@ -6,6 +6,7 @@ let screen = null;
 let active = false;
 let activeTab = 'appearance';
 let onExit = null;
+let onConfigReloadFn = null;
 
 const TABS = ['appearance', 'shortcuts', 'advanced'];
 
@@ -103,6 +104,10 @@ function getCurrentBlurStyle() {
   return active?.dataset.value || 'high_contrast';
 }
 
+export function setOnConfigReload(fn) {
+  onConfigReloadFn = fn;
+}
+
 export function init(exitFn) {
   onExit = exitFn;
   screen = document.getElementById('settings-screen');
@@ -191,12 +196,13 @@ export function init(exitFn) {
   });
 
 
-  // Keys that mark the theme as "Custom" when manually changed
+  // Keys that mark the theme as "Custom" when manually changed.
+  // Opacities and thickness are user-controlled and should not flip the
+  // theme to Custom — they are preserved across theme switches separately.
   const THEME_KEYS = new Set([
-    'ui_tint_red', 'ui_tint_green', 'ui_tint_blue', 'ui_tint_opacity',
-    'ui_font_red', 'ui_font_green', 'ui_font_blue', 'ui_font_opacity',
-    'ui_border_red', 'ui_border_green', 'ui_border_blue', 'ui_border_opacity',
-    'ui_border_thickness',
+    'ui_tint_red', 'ui_tint_green', 'ui_tint_blue',
+    'ui_font_red', 'ui_font_green', 'ui_font_blue',
+    'ui_border_red', 'ui_border_green', 'ui_border_blue',
   ]);
 
   // All data-key sliders: live preview + save on release
@@ -238,6 +244,18 @@ export function init(exitFn) {
 
   document.getElementById('settings-lazy-indexing').addEventListener('change', (e) => {
     saveConfig({ lazy_indexing_enabled: e.target.checked ? 'true' : 'false' });
+  });
+
+  // Running apps toggle (Appearance tab, next to Theme).
+  // Persisted as `running_apps_placement` to share the macOS config key;
+  // 'right' = visible, 'none' = hidden. Dispatches a custom event so
+  // app.js can apply the change live.
+  document.getElementById('settings-running-apps').addEventListener('change', (e) => {
+    const enabled = e.target.checked;
+    saveConfig({ running_apps_placement: enabled ? 'right' : 'none' });
+    document.dispatchEvent(new CustomEvent('look:running-apps-changed', {
+      detail: { enabled },
+    }));
   });
 
   // Extra scan dirs
@@ -484,6 +502,7 @@ export function init(exitFn) {
       updates.file_scan_depth = document.getElementById('settings-scan-depth').value;
       updates.file_scan_limit = document.getElementById('settings-file-limit').value;
       updates.lazy_indexing_enabled = document.getElementById('settings-lazy-indexing').checked ? 'true' : 'false';
+      updates.running_apps_placement = document.getElementById('settings-running-apps').checked ? 'right' : 'none';
 
       // Advanced: log level
       const logDD = document.getElementById('settings-log-level');
@@ -551,6 +570,7 @@ export async function reloadFromFile() {
     // Rebuild index with new config
     await forceIndexRefresh();
 
+    if (onConfigReloadFn) onConfigReloadFn(map);
     banner.show('Config reloaded from file', 'success', 1.2);
   } catch {
     banner.show('Reload failed', 'error', 1.5);
@@ -607,6 +627,17 @@ export async function restoreOnStartup() {
     // already opaque if the user toggled it.
     if (map.arch_disable_blur === 'true') {
       document.documentElement.setAttribute('data-disable-blur', '');
+    }
+
+    // Pre-populate user-controlled sliders from config so the preset's
+    // applytint/applyBorderColor read the user's saved opacity/thickness
+    // instead of the HTML default values. Without this, first-launch
+    // appearance ignores any user opacity / border-thickness overrides
+    // until they actually open Settings.
+    for (const key of USER_CONTROLLED_KEYS) {
+      if (map[key] === undefined) continue;
+      const slider = screen?.querySelector(`.settings-row[data-key="${key}"] .settings-slider`);
+      if (slider) slider.value = map[key];
     }
 
     // Restore theme preset — preset values drive tint/font/border
@@ -716,7 +747,9 @@ async function loadConfig() {
     document.getElementById('settings-font-name').value = fontName;
 
     // Populate all data-key sliders
-    // If a built-in theme is active, use preset values for theme keys
+    // If a built-in theme is active, use preset values for theme keys —
+    // but keep the user's value for user-controlled keys (opacities,
+    // border thickness) so they survive theme switches.
     const activeTheme = map.ui_theme || '';
     const preset = (activeTheme && activeTheme !== 'custom') ? THEME_PRESETS[activeTheme] : null;
     for (const row of screen.querySelectorAll('.settings-row[data-key]')) {
@@ -726,7 +759,13 @@ async function loadConfig() {
       if (!slider) continue;
 
       const presetVal = preset?.[key];
-      const val = presetVal !== undefined ? presetVal : map[key];
+      const userVal = map[key];
+      // User-controlled keys: prefer the user's saved value, fall back to
+      // preset if they haven't set anything yet. Other keys: theme preset
+      // wins so the colors switch with the theme.
+      const val = USER_CONTROLLED_KEYS.has(key)
+        ? (userVal !== undefined ? userVal : presetVal)
+        : (presetVal !== undefined ? presetVal : userVal);
       if (val !== undefined) {
         slider.value = val;
         valueEl.textContent = formatValue(key, parseFloat(val));
@@ -737,6 +776,7 @@ async function loadConfig() {
     document.getElementById('settings-scan-depth').value = map.file_scan_depth || '4';
     document.getElementById('settings-file-limit').value = map.file_scan_limit || '8000';
     document.getElementById('settings-lazy-indexing').checked = map.lazy_indexing_enabled !== 'false';
+    document.getElementById('settings-running-apps').checked = (map.running_apps_placement || 'right') !== 'none';
     document.getElementById('settings-arch-disable-gpu').checked = map.arch_disable_gpu === 'true';
     document.getElementById('settings-arch-disable-blur').checked = map.arch_disable_blur === 'true';
     if (map.arch_disable_blur === 'true') {
@@ -831,6 +871,15 @@ const THEME_PRESETS = {
   },
 };
 
+// Keys that belong to the user, not the theme — preserved when switching
+// themes so the user doesn't lose their custom transparency / border tweaks.
+const USER_CONTROLLED_KEYS = new Set([
+  'ui_tint_opacity',
+  'ui_font_opacity',
+  'ui_border_opacity',
+  'ui_border_thickness',
+]);
+
 function applyThemePreset(themeId) {
   // "custom" = user-modified values, don't override anything
   if (themeId === 'custom') return;
@@ -844,9 +893,12 @@ function applyThemePreset(themeId) {
   const preset = THEME_PRESETS[themeId];
   if (!preset) return;
 
-  // Update slider DOMs first (so getSliderVal reads correct values)
+  // Update slider DOMs first (so getSliderVal reads correct values).
+  // Skip user-controlled keys so the user's existing values survive a
+  // theme switch.
   for (const row of screen.querySelectorAll('.settings-row[data-key]')) {
     const key = row.dataset.key;
+    if (USER_CONTROLLED_KEYS.has(key)) continue;
     if (preset[key] !== undefined) {
       const slider = row.querySelector('.settings-slider');
       const valueEl = row.querySelector('.settings-slider-value');
@@ -862,7 +914,6 @@ function applyThemePreset(themeId) {
   applyFontColor();
   applyBorderColor();
   if (preset.ui_font_size !== undefined) CSS_MAP.ui_font_size(preset.ui_font_size);
-  if (preset.ui_border_thickness !== undefined) CSS_MAP.ui_border_thickness(preset.ui_border_thickness);
 }
 
 // --- CSS application ---
