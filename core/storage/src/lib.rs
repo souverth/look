@@ -211,10 +211,10 @@ impl SqliteStore {
     pub fn load_candidates(&self, limit: Option<usize>) -> StorageResult<Vec<Candidate>> {
         let sql = match limit {
             Some(_) => {
-                "SELECT id, kind, title, subtitle, path, use_count, last_used_at_unix_s FROM candidates ORDER BY title ASC LIMIT ?1"
+                "SELECT id, kind, title, subtitle, path, use_count, last_used_at_unix_s, fs_modified_at_unix_s FROM candidates ORDER BY title ASC LIMIT ?1"
             }
             None => {
-                "SELECT id, kind, title, subtitle, path, use_count, last_used_at_unix_s FROM candidates ORDER BY title ASC"
+                "SELECT id, kind, title, subtitle, path, use_count, last_used_at_unix_s, fs_modified_at_unix_s FROM candidates ORDER BY title ASC"
             }
         };
 
@@ -239,6 +239,7 @@ impl SqliteStore {
                 path: row.get::<_, String>(4)?.into_boxed_str(),
                 use_count: to_use_count(use_count_raw)?,
                 last_used_at_unix_s: row.get(6)?,
+                fs_modified_at_unix_s: row.get(7)?,
             });
         }
 
@@ -257,14 +258,31 @@ impl SqliteStore {
         let tx = self.conn.transaction()?;
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO candidates (id, kind, title, subtitle, path, use_count, last_used_at_unix_s, indexed_at_unix_s)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                // Interim write-reduction (see specs/indexing-scale.md): the `WHERE`
+                // skips the UPDATE entirely when nothing the scan controls changed,
+                // so a reindex after one download/install rewrites ~1 row instead of
+                // all ~8000. Pairs with `delete_unseen_candidates` for pruning — we
+                // can no longer rely on bumping `indexed_at` for every seen row.
+                // List EVERY scan-owned column here; a missing one means stale data
+                // silently lingers. (use_count/last_used_at are intentionally never
+                // overwritten on conflict, so they're not part of change detection.)
+                // TODO(indexing-scale Direction A): the full walk + per-reindex
+                // re-normalize are still O(total). Move to event-driven incremental
+                // indexing (watcher paths) to make reindex cost ∝ changed files.
+                "INSERT INTO candidates (id, kind, title, subtitle, path, use_count, last_used_at_unix_s, indexed_at_unix_s, fs_modified_at_unix_s)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
                  ON CONFLICT(id) DO UPDATE SET
                    kind = excluded.kind,
                    title = excluded.title,
                    subtitle = excluded.subtitle,
                      path = excluded.path,
-                    indexed_at_unix_s = excluded.indexed_at_unix_s",
+                    indexed_at_unix_s = excluded.indexed_at_unix_s,
+                    fs_modified_at_unix_s = excluded.fs_modified_at_unix_s
+                 WHERE candidates.kind <> excluded.kind
+                    OR candidates.title <> excluded.title
+                    OR candidates.subtitle IS NOT excluded.subtitle
+                    OR candidates.path <> excluded.path
+                    OR candidates.fs_modified_at_unix_s IS NOT excluded.fs_modified_at_unix_s",
             )?;
 
             for candidate in candidates {
@@ -278,6 +296,7 @@ impl SqliteStore {
                     use_count,
                     candidate.last_used_at_unix_s,
                     indexed_at_unix_s,
+                    candidate.fs_modified_at_unix_s,
                 ])?;
             }
         }
@@ -292,8 +311,8 @@ impl SqliteStore {
 
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO candidates (id, kind, title, subtitle, path, use_count, last_used_at_unix_s, indexed_at_unix_s)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                "INSERT INTO candidates (id, kind, title, subtitle, path, use_count, last_used_at_unix_s, indexed_at_unix_s, fs_modified_at_unix_s)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             )?;
 
             for candidate in candidates {
@@ -307,6 +326,7 @@ impl SqliteStore {
                     use_count,
                     candidate.last_used_at_unix_s,
                     None::<i64>,
+                    candidate.fs_modified_at_unix_s,
                 ])?;
             }
         }
@@ -398,6 +418,76 @@ impl SqliteStore {
             "DELETE FROM candidates
              WHERE indexed_at_unix_s IS NULL OR indexed_at_unix_s < ?1",
             params![older_than_unix_s],
+        )?;
+        tx.commit()?;
+        Ok(removed)
+    }
+
+    /// Seen-set pruning, the counterpart to the change-detecting upsert
+    /// (see specs/indexing-scale.md). Because the upsert no longer bumps
+    /// `indexed_at` on unchanged rows, "was this seen in the latest scan?" can't
+    /// be inferred from `indexed_at` anymore — we delete rows in scope that are
+    /// NOT in `seen_ids`. The `indexed_at < older_than_unix_s` guard preserves the
+    /// `i64::MAX` pinned/seeded rows (e.g. UWP), exactly like `delete_stale_*`.
+    /// `prefixes` empty = whole table (ALL-scope refresh); otherwise restrict to
+    /// rows whose id starts with one of the prefixes (scoped refresh).
+    ///
+    /// `seen_ids` is staged in an in-memory temp table (PRAGMA temp_store=MEMORY),
+    /// so this adds no persistent writes beyond the rows it actually deletes.
+    pub fn delete_unseen_candidates(
+        &mut self,
+        seen_ids: &HashSet<Box<str>>,
+        older_than_unix_s: i64,
+        prefixes: &[&str],
+    ) -> StorageResult<usize> {
+        let like_clause = if prefixes.is_empty() {
+            String::new()
+        } else {
+            let ors = (0..prefixes.len())
+                .map(|i| format!("id LIKE ?{} ESCAPE '\\'", i + 2))
+                .collect::<Vec<_>>()
+                .join(" OR ");
+            format!(" AND ({ors})")
+        };
+        let escaped: Vec<String> = prefixes
+            .iter()
+            .map(|p| format!("{}%", p.replace('\\', "\\\\").replace('%', "\\%")))
+            .collect();
+
+        let tx = self.conn.transaction()?;
+        tx.execute_batch(
+            "CREATE TEMP TABLE IF NOT EXISTS _seen_ids (id TEXT PRIMARY KEY);
+             DELETE FROM _seen_ids;",
+        )?;
+        {
+            let mut stmt = tx.prepare("INSERT OR IGNORE INTO _seen_ids (id) VALUES (?1)")?;
+            for id in seen_ids {
+                stmt.execute(params![id.as_ref()])?;
+            }
+        }
+
+        let mut bindings: Vec<&dyn rusqlite::ToSql> = Vec::with_capacity(1 + escaped.len());
+        bindings.push(&older_than_unix_s);
+        for s in &escaped {
+            bindings.push(s);
+        }
+
+        let where_unseen = format!(
+            "(indexed_at_unix_s IS NULL OR indexed_at_unix_s < ?1)
+             AND id NOT IN (SELECT id FROM _seen_ids){like_clause}"
+        );
+
+        tx.execute(
+            &format!(
+                "DELETE FROM usage_events WHERE candidate_id IN (
+                   SELECT id FROM candidates WHERE {where_unseen}
+                 )"
+            ),
+            bindings.as_slice(),
+        )?;
+        let removed = tx.execute(
+            &format!("DELETE FROM candidates WHERE {where_unseen}"),
+            bindings.as_slice(),
         )?;
         tx.commit()?;
         Ok(removed)
@@ -522,6 +612,8 @@ impl SqliteStore {
         self.conn.execute_batch(
             "PRAGMA foreign_keys = ON;
              PRAGMA journal_mode = WAL;
+             -- Keep the seen-id temp table used by delete_unseen_candidates in RAM.
+             PRAGMA temp_store = MEMORY;
 
              CREATE TABLE IF NOT EXISTS settings (
                  key TEXT PRIMARY KEY,
@@ -561,6 +653,10 @@ impl SqliteStore {
             "CREATE INDEX IF NOT EXISTS idx_candidates_indexed_at ON candidates(indexed_at_unix_s)",
             [],
         )?;
+
+        // Filesystem mtime, captured at index time, powers the recent view's
+        // "newly added/changed" signal. Additive column on existing DBs.
+        ensure_column_exists(&self.conn, "candidates", "fs_modified_at_unix_s", "INTEGER")?;
 
         Ok(())
     }
@@ -661,8 +757,7 @@ mod tests {
             title: title.into(),
             subtitle: Some("test subtitle".into()),
             path: path.into(),
-            use_count: 0,
-            last_used_at_unix_s: None,
+            ..Default::default()
         }
     }
 
@@ -752,8 +847,7 @@ mod tests {
             title: "Renamed App".into(),
             subtitle: Some("updated subtitle".into()),
             path: "/Applications/Renamed.app".into(),
-            use_count: 0,
-            last_used_at_unix_s: None,
+            ..Default::default()
         };
 
         store
@@ -812,6 +906,118 @@ mod tests {
 
         let loaded = store.load_candidates(None).expect("load candidates");
         assert!(loaded.is_empty());
+    }
+
+    #[test]
+    fn upsert_skips_write_when_row_unchanged() {
+        let mut store = SqliteStore::open_in_memory().expect("open sqlite in memory");
+        let c = candidate("file:a", "a.txt", "/x/a.txt");
+        store
+            .upsert_candidates_indexed(&[c.clone()], Some(100))
+            .expect("first insert");
+        // Re-upsert identical content on a later run: the WHERE guard should skip
+        // the UPDATE, so indexed_at stays at the original value (no rewrite).
+        store
+            .upsert_candidates_indexed(&[c], Some(200))
+            .expect("no-op upsert");
+        let indexed: i64 = store
+            .conn
+            .query_row(
+                "SELECT indexed_at_unix_s FROM candidates WHERE id = 'file:a'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read indexed_at");
+        assert_eq!(indexed, 100, "unchanged row must not be rewritten");
+    }
+
+    #[test]
+    fn upsert_writes_when_content_changes() {
+        let mut store = SqliteStore::open_in_memory().expect("open sqlite in memory");
+        store
+            .upsert_candidates_indexed(&[candidate("file:a", "a.txt", "/x/a.txt")], Some(100))
+            .expect("first insert");
+        store
+            .upsert_candidates_indexed(&[candidate("file:a", "renamed.txt", "/x/a.txt")], Some(200))
+            .expect("changed upsert");
+        let indexed: i64 = store
+            .conn
+            .query_row(
+                "SELECT indexed_at_unix_s FROM candidates WHERE id = 'file:a'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read indexed_at");
+        assert_eq!(indexed, 200, "changed row must be rewritten");
+        let loaded = store.load_candidates(None).expect("load");
+        assert_eq!(loaded[0].title.as_ref(), "renamed.txt");
+    }
+
+    #[test]
+    fn delete_unseen_removes_unseen_keeps_seen_and_pinned() {
+        let mut store = SqliteStore::open_in_memory().expect("open sqlite in memory");
+        store
+            .upsert_candidates_indexed(
+                &[
+                    candidate("file:a", "a", "/x/a"),
+                    candidate("file:b", "b", "/x/b"),
+                ],
+                Some(100),
+            )
+            .expect("insert files");
+        // Pinned/seeded row uses i64::MAX indexed_at to survive sweeps.
+        store
+            .upsert_candidates_indexed(&[candidate("uwp:pinned", "Pinned", "/p")], Some(i64::MAX))
+            .expect("insert pinned");
+
+        // The latest scan only saw file:a.
+        let mut seen: HashSet<Box<str>> = HashSet::new();
+        seen.insert("file:a".into());
+        let removed = store
+            .delete_unseen_candidates(&seen, 200, &[])
+            .expect("prune unseen");
+        assert_eq!(removed, 1);
+
+        let ids: Vec<String> = store
+            .load_candidates(None)
+            .expect("load")
+            .iter()
+            .map(|c| c.id.to_string())
+            .collect();
+        assert!(ids.contains(&"file:a".to_string()), "seen row kept");
+        assert!(ids.contains(&"uwp:pinned".to_string()), "pinned row kept");
+        assert!(!ids.contains(&"file:b".to_string()), "unseen row removed");
+    }
+
+    #[test]
+    fn delete_unseen_respects_prefixes() {
+        let mut store = SqliteStore::open_in_memory().expect("open sqlite in memory");
+        store
+            .upsert_candidates_indexed(
+                &[
+                    candidate("app:x", "X", "/x"),
+                    candidate("file:y", "Y", "/y"),
+                ],
+                Some(100),
+            )
+            .expect("insert");
+        // Scoped (apps-only) refresh saw nothing: only app:* may be pruned.
+        let seen: HashSet<Box<str>> = HashSet::new();
+        let removed = store
+            .delete_unseen_candidates(&seen, 200, &["app:"])
+            .expect("scoped prune");
+        assert_eq!(removed, 1);
+        let ids: Vec<String> = store
+            .load_candidates(None)
+            .expect("load")
+            .iter()
+            .map(|c| c.id.to_string())
+            .collect();
+        assert!(ids.contains(&"file:y".to_string()), "out-of-scope row kept");
+        assert!(
+            !ids.contains(&"app:x".to_string()),
+            "in-scope unseen removed"
+        );
     }
 
     #[test]
