@@ -54,6 +54,15 @@ struct QuickFolderDefinition {
 
 enum AppConstants {
     enum Launcher {
+        /// Search field placeholder shown in normal (non-command) mode.
+        static let searchPlaceholder = "Type whatever you want"
+        /// Search field placeholder shown in command mode when no command is active.
+        static let commandModePlaceholder = "Choose a command with Tab"
+
+        /// Width of the web-suggestion column shown to the right of the AI answer
+        /// card in the two-column knowledge-lookup layout.
+        static let aiAnswerSuggestionColumnWidth: CGFloat = 320
+
         enum Command {
             static let shell = "shell"
             static let calc = "calc"
@@ -129,6 +138,19 @@ enum AppConstants {
             /// Recovers the query prefix encoded in a discovery-suggestion result
             /// id, or nil when `resultID` isn't a discovery suggestion.
             static func prefix(fromResultID resultID: String) -> String? {
+                guard resultID.hasPrefix(resultIDPrefix) else { return nil }
+                return String(resultID.dropFirst(resultIDPrefix.count))
+            }
+        }
+
+        // Google autocomplete rows appended after the engine results. Like
+        // PrefixSuggestion, these are Swift-synthesized rows told apart by id.
+        enum WebSuggestion {
+            static let resultIDPrefix = "websuggest:"
+            static let limit = 6
+
+            /// Recovers the suggestion text encoded in a result id, or nil.
+            static func text(fromResultID resultID: String) -> String? {
                 guard resultID.hasPrefix(resultIDPrefix) else { return nil }
                 return String(resultID.dropFirst(resultIDPrefix.count))
             }

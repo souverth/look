@@ -34,11 +34,14 @@ struct LauncherView: View {
     @EnvironmentObject var themeStore: ThemeStore
     @Environment(\.openWindow) var openWindow
     @StateObject var clipboardStore = ClipboardHistoryStore()
+    @StateObject var aiAnswer = AIAnswerController()
 
     @State var query = ""
     @State var commandInput = ""
     @State var isCommandMode = false
     @State var backendResults: [LauncherResult] = []
+    @State var webSuggestions: [String] = []
+    @State var webSuggestionTask: Task<Void, Never>?
     @State var selectedResultID: String?
     @State var pickedKeys: [String] = []
     @State var pickedResultsByKey: [String: LauncherResult] = [:]
@@ -294,9 +297,27 @@ struct LauncherView: View {
         }
     }
 
+    /// Google autocomplete rows, appended after the engine results. Built by
+    /// hand like `prefixSuggestionResults`; `openSelectedApp` recognises the id
+    /// prefix and runs a web search instead of opening a file.
+    var webSuggestionResults: [LauncherResult] {
+        guard !isCommandMode, !isClipboardQuery, !isPrefixSuggestionQuery else { return [] }
+        return webSuggestions.enumerated().map { index, text in
+            LauncherResult(
+                id: "\(AppConstants.Launcher.WebSuggestion.resultIDPrefix)\(text)",
+                kind: .app,
+                title: text,
+                subtitle: "Search Google",
+                path: "",
+                score: -1 - index
+            )
+        }
+    }
+
     var displayedResults: [LauncherResult] {
         if isPrefixSuggestionQuery { return prefixSuggestionResults }
-        return isClipboardQuery ? clipboardResults : backendFilteredResults
+        if isClipboardQuery { return clipboardResults }
+        return backendFilteredResults + webSuggestionResults
     }
 
     var isTranslationQuery: Bool {
@@ -484,6 +505,7 @@ struct LauncherView: View {
             invalidateSearchRequests()
             bannerTask?.cancel()
             lookupPreviewTask?.cancel()
+            webSuggestionTask?.cancel()
             keyboardMonitor.stop()
             clipboardStore.setMonitoringMode(.background)
         }
@@ -494,6 +516,7 @@ struct LauncherView: View {
                 pendingEmptyTrashCount = nil
             }
             if !isCommandMode, let cmd = extractInlineCommand(from: query), cmd.hasSpace {
+                aiAnswer.cancel()
                 enterCommandMode(commandID: cmd.id, prefilledInput: cmd.args)
                 return
             }
@@ -505,11 +528,19 @@ struct LauncherView: View {
                 if isClipboardQuery || isPrefixSuggestionQuery {
                     // Both render synthetic results (clip history / prefix menu);
                     // no backend search, just re-seed the selection.
+                    aiAnswer.cancel()
                     setInitialSelection()
                 } else {
+                    // Search drives the AI answer card from its completion handler
+                    // (it needs the local result count to decide whether to fire).
                     refreshSearchResults()
                 }
+            } else {
+                aiAnswer.cancel()
             }
+            // Google autocomplete rows (appended after engine results). Self-gates
+            // by mode and the online-features flag; never blocks search.
+            refreshWebSuggestions()
         }
         .onReceive(clipboardStore.$entries) { _ in
             refreshClipboardSelectionIfNeeded()
@@ -731,6 +762,43 @@ struct LauncherView: View {
 
     @ViewBuilder
     private var resultsRow: some View {
+        if aiAnswer.isActive {
+            if displayedResults.isEmpty {
+                // Nothing actionable underneath, let the answer fill the panel.
+                AIAnswerCardView(controller: aiAnswer, themeStore: themeStore)
+                    .frame(maxHeight: .infinity)
+            } else if backendFilteredResults.isEmpty {
+                // Knowledge lookup: the answer is the headline and the only rows
+                // are web suggestions. Two columns: answer on the left at a
+                // comfortable reading measure, suggestion list pinned on the
+                // right so it stays visible and keyboard-navigable. Both fill the
+                // panel height so the layout matches the normal results screen
+                // and the hint bar stays pinned to the bottom.
+                HStack(alignment: .top, spacing: 8) {
+                    AIAnswerCardView(controller: aiAnswer, themeStore: themeStore)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    resultsListAndPreview
+                        .frame(width: AppConstants.Launcher.aiAnswerSuggestionColumnWidth)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                }
+                .frame(maxHeight: .infinity)
+            } else {
+                // Local file/app results coexist with the answer. Keep the answer
+                // capped on top so the results list keeps its full-width preview
+                // pane instead of being squeezed into a third column.
+                VStack(spacing: 8) {
+                    AIAnswerCardView(controller: aiAnswer, themeStore: themeStore)
+                        .frame(maxHeight: 240)
+                    resultsListAndPreview
+                }
+            }
+        } else {
+            resultsListAndPreview
+        }
+    }
+
+    @ViewBuilder
+    private var resultsListAndPreview: some View {
         HStack(spacing: 0) {
             ResultsListView(
                 results: displayedResults,
@@ -752,7 +820,10 @@ struct LauncherView: View {
                 )
             } else if !isPrefixSuggestionQuery,
                       let selectedID = selectedResultID,
-                      let selectedResult = displayedResults.first(where: { $0.id == selectedID }) {
+                      let selectedResult = displayedResults.first(where: { $0.id == selectedID }),
+                      // Search suggestions have nothing to preview — let the list
+                      // span full width instead of showing an empty pane.
+                      AppConstants.Launcher.WebSuggestion.text(fromResultID: selectedResult.id) == nil {
                 resultsDivider
                 ResultPreviewView(
                     result: selectedResult,
