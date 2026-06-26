@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod answers;
 mod autostart;
 mod calc;
 mod clipboard;
@@ -559,26 +560,35 @@ fn apply_transparency(window: &tauri::WebviewWindow) {
 /// Set up window event handlers (focus input on focus, auto-hide on blur).
 fn setup_window_events(window: &tauri::WebviewWindow) {
     let w = window.clone();
-    window.on_window_event(move |event| {
-        match event {
-            tauri::WindowEvent::Focused(true) => {
-                let _ = w.eval("{ let q = document.getElementById('query'); if (q) { q.focus(); q.select(); } }");
-            }
-            // On Linux, Focused(false) fires on mouse-leave (GNOME/Mutter
-            // with undecorated always-on-top windows), so auto-hide is
-            // handled entirely by the X11 active-window monitor instead.
-            // TODO: add Wayland auto-hide when Wayland support is added.
-            #[cfg(not(target_os = "linux"))]
-            tauri::WindowEvent::Focused(false)
-                if !PICKING_FILE.load(Ordering::Relaxed)
-                    && now_ms() - LAST_SHOWN_AT.load(Ordering::Relaxed) > AUTO_HIDE_GRACE_MS =>
-            {
-                LAST_AUTO_HIDDEN_AT.store(now_ms(), Ordering::Relaxed);
-                let _ = w.hide();
-            }
-            _ => {}
+    window.on_window_event(move |event| match event {
+        tauri::WindowEvent::Focused(true) => {
+            let _ = w.eval(
+                "{ let q = document.getElementById('query'); if (q) { q.focus(); q.select(); } }",
+            );
         }
+        tauri::WindowEvent::Focused(false)
+            if !PICKING_FILE.load(Ordering::Relaxed)
+                && now_ms() - LAST_SHOWN_AT.load(Ordering::Relaxed) > AUTO_HIDE_GRACE_MS
+                && focus_loss_means_dismiss() =>
+        {
+            LAST_AUTO_HIDDEN_AT.store(now_ms(), Ordering::Relaxed);
+            let _ = w.hide();
+        }
+        _ => {}
     });
+}
+
+/// Whether a `Focused(false)` event should auto-hide the launcher.
+///
+/// macOS / Windows: trustworthy, fire only on real focus loss → true.
+/// Linux (X11 + Wayland): false. On X11 the GNOME/Mutter mouse-leave race
+///   means Focused(false) fires even when the window still has keyboard
+///   focus, so the X11 _NET_ACTIVE_WINDOW monitor handles auto-hide
+///   instead. On Wayland we also stay false — Focused(false) fires when
+///   any screenshot / screencast tool grabs focus, which would dismiss
+///   Look before the capture lands. User dismisses via Esc.
+fn focus_loss_means_dismiss() -> bool {
+    !cfg!(target_os = "linux")
 }
 
 fn main() {
@@ -722,6 +732,13 @@ fn main() {
             process::activate_running_app,
             // Translation
             translate::translate,
+            // AI / web answers (look-answers crate, shared with macOS)
+            answers::instant_has_match,
+            answers::definitional_entity,
+            answers::instant_answer,
+            answers::duckduckgo_answer,
+            answers::wikipedia_answer,
+            answers::web_suggestions,
             // Clipboard
             clipboard::get_clipboard_history,
             clipboard::delete_clipboard_entry,

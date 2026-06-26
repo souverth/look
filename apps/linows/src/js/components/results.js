@@ -1,6 +1,7 @@
 import { getIcon } from '../ipc.js';
 import { clipboard as clipboardIcon, check as checkIcon, appIcon, fileIcon, folderIcon, settingIcon, historyLg } from '../icons.js';
 import { getSettingsIcon as getWindowsSettingsIcon } from '../settings-icons/windows.js';
+import { webSuggestionFromResultId } from '../catalog.js';
 
 const iconCache = new Map();
 const pickedMap = new Map(); // key → result
@@ -40,6 +41,13 @@ function renderEmptyState() {
         <div class="empty-state-body">Nothing recent yet</div>
         <div class="empty-state-help">Open files/folders through Look, or download/create some — newest activity shows here. Type <kbd>rc"word</kbd> to filter.</div>
       </div>`;
+  }
+  // AI two-col mode: the right column hosts web suggestions, which routinely
+  // return empty (DDG /ac/ rate-limits, transient curl failures). Showing
+  // a stark "No results" there reads as broken when the user can see the
+  // answer card on the left is working fine. Render nothing instead.
+  if (emptyState.mode === 'ai-suggestion') {
+    return '';
   }
   return '<div class="empty-state">No results</div>';
 }
@@ -187,6 +195,12 @@ function createRow(result, index) {
   const row = document.createElement('div');
   row.className = 'result-row';
   row.dataset.index = index;
+  // Web-suggestion rows live in a narrow 320 px column when the AI card is
+  // active; let their title wrap to multiple lines instead of truncating
+  // (matches macOS WebSuggestionPreviewView's 3-line title cap).
+  if (webSuggestionFromResultId(result.id) != null) {
+    row.classList.add('result-row-web-suggest');
+  }
 
   // Icon (kind-based SVG fallback, async-load real icon)
   const icon = document.createElement('div');
