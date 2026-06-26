@@ -174,8 +174,8 @@ impl AppState {
             self.ptrs(),
             BootstrapScope::ALL,
             dirty_snapshot,
-            true,  // we just acquired in_progress; worker releases it on drop
-            false, // user-initiated refresh; frontend already knows it asked
+            true,
+            true,
             "look: index refresh",
         );
         true
