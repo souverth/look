@@ -11,6 +11,7 @@ Use this guide when you are changing:
 - indexing scope and discovery behavior,
 - matching/ranking quality,
 - SQLite persistence semantics,
+- web answers / translation lookups (`core/answers`),
 - FFI payloads between Swift and Rust.
 
 ## Module map (edit targets)
@@ -27,6 +28,14 @@ Use this guide when you are changing:
 - `core/engine/src/index/settings.rs`: curated System Settings catalog.
 - `core/engine/src/lib.rs`: bootstrap, cache refresh, integration surface.
 
+### `core/answers`
+
+- `core/answers/src/lib.rs`: public entry points (`instant_answer`, `has_match`, suggestions, `translate`).
+- `core/answers/src/sources/`: per-provider lookups (`currency.rs`, `weather.rs`, `crypto.rs`, `knowledge.rs`, `suggest.rs`).
+- `core/answers/src/http.rs`: blocking `curl` subprocess transport (no async runtime).
+- `core/answers/src/translate.rs`: translation logic behind the FFI/Tauri translate endpoints.
+- Keep entry points best-effort and panic-free: return "no answer" on any failure.
+
 ### `core/storage`
 
 - `core/storage/src/lib.rs`:
@@ -42,6 +51,8 @@ Use this guide when you are changing:
 - `bridge/ffi/src/search_api.rs`: search endpoints.
 - `bridge/ffi/src/usage_api.rs`: usage recording endpoint.
 - `bridge/ffi/src/translate_api.rs`: translation endpoint + typed errors.
+- `bridge/ffi/src/answers_api.rs`: instant/web answer endpoints (C ABI over `look_answers`).
+- `bridge/ffi/src/seed_api.rs`: seed externally-discovered candidates (e.g. Windows UWP apps) into storage.
 - `bridge/ffi/src/runtime_config.rs`: config loading + runtime toggles.
 
 ## Common change recipes
@@ -78,6 +89,7 @@ Runtime file: `~/.look.config` (or `LOOK_CONFIG_PATH`).
 - `app_scan_roots`, `app_scan_depth`, `app_exclude_paths`, `app_exclude_names`
 - `file_scan_roots`, `file_scan_extra_roots`, `file_scan_depth` (default: 4, range: 1-12), `file_scan_limit` (default: 4000, range: 500-50000), `file_exclude_paths`
 - `skip_dir_names`
+- `lazy_indexing_enabled` (default: true) - when true, launcher-open refresh runs only when the index is dirty
 - `backend_log_level`
 - `launch_at_login`
 
@@ -106,20 +118,7 @@ cargo test --manifest-path bridge/ffi/Cargo.toml
 
 ### App-level smoke check
 
-```bash
-make app-run
-```
-
-For side-by-side testing without replacing the normal install, use:
-
-```bash
-make app-run-dev
-```
-
-- macOS: installs and runs `/Applications/Look Dev.app` (bundle id `noah-code.Look.Dev`) alongside the Homebrew `Look.app`.
-- Windows: publishes into `%LOCALAPPDATA%\Programs\Look Dev\` and launches that copy with the dev env vars.
-
-After launch, validate:
+Run the app with `make app-run` (see [DEVELOPMENT.md](../DEVELOPMENT.md#building-and-running) for per-platform behavior and the macOS side-by-side `make app-run-dev` build), then validate:
 
 - search returns expected results,
 - usage events update ranking after opening items,

@@ -2,7 +2,7 @@
 
 `look` is a keyboard-first launcher for macOS, Windows, and Linux focused on fast local actions.
 
-> **Cross-platform shortcut note.** Examples are written with macOS modifiers (`Cmd+...`). On Windows and Linux, read `Cmd` as `Ctrl` — except the launcher toggle, which is `Alt+Space` (since `Win+Space` / `Super+Space` are reserved by the OS or desktop environment).
+> **Cross-platform shortcut note.** Examples are written with macOS modifiers (`Cmd+...`). On Windows and Linux, read `Cmd` as `Ctrl` - except the launcher toggle, which is `Alt+Space` (since `Win+Space` / `Super+Space` are reserved by the OS or desktop environment).
 >
 > | macOS           | Windows / Linux  |
 > | --------------- | ---------------- |
@@ -30,7 +30,7 @@ brew tap kunkka19xx/tap
 brew install --cask look
 ```
 
-On first launch, Look will index your apps, files, and folders in the background. You can start using it immediately — results appear as indexing completes.
+On first launch, Look will index your apps, files, and folders in the background. You can start using it immediately - results appear as indexing completes.
 
 To bind `Cmd+Space` to Look, disable Spotlight's default shortcut: `System Settings > Keyboard > Keyboard Shortcuts > Spotlight`.
 
@@ -41,10 +41,10 @@ Look is designed to need as few macOS permissions as possible:
 - **No Accessibility permission** is required.
 - **No Full Disk Access** is required. Look indexes standard user directories (`~`, `/Applications`, `~/Documents`, `~/Downloads`, etc.). To index a directory outside those defaults, add it via `file_scan_extra_roots` in `~/.look.config`.
 - **No Screen Recording** is required.
-- **Network access** is used for explicit actions — `t"` translation, `tw"` dictionary lookup, and `Cmd+Enter` web search — and, when **AI features** are enabled (macOS, on by default), for live Google search suggestions and the DuckDuckGo/Wikipedia answer card as you type. The on-device Apple Intelligence model runs locally and makes no network calls of its own. Turn the AI/web features off by setting `ai_enabled = false` in `~/.look.config` (or via Settings). Local search and indexing never make network calls.
+- **Network access** is used for explicit actions - `t"` translation, `tw"` dictionary lookup, and `Cmd+Enter` web search — and, when **AI features** are enabled (macOS, on by default), for live Google search suggestions and the DuckDuckGo/Wikipedia answer card as you type. The on-device Apple Intelligence model runs locally and makes no network calls of its own. Turn the AI/web features off by setting `ai_enabled = false` in `~/.look.config` (or via Settings). Local search and indexing never make network calls.
 - **Finder Automation** is requested only when you empty the Trash (`Cmd+D` on the pinned Trash folder). The Trash is protected by macOS, so Look asks Finder to empty it; macOS prompts once, and you can manage it under `System Settings > Privacy & Security > Automation`. Moving individual files to the Trash needs no permission.
 
-If macOS prompts for permission during an action you didn't trigger, that's a bug — please [file an issue](https://github.com/kunkka19xx/look/issues).
+If macOS prompts for permission during an action you didn't trigger, that's a bug - please [file an issue](https://github.com/kunkka19xx/look/issues).
 
 ## Core workflow
 
@@ -62,10 +62,10 @@ Useful actions:
 - `Cmd+C`: copy selected file/folder
 - `Cmd+P`: toggle pick on the selected file/folder (multi-select); the picked set is written to the system pasteboard so you can paste them anywhere in Finder
 - `Cmd+Shift+P`: clear all picked items
-- `Cmd+D`: move the selected file/folder — or all picked items — to the Trash (macOS only for now). Like Finder's `Cmd+Delete`, this is immediate and unconfirmed because it's recoverable: the items go to the Trash, not permanent deletion. The rows disappear from results right away.
+- `Cmd+D`: move the selected file/folder - or all picked items — to the Trash (macOS only for now). Like Finder's `Cmd+Delete`, this is immediate and unconfirmed because it's recoverable: the items go to the Trash, not permanent deletion. The rows disappear from results right away.
 - `Cmd+Enter`: web search current query (Google)
 
-When at least one item is picked, the right panel switches to the **Picked** list — each row has an `X` to remove a single item, plus a **Clear all** button. File/folder copies (both `Cmd+C` and `Cmd+P`) are excluded from clipboard history.
+When at least one item is picked, the right panel switches to the **Picked** list - each row has an `X` to remove a single item, plus a **Clear all** button. File/folder copies (both `Cmd+C` and `Cmd+P`) are excluded from clipboard history.
 
 **Trash.** Type `trash` to pin the Trash quick folder; `Enter` opens it in Finder. With the Trash folder selected, its preview shows the item count and `Cmd+D` **empties** the Trash. Emptying is permanent, so it asks you to confirm (`Y`/`Enter` to empty, `N`/`Esc` to cancel). Look empties the Trash through Finder, so the first time you do this macOS asks for permission to control Finder (see [Permissions](#permissions)).
 
@@ -73,15 +73,15 @@ When at least one item is picked, the right panel switches to the **Picked** lis
 
 Look can answer questions and look things up without leaving the launcher. These features are **macOS-only**, **on by default**, and powered by on-device **Apple Intelligence**. Toggle them in Settings or with `ai_enabled` in `~/.look.config`.
 
-- **Answer card.** A question, an entity that has no local match (e.g. `sir alex ferguson`), or an instant-answer pattern (weather, currency, crypto) shows a Spotlight-style card above the results. Sources resolve independently and each appears as it lands — local **Calculator** first, then **DuckDuckGo** and **Wikipedia**, falling back to a streaming on-device **Apple Intelligence** answer when no web source has one. Click a source label to open it; the copy button copies that block.
+- **Answer card.** A question, an entity that has no local match (e.g. `sir alex ferguson`), or an instant-answer pattern (weather, currency, crypto) shows a Spotlight-style card above the results. Sources resolve independently and each appears as it lands - local **Calculator** first, then **DuckDuckGo** and **Wikipedia**, falling back to a streaming on-device **Apple Intelligence** answer when no web source has one. Click a source label to open it; the copy button copies that block.
 - **Search suggestions.** For plain text queries (2+ characters), Google autocomplete rows appear under the results. `Enter` on a suggestion (or `Cmd+Enter` on your query) runs a web search in your default browser.
-- **Query rewrite.** When a natural-language query finds nothing locally, the on-device model rewrites it into Look's prefix grammar and searches again. It never overrides results you can already see — it only runs when the raw query came up empty.
+- **Query rewrite.** When a natural-language query finds nothing locally, the on-device model rewrites it into Look's prefix grammar and searches again. It never overrides results you can already see - it only runs when the raw query came up empty.
 
 **Network note.** While AI features are on, the answer card's web sources and the Google suggestions send your typed query to those services (DuckDuckGo, Wikipedia, Google). The on-device model makes no network calls of its own. Set `ai_enabled = false` to disable all of it.
 
 ## Query prefixes
 
-Don't remember the prefixes? Type a single `"` to open a menu listing every prefix with a short description — pick one (click or `↑`/`↓` then `Enter`) to drop it into the search field, ready for your term.
+Don't remember the prefixes? Type a single `"` to open a menu listing every prefix with a short description - pick one (click or `↑`/`↓` then `Enter`) to drop it into the search field, ready for your term.
 
 - `a"term` -> apps only
 - `f"term` -> files only
@@ -110,8 +110,8 @@ Translation mode (`t"`/`tw"`):
 
 Enter command mode with `Cmd+/`, or jump straight to a specific command from the home screen with the `:` prefix:
 
-- `:calc` then `Enter` — open `/calc` with empty input
-- `:calc 2+2` — opens `/calc` with `2+2` already typed (the space after the command id is the trigger; you can keep typing without pressing Enter)
+- `:calc` then `Enter` - open `/calc` with empty input
+- `:calc 2+2` - opens `/calc` with `2+2` already typed (the space after the command id is the trigger; you can keep typing without pressing Enter)
 - Same pattern for `:shell`, `:kill`, `:sys`
 
 The `:` prefix only triggers when the word right after it is a known command id (`calc`, `shell`, `kill`, `sys`); anything else (`:foo`, `:Users/me/...`) stays in normal search.
@@ -138,7 +138,7 @@ Built-in commands:
 - Edit the **Session List** to plan focus + break blocks; the timer auto-advances through them and loops the music folder while running
 - `Space` start/pause the active session • `R` reset • `P` toggle music play/pause
 - Pick a folder of audio files (mp3/m4a/wav/aac/flac/ogg/aiff/alac); tracks are played one at a time, shuffled per launch
-- A "session ending soon" alert fires 10s before each block ends — both as a menu-bar popover and (when granted) a macOS notification with chime
+- A "session ending soon" alert fires 10s before each block ends - both as a menu-bar popover and (when granted) a macOS notification with chime
 - Menu-bar mini-timer shows remaining time even when the launcher is hidden; click to jump back into `/pomo`
 
 Behavior:
@@ -178,13 +178,13 @@ Built-in theme presets are available:
 
 Theme is saved as `ui_theme=<name>` in config.
 
-**Running Apps**: a switch that shows running-app icons in the right half of the search bar. When on, the search field shrinks to the left half and the running apps fill the right half (right-aligned, growing leftward as more apps open). Each icon has a corner number badge; pressing the modifier + the badge digit on the home screen activates that app — `Cmd+1`..`Cmd+9` on macOS, `Alt+1`..`Alt+9` on Linux and Windows. When off, the search bar spans the full width and the switcher shortcut is disabled. The launcher window stays the same size either way.
+**Running Apps**: a switch that shows running-app icons in the right half of the search bar. When on, the search field shrinks to the left half and the running apps fill the right half (right-aligned, growing leftward as more apps open). Each icon has a corner number badge; pressing the modifier + the badge digit on the home screen activates that app - `Cmd+1`..`Cmd+9` on macOS, `Alt+1`..`Alt+9` on Linux and Windows. When off, the search bar spans the full width and the switcher shortcut is disabled. The launcher window stays the same size either way.
 
 Behavior:
 
-- **Stable** — icons sit in alphabetical order and don't shuffle when you switch apps. The activation digit for a given app stays the same until you launch or quit something.
-- **Ergonomic badge keys** — easier-to-reach keys are assigned first. With 5 running apps the badges are `1, 2, 3, 8, 9` (skipping the harder middle keys); `5/6/7` only get used when you have 7+ apps running.
-- **Linux focus** — Look's GNOME Shell extension activates the app's most-recent window on Wayland; X11 uses `_NET_ACTIVE_WINDOW` via x11rb; sway/Hyprland use `wlr-foreign-toplevel-management`; i3 uses `i3-msg`.
+- **Stable** - icons sit in alphabetical order and don't shuffle when you switch apps. The activation digit for a given app stays the same until you launch or quit something.
+- **Ergonomic badge keys** - easier-to-reach keys are assigned first. With 5 running apps the badges are `1, 2, 3, 8, 9` (skipping the harder middle keys); `5/6/7` only get used when you have 7+ apps running.
+- **Linux focus** - Look's GNOME Shell extension activates the app's most-recent window on Wayland; X11 uses `_NET_ACTIVE_WINDOW` via x11rb; sway/Hyprland use `wlr-foreign-toplevel-management`; i3 uses `i3-msg`.
 - **Windowless apps** (Finder with no Finder windows, etc.) get a fresh window via a Dock-style "reopen" so you don't see an empty flash.
 
 Saved as `running_apps_placement=<value>` in `~/.look.config` (`none` = off, any other value = on; legacy `top`/`right`/`bottom` values still load as "on"). New keys are auto-appended to existing config files on next Save Config.
@@ -270,7 +270,7 @@ Note: `Settings Blur` is stored as local app UI state (UserDefaults) and is not 
 - `Cmd+/`: command mode
 - `:cmd` (e.g. `:calc 2+2`, `:kill chrome`, `:sys`, `:pomo`): jump to a command directly from the home screen
 - `Cmd+1` / `Cmd+2` / `Cmd+3` / `Cmd+4` / `Cmd+5`: in command mode, direct command switch (`shell`, `calc`, `kill`, `sys`, `pomo`)
-- `Cmd+1`..`Cmd+9` (macOS) / `Alt+1`..`Alt+9` (Linux, Windows): on the home screen, activate the running-app whose badge shows that digit, when `Running Apps` is on. Badge labels are ergonomic, not strictly positional — see Settings → Appearance → Running Apps
+- `Cmd+1`..`Cmd+9` (macOS) / `Alt+1`..`Alt+9` (Linux, Windows): on the home screen, activate the running-app whose badge shows that digit, when `Running Apps` is on. Badge labels are ergonomic, not strictly positional - see Settings → Appearance → Running Apps
 - `Space` / `R` / `P` (inside `/pomo`): start/pause session, reset, toggle music play/pause
 - `Escape`: back/close (context dependent)
 - `Shift+Escape`: hide launcher
@@ -318,12 +318,12 @@ Note: `Settings Blur` is stored as local app UI state (UserDefaults) and is not 
 - translation requires network; check connectivity and retry
 - corporate proxies and VPNs can block the translation endpoint
 
-**Linux only — ghost slider trails or overlapping popovers in Settings.**
+**Linux only - ghost slider trails or overlapping popovers in Settings.**
 
 - observed on Arch GNOME 50 + webkit2gtk 2.52.3; Ubuntu 26.04 and NixOS 2.50.6 on identical webkit are unaffected, so this is a stack-interaction bug we can't auto-detect
 - open **Settings > Advanced > Arch** and flip one toggle:
-  - **Disable GPU compositing** — keeps blur, fixes the ghost. Requires restart.
-  - **Disable blur effect** — drops blur, keeps tint. Takes effect immediately.
+  - **Disable GPU compositing** - keeps blur, fixes the ghost. Requires restart.
+  - **Disable blur effect** - drops blur, keeps tint. Takes effect immediately.
 
 **I want to reset everything to defaults.**
 
@@ -344,7 +344,7 @@ Manual install:
 rm -rf "/Applications/Look.app"
 ```
 
-Remove local state (optional — includes config, index, and usage history):
+Remove local state (optional - includes config, index, and usage history):
 
 ```bash
 rm -f "$HOME/.look.config"

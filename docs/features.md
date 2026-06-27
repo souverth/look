@@ -15,12 +15,12 @@ This document tracks what `look` supports today and what is planned next.
 ### Core search and launch
 
 - app/file/folder search from one input
-- scoped query prefixes: `a"`, `f"`, `d"`, `r"`, and `rc"` (recent files/folders, newest first — blends opened-through-Look with recently added/changed on disk; macOS for now)
+- scoped query prefixes: `a"`, `f"`, `d"`, `r"`, and `rc"` (recent files/folders, newest first - blends opened-through-Look with recently added/changed on disk; macOS for now)
 - path-fragment friendly matching (slash-biased queries)
 - open with `Enter`, reveal in Finder with `Cmd+F`
 - copy selected file/folder path/content handle with `Cmd+C`
 - multi-pick files/folders with `Cmd+P` (toggle); picked set is mirrored to the system pasteboard for paste anywhere. `Cmd+Shift+P` clears the set
-- move selected file/folder (or all picked items) to the Trash with `Cmd+D` — recoverable, no confirmation (macOS only for now)
+- move selected file/folder (or all picked items) to the Trash with `Cmd+D` - recoverable, no confirmation (macOS only for now)
 - pinned **Trash** quick folder (type `trash`): `Enter` opens it in Finder, its preview shows the item count, and `Cmd+D` empties it via Finder (confirmed, since it's permanent)
 - preview pane: text/image file previews, plus folder previews listing the immediate children (folders first, capped at 30, click to open)
 
@@ -34,9 +34,9 @@ This document tracks what `look` supports today and what is planned next.
 ### AI answers and web suggestions (macOS)
 
 - optional, **on by default**; toggle with `ai_enabled` in `~/.look.config` or the Settings panel. Runs on-device via **Apple Intelligence**
-- **answer card**: a question, an entity with no local match (e.g. `sir alex ferguson`), or an instant-answer pattern (weather/currency/crypto) shows a Spotlight-style card. Sources resolve concurrently and render as they arrive — local Calculator, then DuckDuckGo and Wikipedia, falling back to a streaming on-device Apple Intelligence answer when no web source hits. In the knowledge-lookup view the card sits in a two-column layout with the suggestion list
+- **answer card**: a question, an entity with no local match (e.g. `sir alex ferguson`), or an instant-answer pattern (weather/currency/crypto) shows a Spotlight-style card. Sources resolve concurrently and render as they arrive - local Calculator, then DuckDuckGo and Wikipedia, falling back to a streaming on-device Apple Intelligence answer when no web source hits. In the knowledge-lookup view the card sits in a two-column layout with the suggestion list
 - **search suggestions**: Google autocomplete rows appear under the results for plain text queries (2+ chars); `Enter` on one runs a web search, as does `Cmd+Enter` on the query
-- **query rewrite**: when a natural-language query finds nothing locally, the on-device model rewrites it into Look's prefix grammar and re-searches — never overriding results already on screen
+- **query rewrite**: when a natural-language query finds nothing locally, the on-device model rewrites it into Look's prefix grammar and re-searches - never overriding results already on screen
 - network note: while AI is on, the answer card's web sources and the Google suggestions send the typed query to those services; the on-device model itself makes no network calls. All of it is off when `ai_enabled = false`
 
 ### Command mode
@@ -50,7 +50,7 @@ This document tracks what `look` supports today and what is planned next.
 
 ### Running apps switcher
 
-- an icon row rendered on the right half of the search bar: when enabled, the search field takes the left half and the running-app icons occupy the right (right-aligned, growing leftward as more apps open). Apps are capped at 9, sorted alphabetically and **stable** — positions don't shuffle when you switch apps
+- an icon row rendered on the right half of the search bar: when enabled, the search field takes the left half and the running-app icons occupy the right (right-aligned, growing leftward as more apps open). Apps are capped at 9, sorted alphabetically and **stable** - positions don't shuffle when you switch apps
   - **macOS**: from `NSWorkspace.shared.runningApplications`, filtered to regular apps
   - **Linux**: from `/proc` scan, filtered by what GNOME Shell's `Shell.AppSystem.get_running()` considers a windowed app (via Look's GNOME extension on Wayland) or by `wlr-foreign-toplevel` / X11 client-list / desktop-hints on other compositors
   - **Windows**: from running-window enumeration via Win32

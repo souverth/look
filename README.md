@@ -16,25 +16,25 @@ https://github.com/user-attachments/assets/f8ee0f85-4c0d-4ea5-bb1d-8c8bf014d50d
 
 ## What you can do
 
-- **Find and open anything** — apps, files, folders indexed locally. Type, Enter, done.
-- **Calc inline** — type `2^10`, `4!`, `200*15%`, `sqrt(2)`, `2*pi`. No command mode needed.
-- **Kill a process by port** — `Cmd+/` then `kill :3000`. Confirms before killing.
-- **Search clipboard history** — `c"meeting` finds the snippet you copied an hour ago.
-- **Translate or look up a word** — `t"hello` for quick translation, `tw"word` for a definition panel.
-- **Regex, path, and kind-scoped search** — `r"^Visual.*`, `git/project/readme`, `a"safari`, `f"note`, `d"documents`.
-- **Browse recent files/folders** — `rc"` lists what you most recently opened *and* what recently landed on disk (downloads, screenshots), newest first; `rc"word` filters. macOS for now.
-- **Switch running apps from the launcher** — an icon strip on the right half of the search bar. `Cmd+1`..`Cmd+9` on macOS / `Alt+1`..`Alt+9` on Linux+Windows jumps to a running app. Toggle on/off in `Settings > Appearance > Running Apps`.
-- **Ask a question or look something up** *(macOS, optional)* — with AI features on, a question or an entity that isn't on your Mac (e.g. `sir alex ferguson`) shows an answer card from DuckDuckGo/Wikipedia or the on-device Apple Intelligence model, alongside Google search suggestions. On by default; turn it off in Settings.
+- **Find and open anything** - apps, files, folders indexed locally. Type, Enter, done.
+- **Calc inline** - type `2^10`, `4!`, `200*15%`, `sqrt(2)`, `2*pi`. No command mode needed.
+- **Kill a process by port** - `Cmd+/` then `kill :3000`. Confirms before killing.
+- **Search clipboard history** - `c"meeting` finds the snippet you copied an hour ago.
+- **Translate or look up a word** - `t"hello` for quick translation, `tw"word` for a definition panel.
+- **Regex, path, and kind-scoped search** - `r"^Visual.*`, `git/project/readme`, `a"safari`, `f"note`, `d"documents`.
+- **Browse recent files/folders** - `rc"` lists what you most recently opened *and* what recently landed on disk (downloads, screenshots), newest first; `rc"word` filters. macOS for now.
+- **Switch running apps from the launcher** - an icon strip on the right half of the search bar. `Cmd+1`..`Cmd+9` on macOS / `Alt+1`..`Alt+9` on Linux+Windows jumps to a running app. Toggle on/off in `Settings > Appearance > Running Apps`.
+- **Ask a question or look something up** *(macOS, optional)* - with AI features on, a question or an entity that isn't on your Mac (e.g. `sir alex ferguson`) shows an answer card from DuckDuckGo/Wikipedia or the on-device Apple Intelligence model, alongside Google search suggestions. On by default; turn it off in Settings.
 
-No account. No telemetry. No plugin marketplace to manage. Local-first by default — the optional AI/web features (macOS) are the only things that reach the network, and you can switch them off.
+No account. No telemetry. No plugin marketplace to manage. Local-first by default - the optional AI/web features (macOS) are the only things that reach the network, and you can switch them off.
 
 ## Why look
 
-- **Fast** — typical search under 1 ms on a 2000-item index; empty-query browse under 30 µs.
-- **Small** — single native app per platform. No Electron, no background daemons.
-- **Local-first** — candidates indexed in a local SQLite file. Network calls are limited and controllable: the explicit `t"`, `tw"`, and `Cmd+Enter` web search, plus the optional AI features (macOS) — Google search suggestions and DuckDuckGo/Wikipedia answer cards — which you can disable in Settings (`ai_enabled`). The on-device Apple Intelligence model itself runs locally.
-- **Zero-config by default** — presets cover common apps (`alias_note`, `alias_code`, `alias_term`, `alias_chat`, `alias_music`, `alias_brow`). Configure more via `~/.look.config` when you want to.
-- **Keyboard-first** — every action has a key; mouse never required.
+- **Fast** - typical search under 1 ms on a 2000-item index; empty-query browse under 30 µs.
+- **Small** - single native app per platform. No Electron, no background daemons.
+- **Local-first** - candidates indexed in a local SQLite file. Network calls are limited and controllable: the explicit `t"`, `tw"`, and `Cmd+Enter` web search, plus the optional AI features (macOS): Google search suggestions and DuckDuckGo/Wikipedia answer cards, which you can disable in Settings (`ai_enabled`). The on-device Apple Intelligence model itself runs locally.
+- **Zero-config by default** - presets cover common apps (`alias_note`, `alias_code`, `alias_term`, `alias_chat`, `alias_music`, `alias_brow`). Configure more via `~/.look.config` when you want to.
+- **Keyboard-first** - every action has a key; mouse never required.
 
 If you want a launcher that stays out of your way and does exactly what you asked, that's the pitch.
 
@@ -48,7 +48,7 @@ If you want a launcher that stays out of your way and does exactly what you aske
 | No Electron     | ✅                      | ✅         | ❌                 | ✅           | ✅         | ✅         |
 | No plugin store | ✅                      | ✅         | ❌                 | ❌ Powerpack | ✅         | ✅         |
 
-> If this is useful, ⭐ star the repo — it's the single biggest signal that helps the project keep shipping.
+> If this is useful, ⭐ star the repo - it's the single biggest signal that helps the project keep shipping.
 
 ## Install
 
@@ -59,7 +59,7 @@ brew tap kunkka19xx/tap
 brew install --cask look
 ```
 
-Then bind `Cmd+Space` to Look (disable Spotlight's shortcut in `System Settings > Keyboard > Keyboard Shortcuts > Spotlight`). Release builds are signed and notarized — no Gatekeeper bypass needed.
+Then bind `Cmd+Space` to Look (disable Spotlight's shortcut in `System Settings > Keyboard > Keyboard Shortcuts > Spotlight`). Release builds are signed and notarized - no Gatekeeper bypass needed.
 
 ### Linux
 
@@ -107,7 +107,7 @@ yay -R look-bin
 # Ubuntu/Debian
 sudo dpkg -r look
 
-# AppImage — just delete the file
+# AppImage - just delete the file
 rm Look_*.AppImage
 ```
 
@@ -124,7 +124,7 @@ nix profile install 'github:kunkka19xx/look?dir=apps/linows'
 Declarative (NixOS):
 
 ```nix
-# flake.nix — add input and cachix config
+# flake.nix - add input and cachix config
 {
   nixConfig = {
     extra-substituters = [ "https://look.cachix.org" ];
@@ -135,7 +135,7 @@ Declarative (NixOS):
   # ... your other inputs
 }
 
-# configuration.nix — add package
+# configuration.nix - add package
 { pkgs, inputs, ... }:
 {
   environment.systemPackages = [
@@ -144,7 +144,7 @@ Declarative (NixOS):
 }
 ```
 
-Pre-built binaries are served via [Cachix](https://look.cachix.org). On first rebuild, nix will ask to trust the cache — say yes. No source compilation needed.
+Pre-built binaries are served via [Cachix](https://look.cachix.org). On first rebuild, nix will ask to trust the cache - say yes. No source compilation needed.
 
 Update to latest release:
 
@@ -155,7 +155,7 @@ sudo nixos-rebuild switch --flake /path/to/your/flake#hostname
 
 > **Note:** On GNOME desktops, log out and log back in after the first install so the GNOME Shell extension (used for window focusing and hotkey on Wayland) can load.
 
-**Window manager users (i3, sway, Hyprland, etc.):** Autostart via `.desktop` files only works on full DEs (GNOME, KDE). On standalone WMs, add Look to your config manually. The `Alt+Space` hotkey and window rules (float, no border) are registered automatically at runtime — you only need the autostart line:
+**Window manager users (i3, sway, Hyprland, etc.):** Autostart via `.desktop` files only works on full DEs (GNOME, KDE). On standalone WMs, add Look to your config manually. The `Alt+Space` hotkey and window rules (float, no border) are registered automatically at runtime - you only need the autostart line:
 
 ```bash
 # i3: ~/.config/i3/config
@@ -177,7 +177,7 @@ To build from source, see [apps/linows/BUILDING.md](apps/linows/BUILDING.md).
 
 ### Windows
 
-Released artifacts are **x86_64 only**. Windows on ARM (Surface Pro X / Snapdragon X) can run the x64 build under emulation; native ARM builds aren't published — open an issue if you need one.
+Released artifacts are **x86_64 only**. Windows on ARM (Surface Pro X / Snapdragon X) can run the x64 build under emulation; native ARM builds aren't published - open an issue if you need one.
 
 One PowerShell line, no admin required:
 
@@ -185,7 +185,7 @@ One PowerShell line, no admin required:
 iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) }"
 ```
 
-The script resolves the latest release, downloads the NSIS installer, verifies its SHA256 against the published checksums, and runs it silently into `%LOCALAPPDATA%\Programs\Look`. SmartScreen will warn on the first download while reputation builds — click "More info → Run anyway" if Windows blocks the script itself.
+The script resolves the latest release, downloads the NSIS installer, verifies its SHA256 against the published checksums, and runs it silently into `%LOCALAPPDATA%\Programs\Look`. SmartScreen will warn on the first download while reputation builds - click "More info → Run anyway" if Windows blocks the script itself.
 
 Uninstall:
 
@@ -193,12 +193,12 @@ Uninstall:
 iex "& { $(irm https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/windows/install-look.ps1) } -Uninstall"
 ```
 
-The launcher's global hotkey is `Alt+Space` (not user-configurable yet — if it conflicts with another app you use, remap that one). For a manual install: download `Look_<version>_x64-setup.exe` from [Releases](https://github.com/kunkka19xx/look/releases/latest), verify the SHA256 against the published `Look-<version>-windows-checksums.txt`, then run. Uninstall via Settings → Apps or `%LOCALAPPDATA%\Programs\Look\uninstall.exe`. To wipe user data: `Remove-Item -Recurse "$env:LOCALAPPDATA\look"`.
+The launcher's global hotkey is `Alt+Space` (not user-configurable yet - if it conflicts with another app you use, remap that one). For a manual install: download `Look_<version>_x64-setup.exe` from [Releases](https://github.com/kunkka19xx/look/releases/latest), verify the SHA256 against the published `Look-<version>-windows-checksums.txt`, then run. Uninstall via Settings → Apps or `%LOCALAPPDATA%\Programs\Look\uninstall.exe`. To wipe user data: `Remove-Item -Recurse "$env:LOCALAPPDATA\look"`.
 
 <details>
 <summary>Other install options (curl, pin version, update/uninstall)</summary>
 
-**macOS — Homebrew update / uninstall:**
+**macOS - Homebrew update / uninstall:**
 
 ```bash
 # update
@@ -208,7 +208,7 @@ brew upgrade --cask kunkka19xx/tap/look
 brew uninstall --cask look
 ```
 
-**macOS — curl installer:**
+**macOS - curl installer:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kunkka19xx/look/main/scripts/install-look.sh | bash
@@ -244,7 +244,7 @@ open "/Applications/Look.app"
 | Open / run                                    | `Enter`          | `Enter`             | `Enter`          |
 | Web search                                    | `Cmd+Enter`      | `Ctrl+Enter`        | `Ctrl+Enter`     |
 | Reveal in file manager                        | `Cmd+F` (Finder) | `Ctrl+F` (Explorer) | `Ctrl+F` (Files) |
-| Move to Trash (or empty the Trash folder)     | `Cmd+D`          | —                   | —                |
+| Move to Trash (or empty the Trash folder)     | `Cmd+D`          | n/a                 | n/a              |
 | Command mode (`calc`, `shell`, `kill`, `sys`) | `Cmd+/`          | `Ctrl+/`            | `Ctrl+/`         |
 | Settings                                      | `Cmd+Shift+,`    | `Ctrl+Shift+,`      | `Ctrl+Shift+,`   |
 | Back / hide                                   | `Escape`         | `Escape`            | `Escape`         |
@@ -273,12 +273,12 @@ Built-in: Catppuccin, Tokyo Night, Rose Pine, Gruvbox, Dracula, Kanagawa, plus C
 
 ## Documentation
 
-- 📘 [Docs site](https://noah-code.com/docs/look) — hosted, searchable user guide and reference
-- [User guide (in-repo)](docs/user-guide.md) — full feature reference, shortcuts, configuration, permissions, troubleshooting
-- [Architecture](docs/architecture.md) — how the Swift app + Rust core fit together
-- [Features](docs/features.md) — what's shipped, what's planned
-- [Contributing](CONTRIBUTING.md) — how to contribute
-- [Development](DEVELOPMENT.md) — building locally, repo layout, release process
+- 📘 [Docs site](https://noah-code.com/docs/look) - hosted, searchable user guide and reference
+- [User guide (in-repo)](docs/user-guide.md) - full feature reference, shortcuts, configuration, permissions, troubleshooting
+- [Architecture](docs/architecture.md) - how the Swift app + Rust core fit together
+- [Features](docs/features.md) - what's shipped, what's planned
+- [Contributing](CONTRIBUTING.md) - how to contribute
+- [Development](DEVELOPMENT.md) - building locally, repo layout, release process
 
 ## Scope
 
@@ -297,20 +297,20 @@ Out of scope for v1:
 
 ### Platform direction
 
-- **macOS** — shipped and stable (SwiftUI, native). This is the design source of truth.
-- **Windows + Linux** — a new shared Tauri v2 app (`apps/linows/`) is under active development. It targets both platforms with a single codebase (Rust backend, vanilla HTML/CSS/JS frontend). Current status:
-  - Core search, preview, multi-pick, clipboard history, translation — done
-  - Command mode (calc, pomo, kill, shell, sys) — done
-  - Settings screen (appearance, themes, blur, font autocomplete) — done
+- **macOS** - shipped and stable (SwiftUI, native). This is the design source of truth.
+- **Windows + Linux** - a new shared Tauri v2 app (`apps/linows/`) is under active development. It targets both platforms with a single codebase (Rust backend, vanilla HTML/CSS/JS frontend). Current status:
+  - Core search, preview, multi-pick, clipboard history, translation - done
+  - Command mode (calc, pomo, kill, shell, sys) - done
+  - Settings screen (appearance, themes, blur, font autocomplete) - done
   - Platform-aware blur (Mica/Acrylic on Windows, CSS backdrop-filter on Linux)
   - Dynamic window scaling based on monitor resolution
   - 6 built-in themes + Custom
-- **Windows (WinUI3)** — the current `apps/windows/` WinUI3/C# app isarchived.
+- **Windows (WinUI3)** - the legacy `apps/windows/` WinUI3 app is archived and superseded by `apps/linows/`.
 
 ## License
 
-GPLv3 — see [LICENSE](LICENSE).
+GPLv3 - see [LICENSE](LICENSE).
 
 ## Contributors
 
-Thanks to everyone who has contributed — see the [contributor graph](https://github.com/kunkka19xx/look/graphs/contributors).
+Thanks to everyone who has contributed - see the [contributor graph](https://github.com/kunkka19xx/look/graphs/contributors).

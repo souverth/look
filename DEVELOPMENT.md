@@ -9,12 +9,12 @@ Guide for building Look locally and contributing to the project.
 ├── apps/
 │   ├── macos/
 │   │   └── LauncherApp/          # Swift macOS app (Xcode project)
-│   ├── linows/                   # Tauri v2 app — Linux + Windows (under development)
+│   ├── linows/                   # Tauri v2 app, Linux + Windows (under development)
 │   │   ├── src-tauri/            #   Rust backend (commands, config, platform, etc.)
 │   │   ├── src/                  #   Frontend (vanilla HTML/CSS/JS, ES modules)
 │   │   └── flake.nix             #   NixOS dev shell
 │   └── windows/
-│       └── LauncherApp/          # WinUI 3 / .NET Windows app (maintenance mode)
+│       └── LauncherApp/          # Legacy WinUI 3 app (archived, superseded by linows)
 ├── core/
 │   ├── engine/                   # Query engine, search pipeline
 │   ├── indexing/                 # Candidate model, source traits
@@ -42,38 +42,13 @@ macOS:
 - macOS 15.0+
 - Xcode (for the app shell)
 
-Windows:
+Windows / Linux (linows, the Tauri app):
 
-- Windows 10 19041+ / Windows 11 (x64 or ARM64)
-- .NET 10 SDK
-- Visual Studio Build Tools with the C++ workload (the Rust FFI build script uses `vswhere` + `VsDevCmd.bat`)
-- **GNU Make + Git Bash, both required.** Run every `make` target from a Git Bash shell — not from cmd or PowerShell. `Makefile.win` sets `SHELL := bash.exe`, and the recipes use Unix tools (`rm -rf`, `cp -r`, `env`, `printf`, `mkdir -p`) that don't exist on cmd, plus `$HOME` resolution that PowerShell doesn't expose as an env var.
-- Install steps:
-  ```powershell
-  winget install GnuWin32.Make           # provides make.exe
-  # If make is on disk but not on PATH after install, append C:\Program Files (x86)\GnuWin32\bin
-  ```
-  Then in **Git Bash** (open from Start menu after the install — older sessions won't see the new PATH):
-  ```bash
-  which make            # /c/Program Files (x86)/GnuWin32/bin/make
-  cd /c/path/to/look
-  make help             # shows the Windows targets
-  ```
-- Optional: `sqlite3` on PATH (`winget install sqlite.sqlite`) for `make db-*` targets
+- Rust stable + `cargo-tauri` CLI (`cargo install tauri-cli --version "^2" --locked`)
+- Windows: Visual Studio 2022 Build Tools (Desktop C++ workload); WebView2 ships with Windows 11
+- Linux: distro WebKitGTK/GTK system libraries (or `nix develop` on NixOS)
 
-> **Common gotchas on Windows**
-> - `make: command not found` — open a fresh Git Bash window after the winget install so PATH refreshes
-> - `'true' is not recognized as an internal or external command` — you're running make from cmd/PowerShell, not Git Bash
-> - `/AppData/Local/...` (with empty leading path) instead of `/c/Users/<you>/AppData/Local/...` — same; switch to Git Bash so `$HOME` resolves
-
-Linux (linows — Tauri app):
-
-- Rust stable toolchain
-- `cargo-tauri` CLI (`cargo install tauri-cli --version "^2" --locked`)
-- System libraries vary by distro:
-  - **Ubuntu/Debian:** `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libdbus-1-dev libasound2-dev librsvg2-dev libssl-dev libappindicator3-dev pkg-config` (and more — see [apps/linows/BUILDING.md](apps/linows/BUILDING.md))
-  - **Arch:** `webkit2gtk-4.1 gtk3 libsoup3 alsa-lib dbus openssl pkg-config`
-  - **NixOS:** `cd apps/linows && nix develop` (flake provides everything)
+The per-distro package lists, the Windows `vcvars` setup and `LNK1104` notes, and all packaging/installer details are canonical in [apps/linows/BUILDING.md](apps/linows/BUILDING.md).
 
 ## Building and running
 
@@ -93,21 +68,9 @@ cargo check
 cargo test
 ```
 
-Linows (Tauri) dev run:
+Linows (Tauri) dev run: `cd apps/linows && cargo tauri dev` (release: `cargo tauri build`; on NixOS prefix with `nix develop -c`). Per-distro and Windows `vcvars` specifics are in [apps/linows/BUILDING.md](apps/linows/BUILDING.md).
 
-```bash
-cd apps/linows
-cargo tauri dev                           # development build + hot reload
-cargo tauri build                         # release build (.deb + AppImage)
-```
-
-On NixOS:
-```bash
-cd apps/linows
-nix develop -c cargo tauri dev
-```
-
-Run the local dev app — macOS/Windows (from repo root):
+Run the local dev app, macOS/Windows (from repo root):
 
 ```bash
 make app-run
@@ -122,26 +85,21 @@ make app-run
 
 `make app-run` behavior (Windows):
 
-- runs `dotnet build -c Debug -p:Platform=x64 -r win-x64` (matches the PR-CI command)
-- stops any running `LauncherApp` process
-- launches the freshly built exe with the same `LOOK_*` dev env vars
-- override platform with `PLATFORM=ARM64 RID=win-arm64`
+- stops any running `lookapp` process
+- runs `cargo tauri dev` for the linows app (`apps/linows/`) under the VS 2022 `vcvars` environment, with hot reload
+- `make app-run-release` builds the release bundle instead (`cargo tauri build`)
 
-Install a side-by-side test build (`Look Dev`) without replacing the normal install:
+Install a side-by-side test build (`Look Dev`) without replacing the normal install (macOS only):
 
 ```bash
 make app-run-dev
 ```
 
-`make app-run-dev` behavior:
+`make app-run-dev` (macOS) builds a local Debug bundle, installs `/Applications/Look Dev.app` with bundle id `noah-code.Look.Dev`, leaves the Homebrew `/Applications/Look.app` untouched, then launches `Look Dev` with `LOOK_CONFIG_PATH=$HOME/.look.dev.config`. On Windows there is no separate dev install; use `make app-run` (hot reload) or `make app-run-release`.
 
-- macOS: builds a local Debug bundle, installs `/Applications/Look Dev.app` with bundle id `noah-code.Look.Dev`, keeps the Homebrew `/Applications/Look.app` untouched, then launches `Look Dev` with `LOOK_CONFIG_PATH=$HOME/.look.dev.config`.
-- Windows: runs `dotnet publish` with the `win-<arch>.pubxml` profile (matches the release-CI command), copies the publish output to `%LOCALAPPDATA%\Programs\Look Dev\`, then launches that side-by-side install with the dev env vars.
-
-Override dev config path:
+Override the macOS dev config path:
 
 ```bash
-make app-run DEV_CONFIG_PATH="$HOME/.look.qa.config"
 make app-run-dev DEV_CONFIG_PATH="$HOME/.look.qa.config"
 ```
 
@@ -199,8 +157,8 @@ Signing/notarization walkthrough: [docs/apple-developer-release-guide.md](docs/a
 
 ## Further reading
 
-- [docs/architecture.md](docs/architecture.md) — canonical architecture reference
-- [docs/backend-guide.md](docs/backend-guide.md) — backend edit targets and verification
-- [docs/user-guide.md](docs/user-guide.md) — user guide
-- [docs/features.md](docs/features.md) — feature status
-- [apps/linows/BUILDING.md](apps/linows/BUILDING.md) — linows build, packaging, and install methods
+- [docs/architecture.md](docs/architecture.md) - canonical architecture reference
+- [docs/backend-guide.md](docs/backend-guide.md) - backend edit targets and verification
+- [docs/user-guide.md](docs/user-guide.md) - user guide
+- [docs/features.md](docs/features.md) - feature status
+- [apps/linows/BUILDING.md](apps/linows/BUILDING.md) - linows build, packaging, and install methods

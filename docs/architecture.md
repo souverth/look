@@ -6,12 +6,14 @@ It intentionally merges architecture explanation and diagrams into one place, so
 
 ## 1) System overview and design intent
 
-`look` is a keyboard-first launcher (macOS shipped, Windows in active development) designed for low-latency local search. The architecture separates UI concerns from search/index/ranking concerns (Rust), joined through a small FFI boundary. The UI layer is platform-specific:
+`look` is a keyboard-first launcher (macOS shipped, Windows + Linux in active development) designed for low-latency local search. The architecture separates UI concerns from search/index/ranking concerns (Rust), joined through a small FFI/command boundary. The UI layer is platform-specific:
 
-- **macOS:** Swift / AppKit / SwiftUI under `apps/macos/LauncherApp/` (Xcode project)
-- **Windows:** .NET 10 / WinUI 3 under `apps/windows/LauncherApp/` (`dotnet` build, MSBuild + WinUIEx)
+- **macOS:** Swift / AppKit / SwiftUI under `apps/macos/LauncherApp/` (Xcode project), talking to the Rust core via the C ABI (`bridge/ffi`).
+- **Windows + Linux:** Tauri 2 shell with a vanilla HTML/CSS/JS frontend under `apps/linows/` (`lookapp`), talking to the Rust core via Tauri commands. The macOS SwiftUI app is the design source of truth.
 
-Both UIs talk to the same Rust core via the same FFI surface (`bridge/ffi`), so search, indexing, ranking, and storage behave identically across platforms.
+> **Note:** the legacy .NET 10 / WinUI 3 app under `apps/windows/LauncherApp/` is **archived** and being replaced by `linows` (bug fixes only - do not add features). See `apps/windows/README.md`.
+
+Every shell talks to the same Rust core, so search, indexing, ranking, and storage behave identically across platforms.
 
 Key design goals:
 
@@ -56,6 +58,7 @@ flowchart LR
   - `ClipboardHistoryStore`, `KeyboardSelectionMonitor`, `GlobalHotKeyManager`
 - `Themes/`: builtin theme presets (Catppuccin, Tokyo Night, Rose Pine, Gruvbox, Dracula, Kanagawa) and semantic color tokens
 - `bridge/ffi`: narrow C ABI surface for search, usage recording, config reload, translation, and error payloads.
+- `core/answers`: platform-agnostic, network-backed "web answer" lookups shared by every shell (macOS via `bridge/ffi`, Windows/Linux via Tauri commands). Instant answers (currency/weather/crypto), search suggestions, knowledge sources, and translation. Best-effort and panic-free: every entry point returns "no answer" on failure, with cheap network-free pattern-gating (`has_match`) so callers can fire speculatively while typing. No async runtime - HTTP is a blocking `curl` subprocess.
 - `core/indexing`: candidate model and indexing helpers used by engine/storage flows.
 - `core/matching`: exact/prefix/fuzzy matching primitives.
 - `core/ranking`: ranking helpers (usage/recency-aware adjustments and score composition).
@@ -70,6 +73,7 @@ flowchart TB
       RNK[look-ranking]
       STG[look-storage]
       ENG[look-engine]
+      ANS[look-answers\nweb answers + translation]
     end
 
     IDX --> ENG
@@ -84,6 +88,7 @@ flowchart TB
     ENG --> FFI
     IDX --> FFI
     STG --> FFI
+    ANS --> FFI
 ```
 
 ---
@@ -154,13 +159,13 @@ Runtime refresh triggers:
 
 Watcher policy (linows, see `apps/linows/src-tauri/src/state.rs`):
 
-- **apps roots** (`/usr/share/applications`, `~/.local/share/applications`, `XDG_DATA_DIRS/applications`) — watched **recursively** (small directories, cheap),
-- **file roots** (`~/Documents`, `~/Downloads`, `~/Desktop`, `file_scan_extra_roots`) — watched **non-recursively** to bound inotify watch count on large trees; deep-tree changes reconciled on next launcher-open refresh,
+- **apps roots** (`/usr/share/applications`, `~/.local/share/applications`, `XDG_DATA_DIRS/applications`) - watched **recursively** (small directories, cheap),
+- **file roots** (`~/Documents`, `~/Downloads`, `~/Desktop`, `file_scan_extra_roots`) - watched **non-recursively** to bound inotify watch count on large trees; deep-tree changes reconciled on next launcher-open refresh,
 - **noise filter** suppresses events whose every path is a synthetic file (vim `.swp`, browser `.crdownload`/`.part`, Office `~$lock`, OS droppings),
 - **debounce** (2 s) coalesces bursts before firing a refresh,
 - **cooldown** (10 s) caps watcher-triggered refresh rate at ≤ 6/min; explicit launcher-open refreshes bypass it,
-- **scoped refresh** — `QueryEngine::bootstrap_sqlite_scoped(path, scope)` re-walks only the dirty source family (apps-only / files-only / all). Stale deletion is scoped to the same id prefixes so unrelated rows survive,
-- **off-thread reindex** — the watcher loop spawns a worker thread to run the bootstrap, so subsequent events keep draining instead of queuing in the kernel buffer,
+- **scoped refresh** - `QueryEngine::bootstrap_sqlite_scoped(path, scope)` re-walks only the dirty source family (apps-only / files-only / all). Stale deletion is scoped to the same id prefixes so unrelated rows survive,
+- **off-thread reindex** - the watcher loop spawns a worker thread to run the bootstrap, so subsequent events keep draining instead of queuing in the kernel buffer,
 - **RAII slot guard** ensures a panic inside the worker still releases the in-progress flag.
 
 Benchmarks for this path live in `tools/perf/` (see [tools/perf/WATCHER_PERF.md](../tools/perf/WATCHER_PERF.md)).

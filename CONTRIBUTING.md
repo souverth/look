@@ -21,7 +21,8 @@ A good bug report must include:
   - look app version or commit SHA
   - install method:
     - macOS: Xcode run, zip install, Homebrew tap
-    - Windows: zip release, `make app-run-dev` side-by-side install
+    - Windows: NSIS installer (`.exe`), or a local `make app-run` dev build
+    - Linux: `.deb`, AppImage, AUR, or a local `make app-run` dev build
   - architecture (`arm64` / `x86_64` on macOS; `x64` / `ARM64` on Windows)
 - logs or screenshots if available
 
@@ -29,7 +30,7 @@ If crash related, include:
 
 - crash dialog text
 - macOS: stack trace or Xcode console output
-- Windows: contents of `%LOCALAPPDATA%\look\look-crash.log`, plus `Get-WinEvent -LogName Application -MaxEvents 10` filtered to `LauncherApp`
+- Windows: contents of `%LOCALAPPDATA%\look\look-crash.log`, plus `Get-WinEvent -LogName Application -MaxEvents 10` filtered to `lookapp`
 - whether it happens on clean launch
 
 ## Feature requests
@@ -45,24 +46,9 @@ User-facing feature documentation lives in `docs/` (`features.md`, `user-guide.m
 
 ## Development setup
 
-Prerequisites (common):
+[DEVELOPMENT.md](DEVELOPMENT.md) has the full per-platform prerequisites and build walkthrough. In short: Rust stable plus GNU Make everywhere, with Xcode on macOS and Visual Studio 2022 Build Tools (Desktop C++ workload) for the Tauri app on Windows and Linux.
 
-- Rust stable toolchain
-- GNU Make (the top-level `Makefile` dispatches to `Makefile.mac` or `Makefile.win`)
-
-macOS:
-
-- Xcode (for the app shell)
-
-Windows:
-
-- .NET 10 SDK + Visual Studio Build Tools (C++ workload)
-- Git Bash — every `make` target must be run from Git Bash, not cmd or PowerShell
-- `winget install GnuWin32.Make` if `make` is missing
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the full setup walkthrough including the common Windows gotchas.
-
-Checks (cross-platform):
+Before opening a PR, run the cross-platform checks:
 
 ```bash
 cargo test --workspace --manifest-path core/Cargo.toml
@@ -121,7 +107,7 @@ CI runs for pushes and pull requests targeting `dev` and `main`.
 - Rust jobs (`lint`, `test`, `cargo-audit`, release `build`) run only when Rust-related paths change
 - secrets scanning (`gitleaks`) always runs
 - macOS app build runs only for PRs to `dev`/`main` when Swift files change
-- Windows app build (x64 + ARM64) runs when `apps/windows/**`, `bridge/ffi/**`, `core/**`, `scripts/windows/**`, or the workflow itself changes
+- linows (Tauri) build runs when `apps/linows/**` or `core/**` changes; the legacy WinUI3 app build is disabled, since that app is archived
 - release-style Rust build artifacts run only on push to `main`
 
 ## Pull request checklist
