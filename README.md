@@ -10,9 +10,7 @@ A keyboard-first, local-first launcher for macOS, Windows, and Linux. Open apps,
 
 📘 [Docs](https://noah-code.com/docs/look) · 🎬 [Demo video](https://www.youtube.com/watch?v=NBB5bmjnLFU) · 📖 [User guide](docs/user-guide.md)
 
-
-https://github.com/user-attachments/assets/f8ee0f85-4c0d-4ea5-bb1d-8c8bf014d50d
-
+https://github.com/user-attachments/assets/167b028b-04b2-4c62-ba93-c2321482ac94
 
 ## What you can do
 
