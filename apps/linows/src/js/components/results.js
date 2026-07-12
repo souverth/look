@@ -12,6 +12,14 @@ let container = null;
 let onSelectionChange = null;
 let onPickChange = null;
 let emptyState = { mode: 'default' };
+// True once the user moves the cursor (arrows/Tab/click) within the current
+// query. Gates selection preservation in render(): a cursor the user parked
+// somewhere survives re-renders, but an auto-selected row does not - search
+// publishes progressively (engine, then URL rows, then web suggestions) and
+// a row that painted first may end up mid/bottom of the final order. Without
+// the gate the cursor follows it there instead of resting on the top result.
+let userNavigated = false;
+let lastRenderQuery = null;
 
 export function init(containerEl) {
   container = containerEl;
@@ -63,12 +71,21 @@ function renderEmptyState() {
   return '<div class="empty-state">No results</div>';
 }
 
-export function render(results) {
-  // Preserve the selected row across re-renders: a file-watcher index refresh
-  // fires `index-ready`, which re-runs the current query and re-publishes the
-  // (often identical) result set. Without this, the cursor snaps back to row 0
-  // mid-scroll a couple seconds after the user picks another row.
-  const prevSelectedId = (selectedIndex >= 0 && selectedIndex < currentResults.length)
+export function render(results, query = null) {
+  // A new query invalidates any manual cursor position.
+  if (query !== lastRenderQuery) {
+    lastRenderQuery = query;
+    userNavigated = false;
+  }
+
+  // Preserve the selected row across re-renders, but only when the user put
+  // the cursor there: a file-watcher index refresh fires `index-ready`, which
+  // re-runs the current query and re-publishes the (often identical) result
+  // set. Without this, the cursor snaps back to row 0 mid-scroll a couple
+  // seconds after the user picks another row. Auto-selected rows are exempt
+  // (see userNavigated above) so the cursor lands on row 0 once the full
+  // result order settles.
+  const prevSelectedId = (userNavigated && selectedIndex >= 0 && selectedIndex < currentResults.length)
     ? currentResults[selectedIndex].id
     : null;
 
@@ -107,11 +124,13 @@ export function getSelectedIndex() {
 
 export function selectNext() {
   if (currentResults.length === 0) return;
+  userNavigated = true;
   select((selectedIndex + 1) % currentResults.length);
 }
 
 export function selectPrev() {
   if (currentResults.length === 0) return;
+  userNavigated = true;
   select((selectedIndex - 1 + currentResults.length) % currentResults.length);
 }
 
@@ -277,6 +296,7 @@ function createRow(result, index) {
   }
 
   row.addEventListener('click', () => {
+    userNavigated = true;
     select(index);
     row.dispatchEvent(new CustomEvent('result-activate', { bubbles: true }));
   });
