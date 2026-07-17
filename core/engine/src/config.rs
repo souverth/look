@@ -1,6 +1,9 @@
 use crate::normalize::normalize_for_search;
 use crate::platform;
+#[cfg(test)]
+use crate::platform::paths::compile_ignore_matcher;
 use crate::platform::paths::expand_with_home;
+use globset::GlobBuilder;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -81,6 +84,7 @@ pub struct RuntimeConfig {
     pub file_scan_limit: usize,
     pub file_exclude_paths: Vec<String>,
     pub skip_dir_names: Vec<String>,
+    pub ignored_file_patterns: Vec<String>,
     pub lazy_indexing_enabled: bool,
     pub search_aliases: HashMap<String, Vec<String>>,
 }
@@ -110,6 +114,7 @@ impl Default for RuntimeConfig {
                 .iter()
                 .map(|value| value.to_string())
                 .collect(),
+            ignored_file_patterns: Vec::new(),
             lazy_indexing_enabled: LAZY_INDEXING_ENABLED,
             search_aliases: default_search_aliases(),
         }
@@ -287,6 +292,24 @@ impl RuntimeConfig {
                         self.lazy_indexing_enabled = parsed;
                     }
                 }
+                _ if key.strip_prefix("ignored_patterns_").is_some() => {
+                    let parsed = parse_pattern_values(value);
+                    for pattern in parsed {
+                        let expanded = expand_path(&pattern, home.as_deref());
+                        let mut builder = GlobBuilder::new(&expanded);
+                        builder.literal_separator(true);
+                        if builder.build().is_err() {
+                            continue;
+                        }
+                        if !self
+                            .ignored_file_patterns
+                            .iter()
+                            .any(|existing| existing == &expanded)
+                        {
+                            self.ignored_file_patterns.push(expanded);
+                        }
+                    }
+                }
                 _ if key.strip_prefix("alias_").is_some() => {
                     if let Some(alias_key) = key.strip_prefix("alias_") {
                         apply_alias_override(alias_key, value, &mut self.search_aliases);
@@ -394,6 +417,13 @@ file_scan_extra_roots=\n\
 file_scan_depth=4\n\
 file_scan_limit=8000\n\
 file_exclude_paths=\n\
+ignored_patterns_sample=\n\
+# File ignore patterns. Gitignore-style path globs: *, **, ?, [abc].\n\
+# Format: ignored_patterns_<group>=Pattern1|Pattern2|Pattern3\n\
+# macOS/Linux usually use ~/... or /... ; on Windows, C:\\... is the safest documented form and ~ expands to your home dir.\n\
+# ignored_patterns_browser=~/AppData/Local/BraveSoftware/**/*.log|~/AppData/Local/Google/Chrome/**/*.tmp\n\
+# ignored_patterns_sqlite=~/Documents/git/project/**/*.db-wal|~/Documents/git/project/**/*.db-shm\n\
+# ignored_patterns_temp=~/Downloads/*.tmp|~/Downloads/**/*.part\n\
 lazy_indexing_enabled=true\n\
 skip_dir_names=node_modules,target,build,dist,library,applications,old firefox data,deriveddata,pods,vendor,out,coverage,tmp,cache,venv\n\
 \n\
@@ -727,6 +757,17 @@ fn parse_alias_values(value: &str) -> Vec<String> {
     values
 }
 
+fn parse_pattern_values(value: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    for raw in value.split('|') {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() && !values.iter().any(|entry| entry == trimmed) {
+            values.push(trimmed.to_string());
+        }
+    }
+    values
+}
+
 fn apply_alias_override(alias_key: &str, value: &str, aliases: &mut HashMap<String, Vec<String>>) {
     let normalized_key = normalize_for_search(alias_key.trim());
     if normalized_key.is_empty() {
@@ -788,6 +829,15 @@ mod tests {
         // UNC roots are stored with every backslash doubled and decode back.
         let parsed = parse_csv(r"\\\\server\\share\\apps,/Users/demo/Apps");
         assert_eq!(parsed, vec![r"\\server\share\apps", "/Users/demo/Apps"]);
+    }
+
+    #[test]
+    fn parse_pattern_values_trims_and_deduplicates_entries() {
+        // Case: " ~/Project/**/*.log | | ~/Project/**/*.tmp | ~/Project/**/*.log "
+        let parsed = parse_pattern_values(
+            " ~/Project/**/*.log | | ~/Project/**/*.tmp | ~/Project/**/*.log ",
+        );
+        assert_eq!(parsed, vec!["~/Project/**/*.log", "~/Project/**/*.tmp"]);
     }
 
     #[test]
@@ -978,6 +1028,182 @@ mod tests {
         assert!(!config.search_aliases.contains_key("note"));
 
         let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn ignored_pattern_entries_are_loaded_from_config() {
+        // Case:
+        // ignored_patterns_logs=/Users/demo/Project/**/*.log | /Users/demo/Project/**/*.tmp
+        // ignored_patterns_more=/Users/demo/Project/**/*.tmp|[invalid
+        // lazy_indexing_enabled=false
+        let tmp = std::env::temp_dir().join(format!(
+            "look-config-test-ignored-patterns-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time should be after epoch")
+                .as_nanos()
+        ));
+
+        std::fs::write(
+            &tmp,
+            "ignored_patterns_logs=/Users/demo/Project/**/*.log | /Users/demo/Project/**/*.tmp\nignored_patterns_more=/Users/demo/Project/**/*.tmp|[invalid\nlazy_indexing_enabled=false\n",
+        )
+        .expect("should write temporary config");
+
+        let mut config = RuntimeConfig::default();
+        config.apply_from_file(&tmp);
+
+        assert_eq!(
+            config.ignored_file_patterns,
+            vec![
+                "/Users/demo/Project/**/*.log".to_string(),
+                "/Users/demo/Project/**/*.tmp".to_string()
+            ]
+        );
+        assert!(!config.lazy_indexing_enabled);
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn ignored_pattern_empty_values_do_not_fail_parsing() {
+        // Case:
+        // ignored_patterns_empty=
+        // ignored_patterns_spaces= |  |
+        // lazy_indexing_enabled=false
+        let tmp = std::env::temp_dir().join(format!(
+            "look-config-test-ignored-patterns-empty-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time should be after epoch")
+                .as_nanos()
+        ));
+
+        std::fs::write(
+            &tmp,
+            "ignored_patterns_empty=\nignored_patterns_spaces= |  |\nlazy_indexing_enabled=false\n",
+        )
+        .expect("should write temporary config");
+
+        let mut config = RuntimeConfig::default();
+        config.apply_from_file(&tmp);
+
+        assert!(config.ignored_file_patterns.is_empty());
+        assert!(!config.lazy_indexing_enabled);
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn ignored_pattern_windows_style_path_is_accepted() {
+        // Case: ignored_patterns_windows=C:\Users\me\AppData\Local\Temp\**\*.etl
+        let tmp = std::env::temp_dir().join(format!(
+            "look-config-test-ignored-patterns-windows-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time should be after epoch")
+                .as_nanos()
+        ));
+
+        std::fs::write(
+            &tmp,
+            r"ignored_patterns_windows=C:\Users\me\AppData\Local\Temp\**\*.etl
+",
+        )
+        .expect("should write temporary config");
+
+        let mut config = RuntimeConfig::default();
+        config.apply_from_file(&tmp);
+
+        assert_eq!(
+            config.ignored_file_patterns,
+            vec![r"C:\Users\me\AppData\Local\Temp\**\*.etl".to_string()]
+        );
+
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    // End-to-end across the seam the other tests skip: a Windows pattern goes
+    // through the real config parse-and-store step, then is matched the exact
+    // way `walk_files` (index/files.rs) does. The Windows tests elsewhere build
+    // matchers from the raw pattern and never feed config's STORED output back
+    // into the walk matcher, which is where the Windows path breaks.
+    #[test]
+    fn windows_pattern_from_config_ignores_backslash_candidate() {
+        let tmp = std::env::temp_dir().join(format!(
+            "look-config-test-ignored-patterns-walk-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time should be after epoch")
+                .as_nanos()
+        ));
+        std::fs::write(
+            &tmp,
+            "ignored_patterns_win=C:\\Users\\me\\Temp\\**\\*.etl\n",
+        )
+        .expect("should write temporary config");
+
+        let mut config = RuntimeConfig::default();
+        config.apply_from_file(&tmp);
+        let _ = std::fs::remove_file(&tmp);
+
+        // Rebuild matchers exactly like `walk_files`, from the STORED patterns.
+        let matchers = config
+            .ignored_file_patterns
+            .iter()
+            .filter_map(|pattern| compile_ignore_matcher(pattern))
+            .collect::<Vec<_>>();
+
+        // Candidate as the `ignore` walker emits it on Windows: native
+        // backslashes, on-disk casing.
+        let candidate = r"C:\Users\Me\Temp\nested\trace.etl";
+        let ignored = matchers.iter().any(|(policy, glob_matcher)| {
+            glob_matcher.is_match(&*policy.normalize_for_matching(candidate))
+        });
+
+        assert!(
+            ignored,
+            "a Windows pattern loaded from config should ignore the matching backslash candidate"
+        );
+    }
+
+    // Full flow for the Windows home form `~\`, across both steps the other
+    // tests split: config.rs splits + dedups the raw values and stores each one
+    // home-expanded (raw, not policy-normalized); files.rs builds the matcher
+    // from that stored string. Uses an explicit Windows home so the assertion is
+    // deterministic regardless of the machine's real HOME.
+    #[test]
+    fn home_tilde_pattern_from_config_ignores_backslash_candidate() {
+        let home = Some("C:\\Users\\me");
+
+        // Step 1 (config.rs): split on `|`, trim, drop the duplicate.
+        let raw = parse_pattern_values(r" ~\Temp\**\*.log | ~\Temp\**\*.log | ~\Temp\**\*.log ");
+        assert_eq!(raw, vec![r"~\Temp\**\*.log".to_string()]);
+
+        // Step 2 (config.rs): store each home-expanded, still raw (un-normalized).
+        let stored: Vec<String> = raw
+            .iter()
+            .map(|pattern| expand_path(pattern, home))
+            .collect();
+        assert_eq!(stored, vec![r"C:\Users\me\Temp\**\*.log".to_string()]);
+
+        // Step 3 (files.rs): build the matcher from the stored pattern and match
+        // a candidate as the walker emits it on Windows (backslashes, on-disk
+        // casing).
+        let (policy, matcher) = compile_ignore_matcher(&stored[0]).expect("pattern should compile");
+        assert!(
+            matcher.is_match(&*policy.normalize_for_matching(r"C:\Users\Me\Temp\nested\trace.log")),
+            "a ~\\ home pattern from config should ignore the matching candidate"
+        );
+        // A different extension under the same dir stays visible.
+        assert!(
+            !matcher
+                .is_match(&*policy.normalize_for_matching(r"C:\Users\Me\Temp\nested\trace.txt"))
+        );
     }
 
     #[test]
