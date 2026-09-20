@@ -81,7 +81,9 @@ export function setOnPickChange(callback) {
 export function setEmptyState(state) {
     emptyState = state || { mode: 'default' };
     if (currentResults.length === 0 && container) {
-        container.innerHTML = renderEmptyState();
+        const emptyEl = container.querySelector('.empty-state');
+        if (emptyEl) emptyEl.remove();
+        container.insertAdjacentHTML('beforeend', renderEmptyState());
     }
 }
 
@@ -141,18 +143,60 @@ export function render(results, query = null) {
     const prevIndex = selectedIndex;
 
     currentResults = results;
-    container.innerHTML = '';
 
     if (results.length === 0) {
-        container.innerHTML = renderEmptyState();
+        for (const row of container.querySelectorAll('.result-row')) {
+            row.remove();
+        }
+        if (selectionPill) {
+            selectionPill.classList.remove('is-visible');
+        }
+        let emptyEl = container.querySelector('.empty-state');
+        if (!emptyEl) {
+            container.insertAdjacentHTML('beforeend', renderEmptyState());
+        }
         selectedIndex = -1;
         return;
     }
 
+    const emptyEl = container.querySelector('.empty-state');
+    if (emptyEl) emptyEl.remove();
+
+    const existingRows = new Map();
+    for (const row of container.querySelectorAll('.result-row')) {
+        const key = row._rowKey;
+        if (key && !existingRows.has(key)) {
+            existingRows.set(key, row);
+        } else {
+            row.remove();
+        }
+    }
+
+    const fragment = document.createDocumentFragment();
     results.forEach((result, index) => {
-        const row = createRow(result, index);
-        container.appendChild(row);
+        const key = rowKey(result);
+        let row = existingRows.get(key);
+        if (row) {
+            row.dataset.index = index;
+            existingRows.delete(key);
+        } else {
+            row = createRow(result, index);
+            row._rowKey = key;
+        }
+        fragment.appendChild(row);
     });
+
+    for (const remainingRow of existingRows.values()) {
+        remainingRow.remove();
+    }
+
+    if (!selectionPill || selectionPill.parentNode !== container) {
+        selectionPill = document.createElement('div');
+        selectionPill.className = 'results-selection';
+        container.prepend(selectionPill);
+    }
+
+    container.appendChild(fragment);
 
     let nextIndex = 0;
     if (prevSelectedId != null) {
@@ -251,8 +295,9 @@ function placeSelectionPill(row, glide) {
     selectionPill.classList.add('is-visible');
     if (!glide) {
         // Commit the jump this frame, then restore gliding for later moves.
-        void selectionPill.offsetWidth;
-        selectionPill.classList.remove('is-instant');
+        requestAnimationFrame(() => {
+            if (selectionPill) selectionPill.classList.remove('is-instant');
+        });
     }
 }
 
@@ -405,6 +450,10 @@ function rowMeta(result) {
  * Whether the row IS the file it names: a branch row is `main`, whose path is
  * the repo every branch shares, so that folder's icon would lie about it.
  */
+function rowKey(result) {
+    return `${result.id}|${result.title}|${result.subtitle || ''}|${result.kind}`;
+}
+
 function rowIsItsPath(result) {
     if (!result.path) return false;
     const last = result.path.split(/[/\\]/).pop();
@@ -525,7 +574,8 @@ function createRow(result, index) {
 
     row.addEventListener('click', () => {
         userNavigated = true;
-        select(index);
+        const curIdx = Number(row.dataset.index);
+        select(Number.isFinite(curIdx) ? curIdx : index);
         row.dispatchEvent(new CustomEvent('result-activate', { bubbles: true }));
     });
 

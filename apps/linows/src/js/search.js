@@ -269,10 +269,8 @@ export function handleQueryInput(query) {
     // Unlike web suggestions they ignore the AI gate - opening a typed address
     // is a launcher action, not a web answer.
     const wantsUrlRows = !prefixed;
-    // No debounce: local arithmetic on a short string, and it settles before
-    // the engine, so the row never re-seats the selection.
-    if (!prefixed) fetchCalc(query, myVersion);
     debounceTimer = setTimeout(() => {
+        if (!prefixed) fetchCalc(query, myVersion);
         performSearch(query, myVersion);
         if (wantsUrlRows) fetchUrlRows(query, myVersion);
     }, DEBOUNCE_MS);
