@@ -49,6 +49,23 @@ Use this guide when you are changing:
 - `core/todo/src/lib.rs`: `TodoStore` (open/list/save/prune) over the `todo_tasks` table in the app's `look.db`; the JSON task shape is pinned by tests since both app shells decode it.
 - `core/todo/examples/seed.rs`: seeds demo task history into a database (`dev` target by default: the `look.dev.db` file that dev builds read automatically).
 
+### `core/notes`
+
+- `core/notes/src/lib.rs`: `NoteStore` (open/list/save/delete) over the `notes` table of `look.db`, plus `tag_colors` / `set_tag_color` over `note_tag_colors`. `save` returns the stored note, or `None` when a note with no title and no body was removed. `normalize_tags` is the single place tags are cleaned, and the migration adds the `tags` column to older databases. The JSON note shape is what the Tauri layer and the frontend share.
+
+### `core/agents`
+
+- `core/agents/src/detect.rs`: the agent table (`SPECS`), `PATH` and marker-file detection, cached `--version`.
+- `core/agents/src/claude.rs` and `codex.rs`: the log scanners (cached per file by mtime and length) and the live tier. Add an agent by adding a `SPECS` row; give it usage by adding a module and a branch in `status_all`.
+- `core/agents/src/scan.rs`: log discovery, the 5-hour / today / 7-day buckets, and `curl_get` (headers on stdin).
+- `core/agents/examples/probe.rs`: `cargo run -p look-agents --example probe [-- --live]`.
+
+### Super Actions editor
+
+- `core/engine/src/launchpad_editor.rs`: `EditorModel` <-> `super-actions.toml`. `state_at` reads, `compose` edits a model into existing file text, `validate` reuses `launchpad::resolve`, `save_at` writes atomically with a `.bak`, `test_value` runs a tile's `value` command once.
+- `core/qactions/src/lib.rs`: add a built-in tile by adding it to `launchpad_layout()` (if it is part of the default strip) or to `WIDGETS` (a data widget the shell fills), then its description in `launchpad_editor::describe`.
+- `apps/linows/src-tauri/src/{notes,agents}.rs` and the `launchpad_editor_*` commands in `qactions/mod.rs` are thin wrappers; heavy work runs on the blocking pool.
+
 ### `bridge/ffi`
 
 - `bridge/ffi/src/lib.rs`: exported C ABI.

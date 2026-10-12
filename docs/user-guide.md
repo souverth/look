@@ -175,6 +175,19 @@ The names are the tile ids - `lslot`, `bluetooth`, `wifi`, `battery`, `theme`, `
 
 If the drawing is wrong, Look says so in the window rather than failing quietly. A problem with one tile drops that tile and keeps the rest; a problem with the file's structure - a row with the wrong number of names, or TOML it cannot read - falls back to the whole default layout, so the strip is never empty and never silent about why.
 
+### Data widgets and the visual editor (Linux, Windows)
+
+Beyond the controls above there are seven data widgets, none in the default strip: `agents`, `todo`, `pomo`, `speed`, `notes`, `clock`, `system`. Name one in the drawing like any other tile. A widget draws itself for the room it has: one cell shows the headline, a wide row adds a summary line, a tall tile adds a list. `Agents` shows the `5h` and `Week` windows as bars with reset times, and whether the numbers are `LIVE` or `LOCAL`. Their keys are `A` Agents, `O` Todo, `F` Focus, `E` Speed, `N` Notes, `C` Clock; Todo, Focus, Speed, Notes and Agents are pressable (open the panel, start or pause the timer, run a test).
+
+You do not have to edit the file by hand. `Settings > Appearance > Super Actions > Customize...` opens a visual editor:
+
+- drag a tile to move it (onto a same-sized neighbour to swap), drag its corner to resize, `Shift`+arrows resize and arrows move it; drag it off the grid, or press `Del`, to remove it. Undo and redo with `Ctrl+Z` / `Ctrl+Shift+Z`
+- the Tiles tab is the tray: drag a tile in, or click it to place it in the first free spot (the grid grows a row if it must). `New tile...` makes one of your own; its Properties tab edits the title, icon, the command that shows a value (with `Test`), the refresh time, the command that runs when pressed, a confirmation and a key
+- the grid size is set with the Columns and Rows steppers; `Reset` puts the built-in tiles back in their default places and keeps yours parked
+- the status line shows the launcher's own warnings about the draft (a tile under its minimum size, a taken key). `Ctrl+S` saves and applies it at once
+
+Saving only rewrites `layout` and the `[tiles.*]` tables. Every other line in the file, your comments included, is kept, and the previous file is copied to `super-actions.toml.bak`.
+
 ### Tiles of your own
 
 A tile of your own is a name in the drawing plus an entry below it. Nothing changes in `~/.look/sources/` - a tile is declared whole, in this one file, and needs no source at all.
@@ -294,9 +307,10 @@ Enter command mode with `Cmd+/`, or jump straight to a specific command from the
 
 - `:calc` then `Enter` - open `/calc` with empty input
 - `:calc 2+2` - opens `/calc` with `2+2` already typed (the space after the command id is the trigger; you can keep typing without pressing Enter)
-- Same pattern for `:shell`, `:kill`, `:sys`, `:pomo`, `:todo`, `:speed`
+- Same pattern for `:shell`, `:kill`, `:sys`, `:pomo`, `:speed`, `:agents`
+- `:note`, `:todo` and `:done` followed by text are the exception: they act from the search box instead of opening a panel (see [Quick capture](#quick-capture-from-the-search-box))
 
-The `:` prefix only triggers when the word right after it is a known command id (`calc`, `pomo`, `todo`, `speed`, `kill`, `shell`, `sys`); anything else (`:foo`, `:Users/me/...`) stays in normal search.
+The `:` prefix only triggers when the word right after it is a known command id (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`, `agents`); anything else (`:foo`, `:Users/me/...`) stays in normal search.
 
 Built-in commands:
 
@@ -307,6 +321,8 @@ Built-in commands:
 - `pomo`: pomodoro focus timer with editable session list, three timer styles (Modern Ring / Vintage Dial / Minimal Text), background-music folder, menu-bar mini-timer, and a 5-second standby fade
 - `todo`: daily tasks and progress. Two pages - a task list grouped by day, and a Stats page (weekly/monthly completion, streak, 30-day trend, GitHub-style year heatmap)
 - `speed`: measure the connection (download, upload, latency) on a live dial, with your LAN and public addresses
+- `note` (Linux, Windows): quick notes for ideas, as cards you can tag and filter, with a Markdown editor
+- `agents` (Linux, Windows): the coding agents on this machine and how much of their quota is used
 
 `calc` quick examples:
 
@@ -348,12 +364,35 @@ Built-in commands:
 - When today has tasks, the home-screen hint bar shows a clickable `Todo X/Y` stat; hovering it lists what's still unfinished
 - Data lives in the local database and is kept for one year
 
+`note` quick reference (Linux, Windows):
+
+- `Ctrl+N` new note, `Ctrl+S` save now (it also autosaves half a second after you stop typing), `Ctrl+E` flip between Edit and Preview, `Esc` back to the cards
+- Hover a card to see up to three lines of the note. Tags are added in the editor (`Enter`, `Tab` or a comma adds one; suggestions list the tags you already use). Click the dot on a tag to pick its colour, or right-click a tag in the filter bar. Click a tag in the bar to filter, again to clear; `Esc` clears the search, then the tag
+- In the editor, type `/` at the start of a line for a block menu (headings, lists, task list, quote, code block, divider, today's date). `Enter` continues a list, `Tab` / `Shift+Tab` indent it, `Ctrl+B` / `Ctrl+I` wrap the selection
+- In Preview, click a checkbox to tick it (the note's own `[ ]` becomes `[x]`). A fenced block takes its language and, if you give one, a file: ` ```ts `, ` ```ts:src/app.ts `, ` ```ts title="src/app.ts" ` or ` ```src/app.ts `. The header shows the language or the path with the file name emphasised, and a Copy button
+- Deleting a note asks twice and cannot be undone; notes are plain text in the local database
+
+`agents` quick reference (Linux, Windows):
+
+- Detection looks for each agent's command on `PATH` and for its config in your home directory. Claude Code and Codex show token use for the last 5 hours, today and 7 days from their own logs. The others are detected only: they keep nothing Look can read
+- `L` turns on `Live quota` (saved as `agents_live_quota` in `~/.look/config`, off by default): Claude's plan limits (`5h` and `Week`) come from the usage endpoint Claude Code's own sign-in can call, and Codex's from `codex app-server`. Nothing is sent unless it is on, and Claude's token only ever goes to `api.anthropic.com`. `R` refreshes
+- The logs are read only while something shows them: this panel, or an Agents tile on the Super Actions strip
+
+### Quick capture from the search box
+
+On the home screen, in the search box (Linux, Windows):
+
+- `:note buy milk #errands` saves a note straight away; words starting with `#` become tags
+- `:todo call the dentist` adds a task to today, with the same limit `/todo` has (3 unfinished a day); if `/todo` has unsaved changes you are asked to save them first
+- `:done` lists today's open tasks and `Enter` ticks the highlighted one off; `:done dentist` narrows the list. The box stays, so you can tick the next one
+- A bare `:note` or `:todo` is still the command menu, and `Enter` on it opens the panel. Typing `:` lists these three at the bottom so they can be found
+
 Behavior:
 
 - `Escape`: leave command mode
 - `Shift+Escape`: hide launcher
 - `Tab` / `Shift+Tab`: switch commands while staying in command mode
-- `Cmd+1`..`Cmd+7`: jump to specific command (`calc`, `pomo`, `todo`, `speed`, `kill`, `shell`, `sys`)
+- `Cmd+1`..`Cmd+7` (macOS) / `Ctrl+1`..`Ctrl+9` (Linux, Windows): jump to a specific command (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`, `agents` on Linux and Windows). On Linux and Windows they also work from the home screen, without entering command mode first
 - `Cmd+N` / `Cmd+S` (inside `/todo`): switch Tasks/Stats page, save changes
 - `R` / `E` (inside `/speed`): run the test again, show or hide the public address
 - `Up` / `Down`: in `kill`, navigate process/app results
@@ -729,8 +768,9 @@ bar, AI mode, command mode and a confirmation.
 - `Tab` / `Shift+Tab`: next/previous result (app list) or command (command mode)
 - `Up` / `Down`: move selection (and in `kill`, move process selection)
 - `Cmd+/`: command mode
-- `:cmd` (e.g. `:calc 2+2`, `:kill chrome`, `:sys`, `:todo`, `:speed`): jump to a command directly from the home screen
-- `Cmd+1`..`Cmd+7`: in command mode, direct command switch (`calc`, `pomo`, `todo`, `speed`, `kill`, `shell`, `sys`)
+- `:cmd` (e.g. `:calc 2+2`, `:kill chrome`, `:sys`, `:speed`): jump to a command directly from the home screen
+- `:note <text>`, `:todo <text>`, `:done` (Linux, Windows): save a note, add a task, or tick one off without opening a panel
+- `Cmd+1`..`Cmd+7` (macOS): in command mode, direct command switch. `Ctrl+1`..`Ctrl+9` (Linux, Windows): open or switch to a command (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`, `agents`), from the home screen too
 - `Cmd+1`..`Cmd+9` (macOS) / `Alt+1`..`Alt+9` (Linux, Windows): on the home screen, activate the running-app whose badge shows that digit, when `Running Apps` is on. Badge labels are ergonomic, not strictly positional - see Settings → Appearance → Running Apps
 - `Option+Up` / `Option+Down` in AI mode (`>`): walk your recent prompts, like a shell history. `Shift+Up` / `Shift+Down` select text in the message instead
 - `Shift+Enter` in AI mode (`>`): new line in the message instead of sending. The box grows to 6 lines and stops there. Elsewhere `Shift+Enter` still opens all picked files
