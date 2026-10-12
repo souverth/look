@@ -1,0 +1,39 @@
+<div class="le-overlay" id="layout-editor" hidden role="dialog" aria-label="Customize Super Actions">
+    <div class="le-panel">
+        <div class="le-header">
+            <button class="le-btn" id="le-back" title="Back (Esc)"></button>
+            <div class="le-title"><span id="le-title-icon"></span>Customize Super Actions</div>
+            <div class="le-spacer"></div>
+            <button class="le-btn le-icon-btn" id="le-undo" title="Undo (Ctrl+Z)"></button>
+            <button class="le-btn le-icon-btn" id="le-redo" title="Redo (Ctrl+Shift+Z)"></button>
+            <button class="le-btn" id="le-reset" title="Put the built-in tiles back in their default places"></button>
+            <button class="le-btn le-primary" id="le-save" title="Save (Ctrl+S)"></button>
+        </div>
+
+        <div class="le-main">
+            <section class="le-canvas-col">
+                <div class="le-canvas-bar">
+                    <div class="le-stepper" id="le-cols"></div>
+                    <div class="le-stepper" id="le-rows"></div>
+                    <span class="le-hint">Drag to move &middot; off the grid to remove</span>
+                </div>
+                <div class="le-canvas" id="le-canvas">
+                    <div class="le-grid" id="le-grid"></div>
+                </div>
+            </section>
+
+            <aside class="le-side">
+                <div class="le-tabs" id="le-tabs">
+                    <button data-tab="tiles">Tiles</button>
+                    <button data-tab="props">Properties</button>
+                </div>
+                <div class="le-side-body" id="le-side-body"></div>
+            </aside>
+        </div>
+
+        <div class="le-footer" id="le-footer"></div>
+        <div class="le-issues" id="le-issues" hidden></div>
+        <div class="le-toast" id="le-toast"></div>
+        <div class="le-drag-chip" id="le-drag-chip" hidden></div>
+    </div>
+</div>

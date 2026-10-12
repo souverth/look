@@ -241,6 +241,17 @@ async function start() {
     syncMotion();
 }
 
+// What other surfaces (the Speed widget) may read: the run in progress, if any,
+// else the last result, which survives restarts.
+export function snapshot() {
+    return { running, reading: reading ?? loadLastReading(), error: errorMessage };
+}
+
+// Starts a measurement unless one is already running; resolves when it ends.
+export function run() {
+    return start();
+}
+
 function isFresh() {
     return reading != null && nowUnix() - reading.measured_at_unix < AUTO_RUN_FRESHNESS_SECS;
 }

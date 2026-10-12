@@ -12,6 +12,7 @@ import {
     isPrefixSuggestionQuery,
     isCommandSuggestionQuery,
     isPrefixedQuery,
+    parseQuickCapture,
     prefixSuggestionResults,
     commandSuggestionResults,
     webSuggestionResults,
@@ -23,6 +24,7 @@ import {
     WEB_URL_RECENT_SUBTITLE,
 } from './catalog.js';
 import * as layout from './layout.js';
+import { quickCaptureRows } from './components/quickcapture.js';
 import { formatSize } from './components/preview.js';
 
 const DEBOUNCE_MS = 70;
@@ -50,6 +52,8 @@ let processMode = false;
 // /proc instead of scoring the stale snapshot.
 let processRefreshPending = false;
 let prefixHintMode = false;
+// Set while the query is a :note / :todo / :done capture.
+let quickCapture = null;
 let commandHintMode = false;
 let aiEnabled = true;
 
@@ -127,6 +131,10 @@ export function isCommandHintMode() {
     return commandHintMode;
 }
 
+export function isQuickCaptureMode() {
+    return quickCapture !== null;
+}
+
 export function setAiEnabled(enabled) {
     aiEnabled = !!enabled;
     if (!aiEnabled) {
@@ -154,6 +162,7 @@ export function handleQueryInput(query) {
     lastUrlMatch = null;
     lastRecentUrls = [];
     lastCalc = null;
+    quickCapture = null;
     if (query !== lastQueryString) {
         lastWebSuggestions = [];
     }
@@ -173,6 +182,16 @@ export function handleQueryInput(query) {
         commandHintMode = true;
         prefixHintMode = translateMode = clipboardMode = clipboardImageMode = false;
         recentMode = processMode = false;
+        // `:note ...` / `:todo ...` / `:done`: rows for the action, built from live
+        // data, in place of the command menu.
+        quickCapture = parseQuickCapture(query);
+        if (quickCapture) {
+            const version = queryVersion;
+            quickCaptureRows(quickCapture).then((rows) => {
+                if (version === queryVersion && onResultsCallback) onResultsCallback(rows, query);
+            });
+            return;
+        }
         if (onResultsCallback) onResultsCallback(commandSuggestionResults(query), query);
         return;
     }

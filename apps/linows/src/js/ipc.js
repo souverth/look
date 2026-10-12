@@ -366,6 +366,62 @@ export async function todoSave(tasks) {
     return invoke('todo_save', { tasks });
 }
 
+// Notes: per-note upsert against the shared look-notes store. A note is
+// `{ id, title, body, created_at_unix_s, updated_at_unix_s }`. notesSave
+// resolves to the stored note, or null when it was blank and got removed.
+export async function notesList() {
+    return invoke('notes_list');
+}
+
+export async function notesSave(note) {
+    return invoke('notes_save', { note });
+}
+
+export async function notesDelete(id) {
+    return invoke('notes_delete', { id });
+}
+
+// Picked tag colours as `[{ tag, color }]` (color = palette index). Tags with
+// no pick are absent. notesSetTagColor(tag, null) clears a pick.
+export async function notesTagColors() {
+    return invoke('notes_tag_colors');
+}
+
+export async function notesSetTagColor(tag, color) {
+    return invoke('notes_set_tag_color', { tag, color });
+}
+
+// Coding agents: detection plus usage for every known agent. `useApi` allows
+// asking the vendor for the plan's real limits; `tzOffsetMinutes` is the local
+// zone's offset east of UTC.
+export async function agentsStatus(useApi, tzOffsetMinutes) {
+    return invoke('agents_status', { useApi, tzOffsetMinutes });
+}
+
+// Super Actions editor. The model is `{ columns, rows, tiles: [{ id, col, row,
+// w, h }], custom: [{ id, title, icon, value, refresh, press, confirm,
+// mnemonic }] }`; the state adds the built-in catalog, the file path and the
+// warnings the app itself would raise.
+export async function launchpadEditorState() {
+    return invoke('launchpad_editor_state');
+}
+
+export async function launchpadEditorValidate(model) {
+    return invoke('launchpad_editor_validate', { model });
+}
+
+export async function launchpadEditorSave(model) {
+    return invoke('launchpad_editor_save', { model });
+}
+
+export async function launchpadEditorReset() {
+    return invoke('launchpad_editor_reset');
+}
+
+export async function launchpadEditorTestValue(command) {
+    return invoke('launchpad_editor_test_value', { command });
+}
+
 export async function onWindowShown(callback) {
     return listen('window-shown', callback);
 }
@@ -441,6 +497,12 @@ export async function getCliPath() {
 
 export async function highlightFile(path) {
     return invoke('highlight_file_cmd', { path });
+}
+
+// A Markdown code block highlighted by its fence label (`ts`, `python`...).
+// Resolves to { html, truncated }; an unknown label comes back as plain text.
+export async function highlightCode(source, lang) {
+    return invoke('highlight_code_cmd', { source, lang });
 }
 
 // A block's steps, highlighted as shell for the panel.

@@ -73,6 +73,7 @@ import {
 import * as platform from '../platform.js';
 import * as banner from './banner.js';
 import { gridPlacement, gridShape } from './launchpad-grid.js';
+import * as widgets from './superactions-widgets.js';
 
 let container = null;
 let built = false;
@@ -98,6 +99,9 @@ let revealPending = false;
 let tilesById = new Map();
 let mnemonicIndex = new Map();
 let controls = new Map();
+// Data widgets by id (see superactions-widgets.js). Kept apart from controls,
+// which is everything that has a native adapter to read.
+let widgetEls = new Map();
 
 // The L-slot's persistent chrome refs (icon, header clock, pill, body) and its
 // current sub-slot; plus the Todo tally and open-task rotation it reads.
@@ -140,6 +144,7 @@ let clockTimer = null;
 let taskTimer = null;
 let pomoTimer = null;
 let mediaTimer = null;
+let widgetTimer = null;
 const CLOCK_TICK_MS = 20000;
 const TASK_ROTATE_MS = 2600;
 const POMO_TICK_MS = 1000;
@@ -147,6 +152,8 @@ const POMO_TICK_MS = 1000;
 // poll it live while the strip is shown. Weather is cached ~30 min, so it only
 // refreshes on summon.
 const MEDIA_TICK_MS = 2000;
+// A widget showing a countdown or the time (see superactions-widgets.js live).
+const WIDGET_TICK_MS = 1000;
 
 // Backend WMO condition key -> tile glyph. clear/partly reuse the sun icons.
 const WEATHER_ICON = {
@@ -186,6 +193,8 @@ const ICON = {
 
 export function init(containerEl) {
     container = containerEl;
+    // The Agents widget follows the agents' numbers as they arrive.
+    widgets.watchAgents(() => refreshWidgets(['agents']));
     // Prefetch the layout so the first show builds with no round trip; if the
     // strip was already asked to show before it arrived, build now.
     ensureLayout().then(() => {
@@ -419,6 +428,7 @@ function startTimers() {
     taskTimer = setInterval(rotateTask, TASK_ROTATE_MS);
     pomoTimer = setInterval(tickPomo, POMO_TICK_MS);
     mediaTimer = setInterval(tickMedia, MEDIA_TICK_MS);
+    widgetTimer = setInterval(tickWidgets, WIDGET_TICK_MS);
 }
 
 function stopTimers() {
@@ -426,6 +436,8 @@ function stopTimers() {
     clearInterval(taskTimer);
     clearInterval(pomoTimer);
     clearInterval(mediaTimer);
+    clearInterval(widgetTimer);
+    widgetTimer = null;
     clockTimer = null;
     taskTimer = null;
     pomoTimer = null;
@@ -454,6 +466,17 @@ export function handleMnemonic(char) {
 function activate(id) {
     const el = tilesById.get(id);
     if (!el) return false;
+
+    // A data widget runs its own press (open its panel, start the timer) or, being
+    // read-only, does nothing.
+    if (widgetEls.has(id)) {
+        if (pendingConfirmId) clearConfirm();
+        if (!widgets.press(id)) return true;
+        flash(el);
+        // A press usually changes what the tile shows; look again once it has.
+        setTimeout(() => refreshWidgets([id]), 300);
+        return true;
+    }
     const ctl = controls.get(id);
 
     // A press on any tile other than the armed one clears a stale confirm, so
@@ -638,6 +661,7 @@ function refreshState() {
     // value land on tiles that have since been torn down.
     refreshCustomTiles((customToken += 1));
     refreshNowPlaying((mediaToken += 1));
+    refreshWidgets();
 }
 
 // Fetch today's lunar date from core, but only when the day has rolled over
@@ -956,6 +980,7 @@ async function transport(command) {
         await nowPlayingCommand(command, player);
     } catch (_) {}
     refreshNowPlaying((mediaToken += 1));
+    refreshWidgets();
 }
 
 // Re-render whichever clock the current slot shows (header clock for Todo/Pomo,
@@ -1007,9 +1032,12 @@ function todayKey() {
 
 function render(layout) {
     const { tiles } = layout;
+    // Agents are only read while a tile for them is on the strip.
+    widgets.holdAgents(tiles.some((tile) => tile.action_id === 'agents'));
     tilesById = new Map();
     mnemonicIndex = new Map();
     controls = new Map();
+    widgetEls = new Map();
     slotEls = null;
     weatherEls = null;
     mediaEls = null;
@@ -1058,6 +1086,8 @@ function buildTile(tile) {
             return buildMedia(tile);
         case 'custom':
             return buildCustom(tile);
+        case 'widget':
+            return buildWidget(tile);
         default:
             // A role this build has never heard of. A bare tile keeps its cell
             // rather than escaping the grid, which is the same bargain the
@@ -1329,6 +1359,179 @@ function buildCustom(tile) {
     });
     bindActionable(el, tile);
     return el;
+}
+
+// A data widget: the anatomy of a tile of your own, filled from the app's own
+// features. One cell shows the headline under the name; more cells add the
+// caption and a few lines.
+function buildWidget(tile) {
+    const el = tileEl(tile.action_id, 'custom');
+    el.classList.add('ctl-tile--widget');
+    // One cell shows the headline; a wide row adds a one-line summary; a tall
+    // tile adds the caption and a short list.
+    const shape = tile.row_span > 1 ? 'tall' : tile.col_span > 1 ? 'wide' : 'compact';
+    const roomy = shape !== 'compact';
+    const icon = iconSpan(widgets.iconFor(tile.action_id));
+
+    const text = document.createElement('span');
+    text.className = 'ctl-text';
+    text.innerHTML =
+        `<span class="ctl-caps">${labelHTML(tile.title, tile.mnemonic)}</span>` +
+        `<span class="ctl-value">--</span>` +
+        (roomy
+            ? '<span class="ctl-custom-caption"></span><span class="ctl-custom-lines"></span>'
+            : '');
+    if (roomy) {
+        const head = document.createElement('span');
+        head.className = 'ctl-custom-head';
+        head.appendChild(icon);
+        head.appendChild(text.querySelector('.ctl-caps'));
+        text.prepend(head);
+        el.appendChild(text);
+    } else {
+        el.appendChild(icon);
+        el.appendChild(text);
+    }
+    // Quota bars (the Agents widget) live in their own block, below the headline.
+    const bars = document.createElement('span');
+    bars.className = 'ctl-bars';
+    if (roomy) text.appendChild(bars);
+    // A thin rail along the tile's foot: how far along (a list, a session, a quota).
+    const rail = document.createElement('span');
+    rail.className = 'ctl-progress';
+    rail.appendChild(document.createElement('i'));
+    el.appendChild(rail);
+    el.classList.toggle('is-pressable', Boolean(tile.pressable));
+    el.classList.add(`ctl-tile--${shape}`);
+
+    widgetEls.set(tile.action_id, {
+        el,
+        shape,
+        title: tile.title,
+        iconEl: icon,
+        valueEl: text.querySelector('.ctl-value'),
+        captionEl: text.querySelector('.ctl-custom-caption'),
+        linesEl: text.querySelector('.ctl-custom-lines'),
+        barsEl: roomy ? bars : null,
+        railEl: rail,
+        cols: tile.col_span,
+    });
+    bindActionable(el, tile);
+    return el;
+}
+
+function applyReading(id, w, r) {
+    if (!r) return;
+    // The headline, with the unit that says what the number is ("5h", "Week").
+    w.valueEl.textContent = r.value ?? '--';
+    if (r.unit) {
+        const unit = document.createElement('small');
+        unit.className = 'ctl-unit';
+        if (r.unitIcon) {
+            const mark = document.createElement('span');
+            mark.innerHTML = r.unitIcon; // our own SVG
+            if (mark.firstElementChild) unit.appendChild(mark.firstElementChild);
+        }
+        unit.appendChild(document.createTextNode(r.unit));
+        w.valueEl.appendChild(unit);
+    }
+    w.el.classList.toggle('has-bars', Boolean(r.hideValue && w.barsEl));
+    // A tile two or more columns wide has room for each bar's reset time.
+    w.el.classList.toggle('has-cols', w.cols > 1);
+    const has = typeof r.progress === 'number';
+    w.railEl.classList.toggle('is-on', has);
+    if (has) w.railEl.firstElementChild.style.width = `${Math.round(Math.max(0, Math.min(1, r.progress)) * 100)}%`;
+    if (w.barsEl) w.barsEl.replaceChildren(...(r.bars || []).map(barRow));
+    if (w.captionEl) w.captionEl.textContent = r.caption ?? '';
+    if (w.linesEl) {
+        w.linesEl.replaceChildren(
+            ...(r.lines || []).map((line) => {
+                const row = document.createElement('span');
+                row.textContent = line; // user text: never HTML
+                return row;
+            }),
+        );
+    }
+    w.iconEl.innerHTML = r.icon || widgets.iconFor(id);
+    w.el.classList.toggle('is-active', Boolean(r.active));
+    w.el.classList.toggle('is-warn', r.tone === 'warn');
+    w.el.classList.toggle('is-danger', r.tone === 'danger');
+    w.el.title = r.caption ? `${w.title}: ${r.caption}` : w.title;
+}
+
+// One row of the quota block: a heading (the agent) or a labelled bar.
+function barRow(b) {
+    const row = document.createElement('span');
+    if (b.heading) {
+        row.className = 'ctl-bars-head';
+        if (b.logo) {
+            const logo = document.createElement('span');
+            logo.innerHTML = b.logo; // our own SVG
+            row.appendChild(logo.firstElementChild);
+        }
+        const name = document.createElement('span');
+        name.className = 'ctl-bars-name';
+        name.textContent = b.heading;
+        row.appendChild(name);
+        if (b.badge) {
+            const badge = document.createElement('span');
+            badge.className = `ctl-source is-${b.badge.toLowerCase()}`;
+            badge.textContent = b.badge;
+            row.appendChild(badge);
+        }
+        return row;
+    }
+    row.className = `ctl-bar-row${b.tone ? ` is-${b.tone}` : ''}`;
+    if (b.title) row.title = b.title;
+    const label = document.createElement('span');
+    label.className = 'ctl-bar-label';
+    label.textContent = b.label;
+    row.appendChild(label);
+    if (b.text) {
+        const text = document.createElement('span');
+        text.className = 'ctl-bar-text';
+        text.textContent = b.text;
+        row.appendChild(text);
+        return row;
+    }
+    const track = document.createElement('span');
+    track.className = 'ctl-bar';
+    const fill = document.createElement('i');
+    fill.style.width = `${Math.max(3, Math.min(100, b.percent))}%`;
+    track.appendChild(fill);
+    const pct = document.createElement('span');
+    pct.className = 'ctl-bar-pct';
+    pct.textContent = `${b.percent}%`;
+    row.append(track, pct);
+    if (b.reset) {
+        const reset = document.createElement('span');
+        reset.className = 'ctl-bar-reset';
+        reset.textContent = b.reset;
+        row.appendChild(reset);
+    }
+    return row;
+}
+
+// Re-read the widgets (all, or the named ones).
+async function refreshWidgets(ids = [...widgetEls.keys()]) {
+    await Promise.all(
+        ids.map(async (id) => {
+            const w = widgetEls.get(id);
+            if (!w) return;
+            applyReading(id, w, await widgets.read(id, w.shape));
+        }),
+    );
+}
+
+// Once a second, only for the widgets that show a countdown or the time.
+function tickWidgets() {
+    const live = [...widgetEls.keys()].filter((id) => widgets.isLive(id));
+    if (live.length) void refreshWidgets(live);
+}
+
+/** app.js tells the strip how to jump into a command panel (Agents, Todo, Notes). */
+export function setOpenCommand(fn) {
+    widgets.setOpenCommand(fn);
 }
 
 // Two calls on purpose: the first reads a cache and returns at once, so the

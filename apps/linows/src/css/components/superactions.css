@@ -622,3 +622,360 @@ html[data-motion="off"] .control-strip.is-armed .ctl-tile {
     color: var(--accent-color);
     background: var(--control-fill);
 }
+
+/* --- Data widgets (Agents, Todo, Focus, Speed, Notes, Clock, System) ---------
+   They wear the custom-tile anatomy; these are only their states. */
+.ctl-tile--widget.is-pressable {
+    cursor: pointer;
+}
+
+.ctl-tile--widget:not(.is-pressable) {
+    cursor: default;
+}
+
+/* A low number is good news and reads as such; it only turns loud when it must. */
+.ctl-tile--widget .ctl-value {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.01em;
+    color: var(--font-color);
+}
+
+/* Running timer, finished list, test in progress: lit like an "on" toggle. */
+.ctl-tile--widget.is-active .ctl-value,
+.ctl-tile--widget.is-active .ctl-icon {
+    color: var(--accent-color);
+}
+
+/* A quota getting tight. */
+.ctl-tile--widget.is-warn .ctl-value,
+.ctl-tile--widget.is-warn .ctl-icon {
+    color: var(--color-warning);
+}
+
+.ctl-tile--widget.is-danger .ctl-value,
+.ctl-tile--widget.is-danger .ctl-icon {
+    color: var(--color-danger);
+}
+
+.ctl-tile--widget .ctl-custom-lines > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A wide, one-row widget: the headline and one summary line, no list. */
+.ctl-tile--widget.ctl-tile--wide .ctl-custom-lines {
+    display: none;
+}
+
+.ctl-tile--widget.ctl-tile--wide .ctl-custom-caption {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--font-secondary);
+}
+
+/* The unit beside a widget's number: which window a percentage belongs to. */
+.ctl-unit {
+    margin-left: 7px;
+    font-family: var(--font-family);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--font-muted);
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(var(--lift), 0.1);
+    line-height: 1.5;
+    vertical-align: 3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Quota bars: one per window, labelled "5h" / "Week". */
+.ctl-bars {
+    display: none;
+}
+
+/* ---- quota bars */
+.ctl-tile--widget.has-bars .ctl-bars {
+    display: grid;
+    gap: 7px 16px;
+    margin-top: 6px;
+    min-width: 0;
+}
+
+/* Two windows side by side in a wide tile, stacked under each agent in a tall one. */
+.ctl-tile--widget.has-bars.ctl-tile--wide .ctl-bars {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0;
+}
+
+.ctl-tile--widget.has-bars .ctl-value,
+.ctl-tile--widget.has-bars .ctl-custom-caption {
+    display: none;
+}
+
+.ctl-bars-head {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--font-color);
+}
+
+.ctl-tile--widget.has-bars.ctl-tile--tall .ctl-bars-head:not(:first-child) {
+    margin-top: 4px;
+}
+
+.ctl-bars-head svg {
+    width: 12px;
+    height: 12px;
+}
+
+.ctl-bar-row {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) 34px;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    --bar: var(--color-success);
+}
+
+.ctl-bar-row.is-warn {
+    --bar: var(--color-warning);
+}
+
+.ctl-bar-row.is-danger {
+    --bar: var(--color-danger);
+}
+
+.ctl-bar-label {
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--font-secondary);
+    justify-self: start;
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: rgba(var(--lift), 0.08);
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+.ctl-bar {
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(var(--lift), 0.1);
+    overflow: hidden;
+    box-shadow: inset 0 1px 1px rgba(var(--scrim), 0.35);
+}
+
+.ctl-bar > i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--bar) 55%, transparent),
+        var(--bar)
+    );
+    transition: width 0.3s ease;
+    box-shadow: 0 0 10px color-mix(in srgb, var(--bar) 45%, transparent);
+}
+
+.ctl-bar-pct {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--bar);
+    font-size: 12px;
+}
+
+.ctl-bar-text {
+    grid-column: 2 / -1;
+    color: var(--font-secondary);
+}
+
+/* The bars need the tile's full width to be bars at all. */
+.ctl-tile--widget.has-bars .ctl-text {
+    width: 100%;
+}
+
+/* ===== Widgets, second pass: calmer surface, clearer hierarchy ============== */
+/* The tile itself. Its surface is the tile's own face (--ctl-face), the same
+   stack Bluetooth and Theme wear on every theme and surface; the only addition
+   is a faint sheen laid over it. The border and shadow are the base tile's too,
+   so a widget sits level with the controls beside it. */
+.ctl-tile--widget {
+    position: relative;
+    overflow: hidden;
+    background-image:
+        linear-gradient(135deg, rgba(var(--lift), 0.05), rgba(var(--lift), 0) 55%),
+        var(--ctl-face);
+}
+
+.ctl-tile--widget .ctl-caps {
+    letter-spacing: 0.09em;
+}
+
+/* Numbers sit on a common baseline and do not jitter as they change. */
+.ctl-tile--widget .ctl-value,
+.ctl-bar-pct,
+.ctl-bar-reset {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- progress rail along the tile's foot */
+.ctl-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: rgba(var(--lift), 0.07);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.ctl-progress.is-on {
+    opacity: 1;
+}
+
+.ctl-progress > i {
+    display: block;
+    height: 100%;
+    border-radius: 0 3px 3px 0;
+    background: var(--accent-color);
+    transition: width 0.4s ease;
+}
+
+.ctl-tile--widget.is-warn .ctl-progress > i {
+    background: var(--color-warning);
+}
+
+.ctl-tile--widget.is-danger .ctl-progress > i {
+    background: var(--color-danger);
+}
+
+.ctl-tile--widget.is-active .ctl-progress > i {
+    background: var(--color-success);
+}
+
+.ctl-bars-head > svg,
+.ctl-bars-head > span > svg {
+    width: 14px;
+    height: 14px;
+    padding: 3px;
+    box-sizing: content-box;
+    border-radius: 6px;
+    background: rgba(var(--lift), 0.08);
+}
+
+.ctl-bars-name {
+    font-weight: 650;
+    letter-spacing: 0.005em;
+}
+
+/* Where the numbers came from. */
+.ctl-source {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--font-muted);
+}
+
+.ctl-source::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--font-muted);
+}
+
+.ctl-source.is-live {
+    color: var(--color-success);
+}
+
+.ctl-source.is-live::before {
+    background: var(--color-success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 22%, transparent);
+}
+
+/* With room, each bar also says when its window resets. */
+.ctl-tile--widget.has-cols .ctl-bar-row {
+    grid-template-columns: 38px minmax(0, 1fr) 34px 58px;
+}
+
+.ctl-bar-reset {
+    color: var(--font-muted);
+    font-size: 10px;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ctl-bar-reset::before {
+    content: '\21BB\00a0';
+    /* ↻ */
+    opacity: 0.7;
+}
+
+.ctl-bar-reset:empty {
+    display: none;
+}
+
+/* Wide tile: one window takes the whole row; two share it and keep only the bar. */
+.ctl-tile--widget.ctl-tile--wide .ctl-bars .ctl-bar-row:nth-child(2):last-child {
+    grid-column: 1 / -1;
+}
+
+.ctl-tile--widget.ctl-tile--wide .ctl-bars:has(.ctl-bar-row:nth-child(3)) .ctl-bar-row {
+    grid-template-columns: 38px minmax(0, 1fr) 34px;
+}
+
+.ctl-tile--widget.ctl-tile--wide .ctl-bars:has(.ctl-bar-row:nth-child(3)) .ctl-bar-reset {
+    display: none;
+}
+
+.ctl-unit svg {
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
+}
+
+/* One-row Agents tile: the agent's name, logo and LIVE sit on the same line as
+   the "AGENTS" title, so the bars below it keep the tile's bottom padding
+   instead of running into the edge. */
+.ctl-tile--widget.has-bars.ctl-tile--wide .ctl-bars-head {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    height: 18px;
+    gap: 8px;
+    margin: 0;
+}
+
+/* Title row at the top, bars at the bottom, the spare height split between them
+   rather than left as a gap under the bars. */
+.ctl-tile--widget.has-bars.ctl-tile--wide .ctl-text {
+    align-self: stretch;
+    justify-content: space-between;
+}

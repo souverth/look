@@ -17,6 +17,8 @@ import * as sourceblocks from '../components/sourceblocks.js';
 import * as platform from '../platform.js';
 import * as layout from '../layout.js';
 import * as superactions from '../components/superactions.js';
+import * as layoutEditor from './layout-editor.js';
+import { layoutGrid } from '../icons.js';
 import * as shortcutrecorder from '../components/shortcutrecorder.js';
 import {
     BLUR_PRESETS,
@@ -358,6 +360,10 @@ export function init(exitFn) {
 
     // Super actions toggle (Appearance tab, next to Running Apps). Dispatches a
     // custom event so app.js can show/hide the launchpad live.
+    const editLayout = document.getElementById('settings-edit-layout');
+    editLayout.innerHTML = `${layoutGrid} Customize\u2026`;
+    editLayout.addEventListener('click', () => void layoutEditor.open());
+
     document.getElementById('settings-super-actions').addEventListener('change', (e) => {
         const enabled = e.target.checked;
         saveConfig({ super_actions_enabled: enabled ? 'true' : 'false' });

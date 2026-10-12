@@ -7,6 +7,8 @@ import {
     calculator,
     timer,
     listChecks,
+    notebook,
+    bot,
     gauge,
     xCircle,
     terminal,
@@ -69,6 +71,7 @@ const COMMAND_HINT_ID = 'cmdhint:';
 const WEB_SUGGEST_ID = 'websuggest:';
 const WEB_URL_ID = 'weburl:';
 const CALC_ID = 'calc:';
+const QUICK_ID = 'quick:';
 const DISCOVERY_CHAR = '"';
 
 // Google-autocomplete row glyph: Lucide `search` (mirrors macOS, which uses
@@ -101,21 +104,23 @@ const PREFIX_ENTRIES = [
 // the number in each title is derived rather than written and reordering here
 // is enough. Mirrors the macOS `commandDefinitions`.
 const COMMAND_DEFINITIONS = [
-    { id: 'calc', detail: 'Evaluate math expression', icon: calculator },
-    { id: 'pomo', detail: 'Pomodoro focus timer', icon: timer },
     { id: 'todo', detail: 'Daily tasks & progress', icon: listChecks },
-    {
-        id: 'speed',
-        detail: 'Measure internet download, upload, and latency',
-        icon: gauge,
-    },
+    { id: 'pomo', detail: 'Pomodoro focus timer', icon: timer },
+    { id: 'note', detail: 'Quick notes & ideas (Markdown)', icon: notebook },
     {
         id: 'kill',
         detail: 'Force kill app or process by name, port, or PID',
         icon: xCircle,
     },
     { id: 'shell', detail: 'Run a shell command', icon: terminal },
+    { id: 'calc', detail: 'Evaluate math expression', icon: calculator },
+    {
+        id: 'speed',
+        detail: 'Measure internet download, upload, and latency',
+        icon: gauge,
+    },
     { id: 'sys', detail: 'Show system information', icon: info },
+    { id: 'agents', detail: 'Coding agents & quota', icon: bot },
 ];
 
 export const COMMAND_ENTRIES = COMMAND_DEFINITIONS.map((entry, index) => ({
@@ -129,11 +134,50 @@ export function isCommandId(id) {
     return COMMAND_ENTRIES.some((entry) => entry.id === id);
 }
 
+// Quick capture from the search box (see components/quickcapture.js):
+//   :note <text>   save a note        :todo <text>   add a task to today
+//   :done [text]   tick off an open task
+// `:note` and `:todo` need a space and some intent to count, so a bare `:note`
+// is still the discovery menu and Enter on it opens the panel as before.
+export function parseQuickCapture(query) {
+    const m = String(query).trimStart().match(/^:(note|todo|done)(?:\s+([\s\S]*))?$/i);
+    if (!m) return null;
+    const word = m[1].toLowerCase();
+    if (word !== 'done' && m[2] === undefined) return null;
+    const action = word === 'note' ? 'note' : word === 'todo' ? 'task' : 'done';
+    return { action, text: (m[2] ?? '').trim() };
+}
+
+// `buy milk #errands #home` -> { body: 'buy milk', tags: ['errands', 'home'] }.
+export function splitNoteTags(text) {
+    const tags = [];
+    const body = String(text)
+        .replace(/(^|\s)#([\p{L}\p{N}_-]{1,24})(?=\s|$)/gu, (_, space, tag) => {
+            tags.push(tag.toLowerCase());
+            return space;
+        })
+        .replace(/\s+/g, ' ')
+        .trim();
+    return { body, tags: [...new Set(tags)].slice(0, 8) };
+}
+
+export function quickResultId(action, payload = '') {
+    return `${QUICK_ID}${action}:${payload}`;
+}
+
+function quickFromResultId(resultId) {
+    if (!resultId?.startsWith(QUICK_ID)) return null;
+    const rest = resultId.slice(QUICK_ID.length);
+    const i = rest.indexOf(':');
+    return i < 0 ? { action: rest, payload: '' } : { action: rest.slice(0, i), payload: rest.slice(i + 1) };
+}
+
 // True when `:cmd <ws>` should bypass the discovery menu and live-trigger
 // the command panel (matches macOS extractInlineCommand). Bare `:calc` keeps
 // the menu open; only whitespace after a known id flips the trigger.
 function isInlineCommandWithArgs(query) {
     if (!query.startsWith(':')) return false;
+    if (parseQuickCapture(query)) return false;
     const spaceIdx = query.slice(1).search(/\s/);
     if (spaceIdx < 0) return false;
     return isCommandId(query.slice(1, 1 + spaceIdx).toLowerCase());
@@ -185,6 +229,12 @@ export function prefixSuggestionResults(query) {
     }));
 }
 
+const QUICK_HINTS = [
+    { keyword: 'note', fill: ':note ', title: ':note <text>', detail: 'Save a note without opening it', icon: notebook },
+    { keyword: 'todo', fill: ':todo ', title: ':todo <text>', detail: 'Add a task to today', icon: listChecks },
+    { keyword: 'done', fill: ':done', title: ':done', detail: 'Tick off one of today\'s tasks', icon: listChecks },
+];
+
 // Synthetic rows backing the `:` menu. `:end` or `:process` both surface
 // `kill`. Each row carries its command's icon so the list scans visually.
 export function commandSuggestionResults(query) {
@@ -194,7 +244,7 @@ export function commandSuggestionResults(query) {
               (e) => e.id.toLowerCase().includes(filter) || e.detail.toLowerCase().includes(filter),
           )
         : COMMAND_ENTRIES;
-    return entries.map((entry, index) => ({
+    const rows = entries.map((entry, index) => ({
         id: `${COMMAND_HINT_ID}${entry.id}`,
         kind: 'app',
         title: entry.title,
@@ -203,6 +253,20 @@ export function commandSuggestionResults(query) {
         score: entries.length - index,
         iconSvg: entry.icon,
     }));
+
+    // The quick captures, picked like a prefix: Enter fills the query.
+    const hints = QUICK_HINTS.filter(
+        (h) => !filter || h.keyword.includes(filter) || h.detail.toLowerCase().includes(filter),
+    ).map((h, index) => ({
+        id: `${PREFIX_HINT_ID}${h.fill}`,
+        kind: 'app',
+        title: h.title,
+        subtitle: h.detail,
+        path: '',
+        score: -1 - index,
+        iconSvg: h.icon,
+    }));
+    return [...rows, ...hints];
 }
 
 export function prefixFromResultId(resultId) {
@@ -310,6 +374,9 @@ export function classifyResultId(resultId) {
 
     const url = webUrlFromResultId(resultId);
     if (url != null) return { kind: 'webUrl', url };
+
+    const quick = quickFromResultId(resultId);
+    if (quick) return { kind: 'quick', ...quick };
 
     return null;
 }

@@ -230,6 +230,12 @@ export function reloadIfClean() {
     if (!isDirty() && !visible) load();
 }
 
+// Whether the panel holds edits it has not saved, so a writer outside it (the
+// search box's quick add) knows it would be overwritten by that Save.
+export function hasUnsavedChanges() {
+    return isDirty();
+}
+
 function fireQuickChange() {
     if (!onQuickChange) return;
     const list = tasksByDay.get(todayKey()) || [];

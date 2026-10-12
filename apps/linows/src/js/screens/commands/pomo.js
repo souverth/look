@@ -527,6 +527,11 @@ export function formatTime(secs) {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+// Start, pause or resume, for surfaces outside this screen (the Focus widget).
+export function togglePlayback() {
+    toggle();
+}
+
 // A read-only view of the live session for other surfaces (the launchpad L
 // slot), or null when idle. Wall-clock corrected so it stays true while this
 // screen is closed and its own tick is stopped: a running session projects the

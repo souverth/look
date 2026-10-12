@@ -1,0 +1,69 @@
+<div class="cmd-panel" id="cmd-panel-note" hidden>
+    <!-- List view: search bar -->
+    <div class="cmd-input-bar" id="cmd-note-search-bar">
+        <span class="cmd-input-bar-icon" id="cmd-note-search-icon"></span>
+        <input
+            id="cmd-note-search"
+            type="text"
+            placeholder="Search notes"
+            spellcheck="false"
+            autocomplete="off"
+        />
+        <span class="cmd-pill">/note</span>
+    </div>
+
+    <!-- List view: toolbar + card grid -->
+    <div class="cmd-todo-toolbar" id="cmd-note-toolbar">
+        <span class="cmd-todo-count" id="cmd-note-count"></span>
+        <div class="cmd-todo-toolbar-right">
+            <button class="cmd-todo-btn" id="cmd-note-new-btn"></button>
+        </div>
+    </div>
+    <div class="cmd-note-tagbar" id="cmd-note-tagbar" hidden></div>
+    <div class="cmd-content cmd-note-grid" id="cmd-note-grid"></div>
+
+    <!-- Editor view -->
+    <div class="cmd-note-editor" id="cmd-note-editor" hidden>
+        <div class="cmd-input-bar">
+            <button class="cmd-todo-btn" id="cmd-note-back-btn" title="Back to notes (Esc)"></button>
+            <input
+                id="cmd-note-title"
+                type="text"
+                placeholder="Title"
+                spellcheck="false"
+                autocomplete="off"
+                maxlength="200"
+            />
+            <span class="cmd-note-status" id="cmd-note-status"></span>
+        </div>
+        <div class="cmd-note-tags" id="cmd-note-tags">
+            <input
+                id="cmd-note-tag-input"
+                type="text"
+                placeholder="Add tag…"
+                spellcheck="false"
+                autocomplete="off"
+                maxlength="24"
+            />
+            <div class="cmd-note-tagmenu" id="cmd-note-tagmenu" hidden></div>
+        </div>
+        <div class="cmd-todo-toolbar">
+            <div class="cmd-todo-segmented" id="cmd-note-mode">
+                <button data-mode="edit">Edit</button>
+                <button data-mode="preview">Preview</button>
+            </div>
+            <div class="cmd-todo-toolbar-right">
+                <button class="cmd-todo-btn" id="cmd-note-delete-btn"></button>
+            </div>
+        </div>
+        <div class="cmd-note-body-wrap">
+            <textarea
+                id="cmd-note-body"
+                placeholder="Write an idea… Markdown works. Type / at the start of a line for blocks."
+                spellcheck="false"
+            ></textarea>
+            <div class="cmd-note-preview md" id="cmd-note-preview" hidden></div>
+            <div class="cmd-note-suggest" id="cmd-note-suggest" hidden></div>
+        </div>
+    </div>
+</div>

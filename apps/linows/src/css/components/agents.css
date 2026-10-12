@@ -1,0 +1,173 @@
+/* /agents: detected agents with quota meters and token windows. */
+
+.cmd-agents-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.cmd-agents-empty {
+    padding: 30px 0;
+    text-align: center;
+    color: var(--font-muted);
+    font-size: calc(var(--font-size) - 1px);
+}
+
+.cmd-agents-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    background: var(--panel-fill);
+    border-radius: var(--bar-radius);
+}
+
+.cmd-agents-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.cmd-agents-name {
+    font-weight: 700;
+    color: var(--font-color);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cmd-agents-meta {
+    min-width: 0;
+    font-size: calc(var(--font-size) - 3px);
+    color: var(--font-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cmd-agents-meter {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cmd-agents-meter.stale {
+    opacity: 0.55;
+}
+
+.cmd-agents-meter-top,
+.cmd-agents-meter-sub {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.cmd-agents-meter-top {
+    font-size: calc(var(--font-size) - 1px);
+    color: var(--font-secondary);
+}
+
+.cmd-agents-meter-sub {
+    font-size: calc(var(--font-size) - 3px);
+    color: var(--font-muted);
+}
+
+.cmd-agents-pct {
+    font-weight: 700;
+}
+
+.cmd-agents-bar {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--control-fill);
+    overflow: hidden;
+}
+
+.cmd-agents-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+.cmd-agents-fill.cmd-agents-ok {
+    background: var(--color-success);
+}
+
+.cmd-agents-fill.cmd-agents-warn {
+    background: var(--color-warning);
+}
+
+.cmd-agents-fill.cmd-agents-danger {
+    background: var(--color-danger);
+}
+
+.cmd-agents-pct.cmd-agents-ok {
+    color: var(--color-success);
+}
+
+.cmd-agents-pct.cmd-agents-warn {
+    color: var(--color-warning);
+}
+
+.cmd-agents-pct.cmd-agents-danger {
+    color: var(--color-danger);
+}
+
+.cmd-agents-windows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding-top: 8px;
+    border-top: 1px solid var(--divider-color);
+}
+
+.cmd-agents-window {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr 1fr 0.7fr;
+    gap: 8px;
+    font-size: calc(var(--font-size) - 2px);
+    color: var(--font-color);
+}
+
+.cmd-agents-window-label {
+    color: var(--font-secondary);
+}
+
+.cmd-agents-dim {
+    color: var(--font-muted);
+}
+
+.cmd-agents-note {
+    font-size: calc(var(--font-size) - 2px);
+    color: var(--font-muted);
+}
+
+.cmd-agents-missing {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 4px 0;
+    font-size: calc(var(--font-size) - 2px);
+    color: var(--font-muted);
+}
+
+.cmd-agents-missing i {
+    font-style: normal;
+    padding: 1px 8px;
+    border: 1px dashed var(--divider-color);
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.agent-logo {
+    flex-shrink: 0;
+}
+
+.cmd-agents-missing .agent-logo {
+    opacity: 0.45;
+    filter: grayscale(1);
+}

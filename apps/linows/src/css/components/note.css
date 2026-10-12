@@ -1,0 +1,765 @@
+/* /note: the card grid, the Markdown editor and preview, tags. */
+
+/* /note: card grid, editor, Markdown preview */
+#cmd-panel-note [hidden] {
+    display: none !important;
+}
+
+.cmd-note-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    grid-auto-rows: 68px;
+    gap: 0;
+    align-content: start;
+    /* Room above the first row for its hovered cards to rise into (a card
+       rises by its content, at most ~56px). */
+    padding-top: 58px;
+}
+
+.cmd-note-empty {
+    grid-column: 1 / -1;
+    padding: 30px 0;
+    text-align: center;
+    color: var(--font-muted);
+    font-size: calc(var(--font-size) - 1px);
+}
+
+/* A fixed-size cell keeps the grid tiled; the card inside is what grows. */
+.cmd-note-cell {
+    position: relative;
+    outline: none;
+}
+
+/* Anchored to the cell's bottom edge: when the card grows on hover its top
+   edge is what moves, so it rises instead of swelling both ways. */
+.cmd-note-card {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    background: var(--panel-fill);
+    border-radius: var(--bar-radius);
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+/* Alternating fills, tiled edge to edge like the sample: a neutral surface and
+   an accent-tinted one, checkerboarded so neighbours always differ. */
+.cmd-note-cell:nth-child(even) .cmd-note-card {
+    background: color-mix(in srgb, var(--accent-color) 14%, var(--panel-fill));
+}
+
+/* Hover/focus: the card rises over its neighbours and shows its content. */
+.cmd-note-cell:hover,
+.cmd-note-cell:focus-visible {
+    z-index: 3;
+}
+
+.cmd-note-cell:hover .cmd-note-card,
+.cmd-note-cell:focus-visible .cmd-note-card {
+    /* Rises by at least this much even when there is no body to reveal. */
+    min-height: calc(100% + 26px);
+    background: color-mix(in srgb, var(--tag-bg, var(--accent-color)) 38%, var(--bg-tint));
+    box-shadow: 0 8px 20px rgba(var(--shadow), 0.45);
+}
+
+/* Tag badge pinned to the top-right corner, like the sample. */
+.cmd-note-badge {
+    position: absolute;
+    top: 0;
+    right: 10px;
+    max-width: 60%;
+    padding: 1px 8px;
+    border-radius: 0 0 6px 6px;
+    background: var(--tag-bg, var(--accent-color));
+    color: var(--tag-fg, var(--on-accent-color));
+    font-size: calc(var(--font-size) - 4px);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cmd-note-card-title {
+    margin-top: 6px;
+    font-weight: 700;
+    color: var(--font-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Hidden until hover; then at most 3 lines, however long the note is. */
+.cmd-note-card-body,
+.cmd-note-card-date {
+    display: none;
+}
+
+.cmd-note-cell:hover .cmd-note-card-body,
+.cmd-note-cell:focus-visible .cmd-note-card-body {
+    display: -webkit-box;
+    font-size: calc(var(--font-size) - 1px);
+    color: var(--font-color);
+    line-height: 1.4;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.cmd-note-cell:hover .cmd-note-card-date,
+.cmd-note-cell:focus-visible .cmd-note-card-date {
+    display: block;
+    font-size: calc(var(--font-size) - 3px);
+    color: var(--font-secondary);
+}
+
+/* Tag filter chips above the grid */
+.cmd-note-tagbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 18px 2px;
+}
+
+.cmd-note-tagchip {
+    font-size: calc(var(--font-size) - 2px);
+    font-weight: 600;
+    padding: 2px 10px;
+    border: 1px solid var(--divider-color);
+    border-radius: 999px;
+    background: var(--control-fill);
+    color: var(--font-secondary);
+    cursor: pointer;
+}
+
+.cmd-note-tagchip b {
+    font-weight: 600;
+    opacity: 0.6;
+}
+
+.cmd-note-tagchip:hover {
+    color: var(--font-color);
+    background: var(--selection-fill);
+}
+
+.cmd-note-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 5px;
+    border-radius: 50%;
+    background: var(--tag-bg);
+}
+
+.cmd-note-tagchip.active {
+    background: var(--tag-bg, var(--accent-color));
+    border-color: var(--tag-bg, var(--accent-color));
+    color: var(--tag-fg, var(--on-accent-color));
+}
+
+.cmd-note-tagchip.active .cmd-note-dot {
+    background: var(--tag-fg);
+}
+
+/* Tag editor row in the note editor */
+.cmd-note-tags {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 18px 0;
+}
+
+.cmd-note-tagpill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 4px 1px 9px;
+    border-radius: 999px;
+    background: var(--tag-bg, var(--accent-color));
+    color: var(--tag-fg, var(--on-accent-color));
+    font-size: calc(var(--font-size) - 2px);
+    font-weight: 600;
+}
+
+.cmd-note-tagpill button {
+    border: none;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1.1em;
+    line-height: 1;
+    padding: 0 4px;
+    opacity: 0.7;
+}
+
+.cmd-note-tagpill button:hover {
+    opacity: 1;
+}
+
+/* Colour dot inside the pill; click opens the swatch picker. */
+.cmd-note-tagpill .cmd-note-tagdot {
+    width: 11px;
+    height: 11px;
+    margin: 0 4px 0 -4px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid var(--tag-fg);
+    background: transparent;
+    opacity: 0.75;
+}
+
+/* Tag suggestions under the tag input */
+.cmd-note-tagmenu {
+    position: absolute;
+    z-index: 10;
+    min-width: 190px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 4px;
+    background: var(--overlay-surface);
+    border: 1px solid var(--divider-color);
+    border-radius: var(--bar-radius);
+    box-shadow: 0 8px 24px rgba(var(--shadow), 0.45);
+}
+
+.cmd-note-tagmenu-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: var(--chip-radius);
+    font-size: calc(var(--font-size) - 1px);
+    cursor: pointer;
+}
+
+.cmd-note-tagmenu-row.active,
+.cmd-note-tagmenu-row:hover {
+    background: var(--selection-fill);
+}
+
+.cmd-note-tagmenu-row .cmd-note-dot {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.cmd-note-tagmenu-name {
+    flex: 1;
+    font-weight: 600;
+    color: var(--font-color);
+}
+
+.cmd-note-tagmenu-meta {
+    font-size: calc(var(--font-size) - 3px);
+    color: var(--font-muted);
+}
+
+.cmd-note-colors {
+    position: absolute;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 188px;
+    padding: 8px;
+    background: var(--overlay-surface);
+    border: 1px solid var(--divider-color);
+    border-radius: var(--bar-radius);
+    box-shadow: 0 8px 24px rgba(var(--shadow), 0.45);
+}
+
+.cmd-note-swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    background: var(--tag-bg);
+    cursor: pointer;
+}
+
+.cmd-note-swatch:hover {
+    transform: scale(1.12);
+}
+
+.cmd-note-swatch.active {
+    border-color: var(--font-color);
+}
+
+.cmd-note-swatch-auto {
+    flex: 1 0 100%;
+    padding: 3px 0;
+    border: 1px solid var(--divider-color);
+    border-radius: var(--chip-radius);
+    background: var(--control-fill);
+    color: var(--font-secondary);
+    font-size: calc(var(--font-size) - 2px);
+    cursor: pointer;
+}
+
+.cmd-note-tags input {
+    flex: 1;
+    min-width: 90px;
+    background: none;
+    border: none;
+    outline: none;
+    font: inherit;
+    font-size: calc(var(--font-size) - 2px);
+    color: var(--font-color);
+    caret-color: var(--accent-color);
+}
+
+.cmd-note-tags input::placeholder {
+    color: var(--font-muted);
+}
+
+.cmd-note-editor {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.cmd-note-editor .cmd-input-bar input {
+    font-weight: 600;
+}
+
+.cmd-note-status {
+    font-size: calc(var(--font-size) - 2px);
+    color: var(--font-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.cmd-note-status svg {
+    width: 12px;
+    height: 12px;
+}
+
+.cmd-note-status-error {
+    color: var(--color-danger);
+}
+
+.cmd-note-delete-armed {
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+}
+
+.cmd-note-body-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    margin: 0 8px 8px;
+    display: flex;
+}
+
+.cmd-note-body-wrap textarea,
+.cmd-note-preview {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 12px;
+    background: var(--panel-fill);
+    border-radius: var(--bar-radius);
+    color: var(--font-color);
+    font: inherit;
+    font-family: var(--font-mono);
+    font-size: calc(var(--font-size) - 1px);
+    line-height: 1.55;
+    border: none;
+    outline: none;
+    resize: none;
+    overflow-y: auto;
+    caret-color: var(--accent-color);
+}
+
+.cmd-note-body-wrap textarea::placeholder {
+    color: var(--font-muted);
+}
+
+/* Markdown preview */
+.cmd-note-preview {
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    padding: 16px 22px 24px;
+    line-height: 1.7;
+    color: var(--font-color);
+    overflow-wrap: anywhere;
+}
+
+.cmd-note-preview > :first-child {
+    margin-top: 0;
+}
+
+.cmd-note-preview > :last-child {
+    margin-bottom: 0;
+}
+
+.cmd-note-preview h1,
+.cmd-note-preview h2,
+.cmd-note-preview h3,
+.cmd-note-preview h4,
+.cmd-note-preview h5,
+.cmd-note-preview h6 {
+    margin: 1.4em 0 0.5em;
+    line-height: 1.3;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.cmd-note-preview h1 {
+    font-size: 1.65em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--divider-color);
+}
+
+.cmd-note-preview h2 {
+    font-size: 1.35em;
+    padding-bottom: 0.2em;
+    border-bottom: 1px solid color-mix(in srgb, var(--divider-color) 50%, transparent);
+}
+
+.cmd-note-preview h3 {
+    font-size: 1.12em;
+    color: var(--accent-color);
+}
+
+.cmd-note-preview h4,
+.cmd-note-preview h5,
+.cmd-note-preview h6 {
+    font-size: 0.82em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--font-muted);
+}
+
+.cmd-note-preview p {
+    margin: 0.65em 0;
+}
+
+.cmd-note-preview strong {
+    font-weight: 700;
+    color: var(--font-color);
+}
+
+.cmd-note-preview em {
+    font-style: italic;
+    color: var(--font-secondary);
+}
+
+.cmd-note-preview del {
+    color: var(--font-muted);
+    text-decoration-thickness: 1.5px;
+}
+
+/* Lists: accent markers instead of the browser defaults. */
+.cmd-note-preview ul,
+.cmd-note-preview ol {
+    margin: 0.55em 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: md-item;
+}
+
+.cmd-note-preview li {
+    position: relative;
+    margin: 0.25em 0;
+    padding-left: 1.55em;
+    counter-increment: md-item;
+}
+
+.cmd-note-preview ul > li::before {
+    content: '';
+    position: absolute;
+    left: 0.45em;
+    top: 0.72em;
+    width: 0.38em;
+    height: 0.38em;
+    border-radius: 50%;
+    background: var(--accent-color);
+}
+
+.cmd-note-preview ol > li::before {
+    content: counter(md-item) '.';
+    position: absolute;
+    left: 0;
+    width: 1.3em;
+    text-align: right;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent-color);
+}
+
+.cmd-note-preview li.md-d1 {
+    margin-left: 1.4em;
+}
+
+.cmd-note-preview li.md-d2 {
+    margin-left: 2.8em;
+}
+
+.cmd-note-preview li.md-d3 {
+    margin-left: 4.2em;
+}
+
+/* Task items: a drawn checkbox, clickable to tick the line in the note. */
+.cmd-note-preview li.md-task {
+    padding-left: 1.85em;
+    cursor: pointer;
+}
+
+.cmd-note-preview li.md-task::before {
+    display: none;
+}
+
+.cmd-note-preview .md-check {
+    position: absolute;
+    left: 0.1em;
+    top: 0.33em;
+    width: 1.1em;
+    height: 1.1em;
+    border: 1.5px solid var(--font-muted);
+    border-radius: 0.3em;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease;
+    user-select: none;
+}
+
+.cmd-note-preview li.md-task:hover .md-check {
+    border-color: var(--accent-color);
+}
+
+.cmd-note-preview li.md-done .md-check {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.cmd-note-preview li.md-done .md-check::after {
+    content: '';
+    position: absolute;
+    left: 0.31em;
+    top: 0.1em;
+    width: 0.28em;
+    height: 0.55em;
+    border: solid var(--on-accent-color);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.cmd-note-preview li.md-done .md-task-text {
+    color: var(--font-muted);
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--font-muted) 60%, transparent);
+}
+
+.cmd-note-preview code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    padding: 0.12em 0.45em;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--accent-color) 14%, transparent);
+    color: color-mix(in srgb, var(--accent-color) 70%, var(--font-color));
+}
+
+.cmd-note-preview pre {
+    margin: 0.9em 0;
+    padding: 12px 14px;
+    border-radius: var(--bar-radius);
+    border-left: 3px solid var(--accent-color);
+    background: rgba(var(--scrim), 0.28);
+    overflow-x: auto;
+    line-height: 1.55;
+}
+
+.cmd-note-preview pre code {
+    padding: 0;
+    background: none;
+    color: var(--font-color);
+    font-size: 0.9em;
+}
+
+.cmd-note-preview blockquote {
+    margin: 0.9em 0;
+    padding: 0.4em 14px;
+    border-left: 3px solid var(--accent-color);
+    border-radius: 0 var(--chip-radius) var(--chip-radius) 0;
+    background: color-mix(in srgb, var(--accent-color) 9%, transparent);
+    color: var(--font-secondary);
+}
+
+.cmd-note-preview blockquote > :first-child {
+    margin-top: 0;
+}
+
+.cmd-note-preview blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+.cmd-note-preview hr {
+    height: 1px;
+    margin: 1.4em 0;
+    border: none;
+    background: linear-gradient(90deg, transparent, var(--divider-color) 15%, var(--divider-color) 85%, transparent);
+}
+
+.cmd-note-preview .md-link {
+    color: var(--accent-color);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+}
+
+.cmd-note-preview .md-empty {
+    color: var(--font-muted);
+    font-style: italic;
+}
+
+/* "/" block menu, anchored near the top of the editor */
+.cmd-note-suggest {
+    position: absolute;
+    /* left/top are set from the caret position by note.js */
+    top: 0;
+    left: 0;
+    min-width: 200px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px;
+    background: var(--overlay-surface);
+    border: 1px solid var(--divider-color);
+    border-radius: var(--bar-radius);
+    box-shadow: 0 8px 24px rgba(var(--shadow), 0.45);
+    z-index: 5;
+}
+
+.cmd-note-suggest-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 5px 8px;
+    border-radius: var(--chip-radius);
+    font-size: calc(var(--font-size) - 1px);
+    cursor: pointer;
+}
+
+.cmd-note-suggest-row code {
+    font-family: var(--font-mono);
+    color: var(--font-muted);
+}
+
+.cmd-note-suggest-row.active {
+    background: var(--selection-fill);
+}
+
+/* /agents: detected agents with quota meters and token windows */
+#cmd-panel-agents [hidden] {
+    display: none !important;
+}
+
+/* Code block: header (file path or language) + Copy, then the code. */
+.cmd-note-preview .md-code {
+    margin: 0.9em 0;
+    border-radius: var(--bar-radius);
+    background: rgba(var(--scrim), 0.28);
+    border: 1px solid var(--divider-color);
+    overflow: hidden;
+}
+
+.cmd-note-preview .md-code-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 6px 5px 12px;
+    background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+    border-bottom: 1px solid var(--divider-color);
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    line-height: 1.4;
+}
+
+.cmd-note-preview .md-code-file {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Keep the file name visible when a long path has to be cut. */
+    direction: rtl;
+    text-align: left;
+}
+
+.cmd-note-preview .md-code-file > * {
+    direction: ltr;
+    unicode-bidi: embed;
+}
+
+.cmd-note-preview .md-code-dir {
+    color: var(--font-muted);
+}
+
+.cmd-note-preview .md-code-file b {
+    font-weight: 600;
+    color: var(--font-color);
+}
+
+.cmd-note-preview .md-code-lang {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent-color) 18%, transparent);
+    color: var(--accent-color);
+    font-weight: 600;
+    text-transform: lowercase;
+}
+
+.cmd-note-preview .md-copy {
+    padding: 2px 9px;
+    border: 1px solid transparent;
+    border-radius: var(--chip-radius);
+    background: transparent;
+    color: var(--font-muted);
+    font: inherit;
+    cursor: pointer;
+    opacity: 0.75;
+    transition:
+        opacity 0.15s ease,
+        background 0.15s ease;
+}
+
+.cmd-note-preview .md-code:hover .md-copy,
+.cmd-note-preview .md-copy:focus-visible {
+    opacity: 1;
+}
+
+.cmd-note-preview .md-copy:hover {
+    background: var(--selection-fill);
+    color: var(--font-color);
+}
+
+.cmd-note-preview .md-copy.copied {
+    color: var(--color-success);
+    opacity: 1;
+}
+
+.cmd-note-preview .md-code pre {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    padding: 10px 14px 12px;
+    tab-size: 4;
+}
+
+.cmd-note-preview .md-code pre code {
+    display: block;
+    white-space: pre;
+}

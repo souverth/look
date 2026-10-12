@@ -9,6 +9,9 @@ import * as health from './components/health.js';
 import * as confirm from './components/confirm.js';
 import * as commands from './screens/commands/index.js';
 import * as todoCmd from './screens/commands/todo.js';
+import * as agentsCmd from './screens/commands/agents.js';
+import * as layoutEditor from './screens/layout-editor.js';
+import * as quickcapture from './components/quickcapture.js';
 import { listChecks } from './icons.js';
 import * as settings from './screens/settings.js';
 import { mountUpdateWidget } from './screens/update_widget.js';
@@ -55,6 +58,7 @@ import {
     webUrlFromResultId,
     classifyResultId,
     isPrefixedQuery,
+    parseQuickCapture,
 } from './catalog.js';
 
 // Item count and structure mirror the macOS app's `LauncherView.hintItems`
@@ -77,6 +81,7 @@ const HINT_PROCESS = 'Enter: CPU \u2022 Ctrl+D: Kill \u2022 Ctrl+C: Copy PID';
 // hint bars (LauncherView.swift hintItems).
 const HINT_PREFIX_DISCOVERY = 'Enter: Pick prefix \u2022 Up/Down: Move \u2022 Esc: Clear';
 const HINT_COMMAND_DISCOVERY = 'Enter: Run command \u2022 Up/Down: Move \u2022 Esc: Clear';
+const HINT_QUICK_CAPTURE = 'Enter: Do it \u2022 Up/Down: Move \u2022 Esc: Clear';
 
 // Which history owns the screen, keyed as CLIPBOARD_EMPTY_COPY is.
 function clipboardEmptyMode() {
@@ -95,6 +100,8 @@ const COMMAND_HINTS = {
     speed: 'R: Rerun \u2022 E: Show IP \u2022 Esc: Back',
     kill: 'Y: Confirm \u2022 N: Cancel \u2022 Esc: Back',
     sys: 'Esc: Back',
+    agents: 'R: Refresh \u2022 L: Live quota \u2022 Esc: Back',
+    note: 'Ctrl+N: New • Ctrl+S: Save • Ctrl+E: Edit/Preview • Esc: Back',
     calc: 'Enter: Evaluate \u2022 Tab: Select \u2022 Esc: Back',
     shell: 'Enter: Run \u2022 Tab: Select \u2022 Esc: Back',
 };
@@ -132,6 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await load('html/screens/commands/index.html', app);
     await load('html/screens/settings.html', app);
     await load('html/screens/help.html', app);
+    await load('html/screens/layout-editor.html', app);
 
     // The Ctrl+1..N rows in Help and Settings, filled from the same catalog the
     // bindings come from, so neither list can go stale behind a new command.
@@ -139,7 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById(`${screen}-cmd-keys`).textContent =
             `Ctrl+1..${COMMAND_ENTRIES.length}`;
         document.getElementById(`${screen}-cmd-list`).textContent =
-            `Switch to ${COMMAND_ENTRIES.map((cmd) => `/${cmd.id}`).join(', ')}`;
+            `Open or switch to ${COMMAND_ENTRIES.map((cmd) => `/${cmd.id}`).join(', ')}`;
     }
 
     // About / version + update-status widget, shared between Settings and Help.
@@ -198,7 +206,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // "Unfinished today" hover bubble, so the line stays one row. Mirrors macOS
     // HintBar.TodoQuickView: home screen only, hidden when today is empty.
     let todoQuick = null;
-
     function renderMainHint() {
         if (!todoQuick || todoQuick.total === 0) {
             setHint(hintMessage, HINT_MAIN);
@@ -412,10 +419,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     settings.init(resetHomeQuery);
+    layoutEditor.init();
     settings.restoreOnStartup();
 
     // Empty-state super-actions control strip
     superactions.init(document.getElementById('control-strip'));
+    // Widgets that open a panel (Agents, Todo, Notes) jump there like the hint bar does.
+    superactions.setOpenCommand((id) => {
+        commands.enterById(id);
+        enterCommandMode();
+        queryInput.value = '';
+    });
 
     // Running apps strip
     runningApps.init(document.getElementById('running-apps-strip'));
@@ -601,6 +615,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // highlighted row to enter the command with empty input.
     function tryCommandPrefix(value) {
         if (!value.startsWith(':')) return false;
+        // `:note ...`, `:todo ...` and `:done` act from the search box instead.
+        if (parseQuickCapture(value)) return false;
         const rest = value.slice(1);
         const spaceIdx = rest.search(/\s/);
         // No whitespace → not a live trigger; let the discovery menu handle it.
@@ -657,7 +673,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (search.isPrefixHintMode() || search.isCommandHintMode()) {
             setHint(
                 hintMessage,
-                search.isPrefixHintMode() ? HINT_PREFIX_DISCOVERY : HINT_COMMAND_DISCOVERY,
+                search.isPrefixHintMode()
+                    ? HINT_PREFIX_DISCOVERY
+                    : search.isQuickCaptureMode()
+                      ? HINT_QUICK_CAPTURE
+                      : HINT_COMMAND_DISCOVERY,
             );
             previewPanel.hidden = true;
         } else {
@@ -696,6 +716,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 commands.enterById(classified.commandId);
                 enterCommandMode();
                 queryInput.value = '';
+                return;
+            case 'quick':
+                quickcapture.runQuick(classified).then((outcome) => {
+                    if (outcome.clear) queryInput.value = '';
+                    queryInput.dispatchEvent(new Event('input'));
+                });
                 return;
             case 'calc':
                 import('./ipc.js').then(({ copyToClipboardLabeled, hideWindow }) =>
@@ -777,6 +803,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Re-read todos when nothing would be lost, so the quick view stays
         // fresh across day rollovers and edits from other Look clients.
         todoCmd.reloadIfClean();
+        void agentsCmd.refreshQuiet();
         // Most re-opens keep the query and selection; an expired hide first
         // returns to the empty-query home state, then this re-asserts the strip
         // and its entrance animation.
@@ -872,6 +899,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.target !== queryInput &&
             !commands.isActive() &&
             !settings.isActive() &&
+            !layoutEditor.isActive() &&
             !helpScreen?.contains(e.target)
         ) {
             queryInput.focus();

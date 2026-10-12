@@ -40,6 +40,8 @@ import { trash as trashIcon } from './icons.js';
 import { classifyResultId, isSyntheticResultId, CLIPBOARD_DELETED_BANNER } from './catalog.js';
 import * as platform from './platform.js';
 import * as layout from './layout.js';
+import * as layoutEditor from './screens/layout-editor.js';
+import * as quickcapture from './components/quickcapture.js';
 
 // Matches the macOS info banner for the same action.
 const CLIP_BANNER_DURATION = 1.1;
@@ -184,6 +186,14 @@ function handleKeyDown(e) {
         return;
     }
 
+    // The Super Actions editor is modal: it owns every key except the zoom
+    // chords, which work on any screen.
+    const zoomChord = e.ctrlKey && !e.shiftKey && !e.altKey && ['=', '-', '0'].includes(e.key);
+    if (layoutEditor.isActive() && !zoomChord) {
+        layoutEditor.handleKey(e);
+        return;
+    }
+
     // Ctrl+Shift+, toggles settings
     if (e.ctrlKey && (e.shiftKey || shiftHeld) && isChord(e, 'settings')) {
         e.preventDefault();
@@ -297,6 +307,24 @@ function handleKeyDown(e) {
     if (actionmenu.vimKey(e)) {
         e.preventDefault();
         if (!isDiscoveryMode()) actionmenu.open();
+        return;
+    }
+
+    // Ctrl+1..9 from the home screen opens that command directly, without Ctrl+/
+    // first. Inside command mode the same keys switch between commands (above).
+    if (
+        e.ctrlKey &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key >= '1' &&
+        e.key <= '9' &&
+        commandMode &&
+        enterCommandModeFn &&
+        commandMode.enterByIndex(Number(e.key))
+    ) {
+        e.preventDefault();
+        enterCommandModeFn();
+        queryInput.value = '';
         return;
     }
 
@@ -703,6 +731,14 @@ async function openSelected(elevated = false) {
                 return;
             }
             break;
+        case 'quick': {
+            // :note / :todo / :done: do it here, no panel. A note or task added empties
+            // the box; ticking one off re-runs the query so the list shrinks.
+            const outcome = await quickcapture.runQuick(classified);
+            if (outcome.clear) queryInput.value = '';
+            queryInput.dispatchEvent(new Event('input'));
+            return;
+        }
         case 'calc':
             // Ungrouped answer to the clipboard, launcher out of the way.
             // History keeps the working (`2+2 = 4`); the paste is the number.
