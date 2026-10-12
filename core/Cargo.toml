@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "agents",
   "ai",
   "qactions",
   "answers",
@@ -9,6 +10,7 @@ members = [
   "lunar",
   "matching",
   "netspeed",
+  "notes",
   "ranking",
   "sources",
   "storage",
