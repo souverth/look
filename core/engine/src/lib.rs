@@ -4,6 +4,7 @@ pub mod config_path;
 pub mod hotkey;
 pub mod index;
 pub mod launchpad;
+pub mod launchpad_editor;
 pub mod launchpad_values;
 pub mod modes;
 mod normalize;

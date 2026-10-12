@@ -61,6 +61,14 @@ pub mod action_id {
     /// The launchpad's L slot: a presentational Todo/Pomo/Clock rotation, not a
     /// system control, so it has no descriptor and no native adapter.
     pub const L_SLOT: &str = "lslot";
+    // Data widgets (see `builtin_tiles`).
+    pub const AGENTS: &str = "agents";
+    pub const TODO: &str = "todo";
+    pub const POMO: &str = "pomo";
+    pub const SPEED: &str = "speed";
+    pub const NOTES: &str = "notes";
+    pub const CLOCK: &str = "clock";
+    pub const SYSTEM: &str = "system";
 }
 
 const STATUS_INFO_KEY: &str = "status";
@@ -138,6 +146,11 @@ pub enum TileRole {
     Weather,
     /// The rotating Todo / Pomo / Clock slot; rendered entirely by the shell.
     Slot,
+    /// A data widget the shell fills from the app's own features (agents,
+    /// todo, focus timer, speed, notes, clock, system). Not part of the default
+    /// strip: it only appears when the user's drawing places it. Rendered
+    /// entirely by the shell, like `Slot`.
+    Widget,
     /// A tile the user declared in `~/.look/super-actions.toml`. No descriptor and
     /// no native adapter, so `title` has to arrive already filled in.
     Custom,
@@ -170,6 +183,8 @@ pub fn min_span(role: TileRole) -> (u8, u8) {
         TileRole::Slot => (2, 2),
         TileRole::Weather => (1, 2),
         TileRole::Media => (2, 1),
+        // A widget reads fine as a single cell and fills out when given more.
+        TileRole::Widget => (1, 1),
         // The user drew it, so the size they drew is the size they meant.
         TileRole::Toggle | TileRole::Info | TileRole::Action | TileRole::Custom => (1, 1),
     }
@@ -400,6 +415,56 @@ pub fn launchpad_layout() -> Vec<LaunchpadTile> {
     placed.into_iter().map(tile).collect()
 }
 
+/// The data widgets: (id, title, mnemonic, pressable, default columns, default
+/// rows). Absent on macOS, whose shell does not know the `widget` role yet, so a
+/// layout naming one there is reported as an unknown tile instead of failing to
+/// decode.
+/// One widget: id, title, mnemonic, pressable, default columns, default rows.
+#[cfg(not(target_os = "macos"))]
+type WidgetSpec = (&'static str, &'static str, Option<char>, bool, u8, u8);
+
+#[cfg(not(target_os = "macos"))]
+const WIDGETS: [WidgetSpec; 7] = [
+    (action_id::AGENTS, "Agents", Some('A'), true, 2, 1),
+    (action_id::TODO, "Todo", Some('O'), true, 2, 1),
+    (action_id::POMO, "Focus", Some('F'), true, 1, 1),
+    (action_id::SPEED, "Speed", Some('E'), true, 1, 1),
+    (action_id::NOTES, "Notes", Some('N'), true, 1, 1),
+    (action_id::CLOCK, "Clock", Some('C'), false, 1, 1),
+    (action_id::SYSTEM, "System", None, false, 1, 1),
+];
+
+/// Every built-in tile a drawing may name: the default strip's tiles, then the
+/// widgets. Widgets carry cell 0,0 and their default size; the drawing decides
+/// where they really go. [`launchpad_layout`] stays the default arrangement.
+pub fn builtin_tiles() -> Vec<LaunchpadTile> {
+    #[allow(unused_mut)]
+    let mut tiles = launchpad_layout();
+    #[cfg(not(target_os = "macos"))]
+    tiles.extend(
+        WIDGETS
+            .iter()
+            .map(|&(id, title, mnemonic, pressable, w, h)| LaunchpadTile {
+                action_id: id.to_string(),
+                title: title.to_string(),
+                size: TileSize::S,
+                role: TileRole::Widget,
+                mnemonic,
+                col: 0,
+                row: 0,
+                col_span: w,
+                row_span: h,
+                on_label: None,
+                off_label: None,
+                pressable,
+                has_value: true,
+                confirm: None,
+                icon: None,
+            }),
+    );
+    tiles
+}
+
 /// Descriptors that apply to a search result. Resolves the (platform-specific)
 /// result id to a shared `action_id` via [`binding_for`], then looks up the
 /// definition. Empty when the result has no actions.
@@ -503,6 +568,57 @@ mod tests {
             usize::from(COLUMNS) * usize::from(ROWS),
             "the default layout leaves a hole"
         );
+    }
+
+    #[test]
+    fn builtin_tiles_extend_the_default_strip_without_changing_it() {
+        let all = builtin_tiles();
+        let default = launchpad_layout();
+        assert_eq!(
+            &all[..default.len()],
+            &default[..],
+            "the default strip comes first, unchanged"
+        );
+        let mut ids: Vec<_> = all.iter().map(|t| t.action_id.as_str()).collect();
+        let n = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), n, "every built-in has its own name");
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn widgets_fit_their_minimum_and_avoid_taken_keys() {
+        let default: Vec<_> = launchpad_layout()
+            .into_iter()
+            .filter_map(|t| t.mnemonic)
+            .collect();
+        let mut seen = std::collections::HashSet::new();
+        for tile in builtin_tiles()
+            .into_iter()
+            .filter(|t| t.role == TileRole::Widget)
+        {
+            let (min_w, min_h) = min_span(tile.role);
+            assert!(
+                tile.col_span >= min_w && tile.row_span >= min_h,
+                "{} is under its own minimum",
+                tile.action_id
+            );
+            if let Some(key) = tile.mnemonic {
+                assert!(
+                    !default.contains(&key),
+                    "{} wants {key}, which a default tile holds",
+                    tile.action_id
+                );
+                assert_eq!(chord_owner(key), None);
+                assert!(seen.insert(key), "two widgets want {key}");
+                assert!(
+                    tile.title.to_ascii_uppercase().contains(key),
+                    "{key} is not in the title \"{}\", so it would not be shown",
+                    tile.title
+                );
+            }
+        }
     }
 
     #[test]

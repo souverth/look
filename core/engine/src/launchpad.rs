@@ -523,7 +523,7 @@ pub fn resolve(contents: &str) -> Resolved {
     let (defs, legend_warnings) = legend(&table);
     warnings.extend(legend_warnings);
 
-    let known: HashMap<String, LaunchpadTile> = look_qactions::launchpad_layout()
+    let known: HashMap<String, LaunchpadTile> = look_qactions::builtin_tiles()
         .into_iter()
         .map(|tile| (tile.action_id.clone(), tile))
         .collect();
