@@ -7,7 +7,7 @@ import { webcrypto } from 'node:crypto';
 // Exercise the panel's real mutation and shortcut handlers with IPC and
 // rendering stubbed, so no Tauri window or database is needed.
 const source = readFileSync(new URL('../src/js/screens/commands/todo.js', import.meta.url), 'utf8')
-    .replace(/^import\s+[\s\S]*?from\s+'[^']+';\n/gm, '')
+    .replace(/^import\s+[\s\S]*?from\s+'[^']+';\r?\n/gm, '')
     .replace(/^export /gm, '');
 
 function panel(save = async () => {}) {

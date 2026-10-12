@@ -299,7 +299,7 @@ mod tests {
 
         let outcome = refresh_defs(&defs(&[(
             "ci",
-            r#"printf '{"value":"3 failing","caption":"CI"}'"#,
+            prints(r#"{"value":"3 failing","caption":"CI"}"#).as_str(),
         )]));
         assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
         assert_eq!(outcome.refreshed, 1);
@@ -314,13 +314,16 @@ mod tests {
         let _guard = GUARD.lock().unwrap_or_else(|err| err.into_inner());
         let _fixture = Fixture::new("empty");
 
-        refresh_defs(&defs(&[("meeting", r#"printf '{"value":"in 24m"}'"#)]));
+        refresh_defs(&defs(&[(
+            "meeting",
+            prints(r#"{"value":"in 24m"}"#).as_str(),
+        )]));
         assert!(cached().contains_key("meeting"), "it had a meeting");
 
         // The day's meetings are over, so the command prints nothing and the
         // tile goes away. This is the INVERSE of the run-block rule, where
         // empty output means "keep the rows you had".
-        refresh_defs(&defs(&[("meeting", "true")]));
+        refresh_defs(&defs(&[("meeting", PRINTS_NOTHING)]));
         assert!(
             !cached().contains_key("meeting"),
             "an empty answer removes the tile rather than keeping the old one"
@@ -335,6 +338,29 @@ mod tests {
     const FAILING_COMMAND: &str = "echo boom >&2; exit 1";
     #[cfg(windows)]
     const FAILING_COMMAND: &str = "echo boom 1>&2& exit 1";
+
+    /// A command that prints `json` and exits 0, in each shell's own language.
+    /// `printf` is not a `cmd` builtin, and `echo` keeps the quotes it is given.
+    #[cfg(not(windows))]
+    fn prints(json: &str) -> String {
+        format!("printf '{json}'")
+    }
+    #[cfg(windows)]
+    fn prints(json: &str) -> String {
+        format!("echo {json}")
+    }
+
+    /// A command that succeeds and prints nothing.
+    #[cfg(not(windows))]
+    const PRINTS_NOTHING: &str = "true";
+    #[cfg(windows)]
+    const PRINTS_NOTHING: &str = "rem";
+
+    /// A command that outlives the 2-second cap.
+    #[cfg(not(windows))]
+    const HANGS: &str = "sleep 30";
+    #[cfg(windows)]
+    const HANGS: &str = "ping -n 31 127.0.0.1 > nul";
 
     #[test]
     fn a_failing_command_keeps_the_last_good_value_and_says_why() {
@@ -373,17 +399,17 @@ mod tests {
         let readout = |value: &str| TileDef {
             value: Some(value.to_string()),
             refresh: Some(Duration::from_secs(3600)),
-            press: Some("true".to_string()),
+            press: Some(PRINTS_NOTHING.to_string()),
             ..Default::default()
         };
         let one = |def: TileDef| -> HashMap<String, TileDef> {
             [("ci".to_string(), def)].into_iter().collect()
         };
 
-        refresh_defs(&one(readout(r#"printf '{"value":"before"}'"#)));
+        refresh_defs(&one(readout(&prints(r#"{"value":"before"}"#))));
         assert_eq!(cached()["ci"].value, "before");
 
-        let changed = readout(r#"printf '{"value":"after"}'"#);
+        let changed = readout(&prints(r#"{"value":"after"}"#));
         assert_eq!(
             refresh_defs(&one(changed.clone())).refreshed,
             0,
@@ -416,14 +442,14 @@ mod tests {
         let _guard = GUARD.lock().unwrap_or_else(|err| err.into_inner());
         let _fixture = Fixture::new("fresh");
 
-        let mut tiles = defs(&[("ci", r#"printf '{"value":"first"}'"#)]);
+        let mut tiles = defs(&[("ci", prints(r#"{"value":"first"}"#).as_str())]);
         tiles.get_mut("ci").unwrap().refresh = Some(Duration::from_secs(3600));
         assert_eq!(refresh_defs(&tiles).refreshed, 1);
 
         // `refresh` is a maximum staleness, not an interval: the second open is
         // inside the window, so nothing runs at all. That is what makes a tile
         // on every launcher open affordable.
-        tiles.get_mut("ci").unwrap().value = Some(r#"printf '{"value":"second"}'"#.to_string());
+        tiles.get_mut("ci").unwrap().value = Some(prints(r#"{"value":"second"}"#));
         assert_eq!(refresh_defs(&tiles).refreshed, 0, "no spawn inside the TTL");
         assert_eq!(cached()["ci"].value, "first");
     }
@@ -434,7 +460,7 @@ mod tests {
         let _fixture = Fixture::new("hangs");
 
         let started = std::time::Instant::now();
-        let outcome = refresh_defs(&defs(&[("slow", "sleep 30")]));
+        let outcome = refresh_defs(&defs(&[("slow", HANGS)]));
         let elapsed = started.elapsed();
 
         assert!(
@@ -463,8 +489,8 @@ mod tests {
         let _fixture = Fixture::new("sweep");
 
         refresh_defs(&defs(&[
-            ("ci", r#"printf '{"value":"a"}'"#),
-            ("old", r#"printf '{"value":"b"}'"#),
+            ("ci", prints(r#"{"value":"a"}"#).as_str()),
+            ("old", prints(r#"{"value":"b"}"#).as_str()),
         ]));
         assert_eq!(cached().len(), 2);
 
