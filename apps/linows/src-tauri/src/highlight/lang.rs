@@ -48,6 +48,29 @@ impl Language {
         }
     }
 
+    /// Language from a Markdown fence label (```ts, ```typescript, ```c++).
+    /// Long names and common aliases map to the extension `from_path` knows;
+    /// anything else is tried as an extension, so ```rs and ```toml work too.
+    pub fn from_name(name: &str) -> Self {
+        let name = name.trim().to_ascii_lowercase();
+        let ext = match name.as_str() {
+            "typescript" => "ts",
+            "javascript" | "node" => "js",
+            "python" | "python3" | "py3" => "py",
+            "rust" => "rs",
+            "ruby" => "rb",
+            "golang" => "go",
+            "shell" | "sh" | "console" | "terminal" | "powershell" | "ps1" | "bat" | "cmd" => "sh",
+            "c++" | "cplusplus" => "cpp",
+            "kotlin" => "kt",
+            "yml" => "yml",
+            "markdown" => "md",
+            "xml" | "svg" => "html",
+            other => other,
+        };
+        Self::from_path(&format!("x.{ext}"))
+    }
+
     pub fn keywords(self) -> &'static [&'static str] {
         match self {
             Self::Go => &[

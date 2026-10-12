@@ -9,12 +9,14 @@ authors = ["kunkka19xx <nobita079x@gmail.com>"]
 tauri = { version = "2.11.1", features = ["protocol-asset"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
+look-agents = { path = "../../../core/agents" }
 look-answers = { path = "../../../core/answers" }
 look-calc = { path = "../../../core/calc" }
 look-engine = { path = "../../../core/engine" }
 look-lunar = { path = "../../../core/lunar" }
 look-matching = { path = "../../../core/matching" }
 look-netspeed = { path = "../../../core/netspeed" }
+look-notes = { path = "../../../core/notes" }
 look-qactions = { path = "../../../core/qactions" }
 look-sources = { path = "../../../core/sources" }
 look-storage = { path = "../../../core/storage" }

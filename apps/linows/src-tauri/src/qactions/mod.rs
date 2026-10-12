@@ -324,6 +324,43 @@ pub fn launchpad_warnings() -> Vec<String> {
     look_engine::launchpad::layout().warnings
 }
 
+// --- The Super Actions editor (core/engine launchpad_editor) ---
+
+use look_engine::launchpad_editor as editor;
+
+/// The layout as the editor edits it: placed tiles, the user's tile
+/// definitions, the built-in catalog, and the file's own warnings.
+#[tauri::command]
+pub fn launchpad_editor_state() -> Result<editor::EditorState, String> {
+    editor::state()
+}
+
+/// What the app would say about a draft, without saving it.
+#[tauri::command]
+pub fn launchpad_editor_validate(model: editor::EditorModel) -> Result<Vec<String>, String> {
+    editor::validate(&model)
+}
+
+/// Writes the draft into `~/.look/super-actions.toml`, keeping the file's
+/// comments and leaving the previous version in a `.bak`.
+#[tauri::command]
+pub fn launchpad_editor_save(model: editor::EditorModel) -> Result<editor::SaveOutcome, String> {
+    editor::save(&model)
+}
+
+/// Back to the seeded layout (the old file goes to the `.bak`).
+#[tauri::command]
+pub fn launchpad_editor_reset() -> Result<(), String> {
+    editor::reset()
+}
+
+/// Runs a tile's `value` command once and reports what it printed. Spawns, so
+/// `async`.
+#[tauri::command(async)]
+pub fn launchpad_editor_test_value(command: String) -> editor::ValueTest {
+    editor::test_value(&command)
+}
+
 /// Live state + info values for an action. `info_keys` are the descriptor's
 /// `value_key`s the frontend wants resolved.
 #[tauri::command]

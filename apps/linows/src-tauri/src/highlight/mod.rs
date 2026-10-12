@@ -87,6 +87,28 @@ pub fn highlight_file_cmd(path: String) -> Option<HighlightResult> {
     highlight_file(&path)
 }
 
+/// Largest block /note will highlight; beyond it the block stays plain text so
+/// a pasted log cannot stall the tokenizer.
+const CODE_BLOCK_CAP: usize = 256 * 1024;
+
+/// Tauri command: highlight a Markdown code block. `lang` is the fence label
+/// (`ts`, `python`, `c++`...); an unknown or empty one renders as plain text.
+#[tauri::command]
+pub fn highlight_code_cmd(source: String, lang: String) -> HighlightResult {
+    let bytes = source.as_bytes();
+    if bytes.len() > CODE_BLOCK_CAP {
+        return HighlightResult {
+            html: html::render(bytes, &[]),
+            truncated: false,
+        };
+    }
+    let spans = tokenizer::tokenize(bytes, Language::from_name(&lang));
+    HighlightResult {
+        html: html::render(bytes, &spans),
+        truncated: false,
+    }
+}
+
 /// Tauri command: highlight text the app already holds, as shell.
 ///
 /// A block's steps ARE shell (`specs/user-sources.md` §2.8), and the panel

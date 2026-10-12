@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agents;
 mod answers;
 mod autostart;
 mod calc;
@@ -18,6 +19,7 @@ mod launcher_hotkey;
 mod lunar;
 mod music;
 mod netspeed;
+mod notes;
 mod nowplaying;
 mod paste;
 mod platform;
@@ -910,6 +912,14 @@ fn main() {
             // Todo (shared look-todo store, same table macOS uses)
             todo::todo_list,
             todo::todo_save,
+            // Coding-agent detection and quota (shared look-agents crate)
+            agents::agents_status,
+            // Quick notes (shared look-notes store)
+            notes::notes_list,
+            notes::notes_save,
+            notes::notes_delete,
+            notes::notes_tag_colors,
+            notes::notes_set_tag_color,
             // Translation
             translate::translate,
             // AI / web answers (look-answers crate, shared with macOS)
@@ -932,6 +942,11 @@ fn main() {
             qactions::refresh_launchpad_tiles,
             qactions::press_launchpad_tile,
             qactions::launchpad_warnings,
+            qactions::launchpad_editor_state,
+            qactions::launchpad_editor_validate,
+            qactions::launchpad_editor_save,
+            qactions::launchpad_editor_reset,
+            qactions::launchpad_editor_test_value,
             qactions::quick_action_state,
             qactions::quick_action_apply,
             qactions::quick_action_apply_item,
@@ -973,6 +988,7 @@ fn main() {
             // Highlight
             highlight::highlight_file_cmd,
             highlight::highlight_shell_cmd,
+            highlight::highlight_code_cmd,
             // About widget: version only. The update check itself runs in
             // the webview via fetch() - no Rust HTTP/TLS dep needed.
             files::get_lookapp_version,

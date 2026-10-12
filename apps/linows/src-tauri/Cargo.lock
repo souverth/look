@@ -2450,6 +2450,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
+name = "look-agents"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "look-answers"
 version = "0.1.0"
 dependencies = [
@@ -2518,6 +2526,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "look-notes"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "serde",
+]
+
+[[package]]
 name = "look-qactions"
 version = "0.1.0"
 dependencies = [
@@ -2575,12 +2591,14 @@ dependencies = [
  "futures-util",
  "gtk",
  "libloading 0.8.9",
+ "look-agents",
  "look-answers",
  "look-calc",
  "look-engine",
  "look-lunar",
  "look-matching",
  "look-netspeed",
+ "look-notes",
  "look-qactions",
  "look-sources",
  "look-storage",
