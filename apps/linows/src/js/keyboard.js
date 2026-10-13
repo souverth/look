@@ -731,6 +731,16 @@ async function openSelected(elevated = false) {
                 return;
             }
             break;
+        case 'memo':
+            // A note opens in its editor; a task opens /todo, where it is ticked.
+            if (commandMode && enterCommandModeFn) {
+                commandMode.enterById(classified.target === 'note' ? 'note' : 'todo');
+                enterCommandModeFn();
+                queryInput.value = '';
+                if (classified.target === 'note') await commandMode.openNote(classified.id);
+                return;
+            }
+            break;
         case 'quick': {
             // :note / :todo / :done: do it here, no panel. A note or task added empties
             // the box; ticking one off re-runs the query so the list shrinks.

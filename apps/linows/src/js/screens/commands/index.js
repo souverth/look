@@ -78,6 +78,12 @@ export function enterById(cmdId) {
     return true;
 }
 
+// Opens one note in the /note editor, for a note found from the main search.
+// Call after entering command mode on `note`.
+export function openNote(id) {
+    return note.openById(id);
+}
+
 // Pick the Nth command (1-based, in the sidebar's order) as the one to open next,
 // for a Ctrl+1..9 pressed outside command mode. False when there is no such command.
 export function enterByIndex(n) {

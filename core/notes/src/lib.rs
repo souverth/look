@@ -9,6 +9,7 @@
 //! but a note with neither is dropped on save, so opening "New note" and
 //! backing out leaves nothing behind.
 
+use look_matching::{normalize_for_search, text_match_score_normalized};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -110,6 +111,136 @@ fn decode_tags(raw: &str) -> Vec<String> {
         .filter(|t| !t.is_empty())
         .map(String::from)
         .collect()
+}
+
+/// Characters of a body line kept in a search hit's snippet.
+pub const SNIPPET_CHARS: usize = 80;
+/// A hit in the title outranks the same hit in a tag, which outranks the body,
+/// so a note named for what you typed comes before one that merely mentions it.
+const TITLE_WEIGHT: i64 = 3;
+const TAG_WEIGHT: i64 = 2;
+const BODY_WEIGHT: i64 = 1;
+
+/// One note matching a query typed in the launcher's main search box.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct NoteHit {
+    pub id: String,
+    /// What the note is called on its card: [`display_title`].
+    pub title: String,
+    /// The body line the query was found on, or the body's first line when the
+    /// match was in the title or a tag. Empty for a note with no body.
+    pub snippet: String,
+    pub tags: Vec<String>,
+    pub score: i64,
+    pub updated_at_unix_s: i64,
+}
+
+/// A note's headline: its title, else its first non-blank line, else
+/// "Untitled". Same rule as the /note cards.
+pub fn display_title(note: &Note) -> String {
+    let title = note.title.trim();
+    if !title.is_empty() {
+        return title.to_string();
+    }
+    first_line(&note.body)
+        .map(|line| line.chars().take(SNIPPET_CHARS).collect())
+        .unwrap_or_else(|| "Untitled".to_string())
+}
+
+fn first_line(body: &str) -> Option<&str> {
+    body.lines().map(str::trim).find(|line| !line.is_empty())
+}
+
+/// The body's non-blank lines below the headline: all of them for a titled
+/// note, all but the first for one headed by its first line, so a snippet never
+/// repeats the title above it.
+fn content_lines(note: &Note) -> impl Iterator<Item = &str> {
+    let skip = usize::from(note.title.trim().is_empty());
+    note.body
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .skip(skip)
+}
+
+fn clip(line: &str) -> String {
+    let mut out: String = line.chars().take(SNIPPET_CHARS).collect();
+    if line.chars().count() > SNIPPET_CHARS {
+        out.push('…');
+    }
+    out
+}
+
+/// Notes matching `query`, best first, at most `limit`. Every word of the query
+/// has to appear in the title, a tag, or the body (case and diacritics folded),
+/// so a short query does not drag in every long note. A blank query returns the
+/// most recently edited notes, which is what an empty `n"` lists.
+pub fn search(notes: &[Note], query: &str, limit: usize) -> Vec<NoteHit> {
+    let query = normalize_for_search(query.trim());
+    let mut hits: Vec<NoteHit> = notes
+        .iter()
+        .filter_map(|note| {
+            let title = display_title(note);
+            let score = if query.is_empty() {
+                0
+            } else {
+                score_note(note, &title, &query)?
+            };
+            Some(NoteHit {
+                id: note.id.clone(),
+                snippet: snippet_for(note, &query),
+                title,
+                tags: note.tags.clone(),
+                score,
+                updated_at_unix_s: note.updated_at_unix_s,
+            })
+        })
+        .collect();
+    hits.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then(b.updated_at_unix_s.cmp(&a.updated_at_unix_s))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    hits.truncate(limit);
+    hits
+}
+
+/// The note's best score, or `None` when some word of `query` (already
+/// normalized) appears nowhere in it. The body may hold the words spread over
+/// lines, together with the title and tags.
+fn score_note(note: &Note, title: &str, query: &str) -> Option<i64> {
+    let title = normalize_for_search(title);
+    let title_score = text_match_score_normalized(query, &title).map(|s| s * TITLE_WEIGHT);
+    let tag_score = note
+        .tags
+        .iter()
+        .filter_map(|tag| text_match_score_normalized(query, &normalize_for_search(tag)))
+        .max()
+        .map(|s| s * TAG_WEIGHT);
+    if let Some(score) = title_score.max(tag_score) {
+        return Some(score);
+    }
+    let everything =
+        normalize_for_search(&format!("{title} {} {}", note.tags.join(" "), note.body));
+    text_match_score_normalized(query, &everything).map(|s| s * BODY_WEIGHT)
+}
+
+/// The first content line holding a word of `query`, so the row shows why the
+/// note matched; else the first content line. Empty when there is none.
+fn snippet_for(note: &Note, query: &str) -> String {
+    let matching = (!query.is_empty())
+        .then(|| {
+            content_lines(note).find(|line| {
+                let line = normalize_for_search(line);
+                query.split_whitespace().any(|word| line.contains(word))
+            })
+        })
+        .flatten();
+    matching
+        .or_else(|| content_lines(note).next())
+        .map(clip)
+        .unwrap_or_default()
 }
 
 pub struct NoteStore {
@@ -418,6 +549,87 @@ mod tests {
         let notes = store.list().unwrap();
         assert_eq!(notes[0].id, "old");
         assert!(notes[0].tags.is_empty());
+    }
+
+    fn hit_ids(hits: &[NoteHit]) -> Vec<&str> {
+        hits.iter().map(|h| h.id.as_str()).collect()
+    }
+
+    #[test]
+    fn search_ranks_title_over_tag_over_body() {
+        let mut tagged = note("tag", "Shopping", "eggs");
+        tagged.tags = vec!["milk".into()];
+        let notes = [
+            note("body", "Groceries", "remember the milk"),
+            tagged,
+            note("title", "Milk", "two litres"),
+        ];
+        assert_eq!(
+            hit_ids(&search(&notes, "milk", 10)),
+            ["title", "tag", "body"]
+        );
+    }
+
+    #[test]
+    fn search_needs_every_word_somewhere_in_the_note() {
+        let notes = [note("a", "Trip", "book the train\npack a bag")];
+        assert_eq!(hit_ids(&search(&notes, "train bag", 10)), ["a"]);
+        assert!(search(&notes, "train plane", 10).is_empty());
+        // A subsequence is not a match: "tb" is in "Trip ... book".
+        assert!(search(&notes, "tb", 10).is_empty());
+    }
+
+    #[test]
+    fn search_folds_vietnamese_diacritics() {
+        let notes = [note("a", "Họp nhóm", "thứ hai")];
+        assert_eq!(hit_ids(&search(&notes, "hop nhom", 10)), ["a"]);
+        assert_eq!(hit_ids(&search(&notes, "thu hai", 10)), ["a"]);
+    }
+
+    #[test]
+    fn snippet_shows_the_line_that_matched() {
+        let notes = [note(
+            "a",
+            "Ideas",
+            "first thought\nlauncher plugin idea\nlast",
+        )];
+        assert_eq!(
+            search(&notes, "plugin", 10)[0].snippet,
+            "launcher plugin idea"
+        );
+        // A title hit shows the body's opening line instead.
+        assert_eq!(search(&notes, "ideas", 10)[0].snippet, "first thought");
+    }
+
+    #[test]
+    fn untitled_note_is_headed_by_its_first_line_without_repeating_it() {
+        let notes = [note("a", "", "\n  Call the bank  \nask about fees")];
+        let hit = &search(&notes, "bank", 10)[0];
+        assert_eq!(hit.title, "Call the bank");
+        assert_eq!(hit.snippet, "ask about fees");
+        let alone = [note("b", "", "only line")];
+        assert_eq!(search(&alone, "only", 10)[0].snippet, "");
+        assert_eq!(display_title(&note("c", " ", " ")), "Untitled");
+    }
+
+    #[test]
+    fn long_snippet_is_clipped() {
+        let long = "word ".repeat(40);
+        let notes = [note("a", "T", &long)];
+        let snippet = &search(&notes, "word", 10)[0].snippet;
+        assert_eq!(snippet.chars().count(), SNIPPET_CHARS + 1);
+        assert!(snippet.ends_with('…'));
+    }
+
+    #[test]
+    fn blank_query_lists_newest_first_and_limit_applies() {
+        let mut old = note("old", "Old", "");
+        old.updated_at_unix_s = 1;
+        let mut new = note("new", "New", "");
+        new.updated_at_unix_s = 9;
+        let notes = [old, new];
+        assert_eq!(hit_ids(&search(&notes, "  ", 10)), ["new", "old"]);
+        assert_eq!(hit_ids(&search(&notes, "", 1)), ["new"]);
     }
 
     #[test]

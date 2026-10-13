@@ -912,10 +912,12 @@ fn main() {
             // Todo (shared look-todo store, same table macOS uses)
             todo::todo_list,
             todo::todo_save,
+            todo::todo_search,
             // Coding-agent detection and quota (shared look-agents crate)
             agents::agents_status,
             // Quick notes (shared look-notes store)
             notes::notes_list,
+            notes::notes_search,
             notes::notes_save,
             notes::notes_delete,
             notes::notes_tag_colors,

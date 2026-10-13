@@ -81,7 +81,9 @@ export function update(result) {
     // panels.
     const cacheKey = sourceblocks.isSourceRow(result.id)
         ? sourceblocks.rowKey(result)
-        : result.kind === 'clipboard' || result.kind === 'action'
+        : result.kind === 'clipboard' ||
+            result.kind === 'action' ||
+            classifyResultId(result.id)?.kind === 'memo'
           ? result.id
           : result.path;
     if (currentPath === cacheKey) return;
@@ -143,6 +145,9 @@ export function update(result) {
             return;
         case 'calc':
             renderCalcPreview(result);
+            return;
+        case 'memo':
+            renderMemoPreview(result, classified.target);
             return;
     }
 
@@ -1087,6 +1092,41 @@ function renderCalcPreview(result) {
     const hint = document.createElement('div');
     hint.className = 'preview-web-suggestion-hint';
     hint.innerHTML = `Press <kbd>Enter</kbd> to copy`;
+    wrap.appendChild(hint);
+
+    panel.appendChild(wrap);
+}
+
+// A note or task from the main search, in the same layout: what it is, the line
+// it matched on (or its day), and where Enter takes it. The row's own glyph is
+// drawn large by .preview-memo.
+function renderMemoPreview(result, target) {
+    const wrap = document.createElement('div');
+    wrap.className = 'preview-web-suggestion preview-memo';
+
+    const icon = document.createElement('div');
+    icon.className = 'preview-web-suggestion-icon';
+    icon.innerHTML = result.iconSvg || '';
+    wrap.appendChild(icon);
+
+    const title = document.createElement('div');
+    title.className = 'preview-web-suggestion-title';
+    title.textContent = result.title;
+    wrap.appendChild(title);
+
+    const sub = document.createElement('div');
+    sub.className = 'preview-web-suggestion-subtitle';
+    const tags = (result.memoTags || []).map((t) => `#${t}`);
+    sub.textContent =
+        target === 'note'
+            ? [result.memoSnippet, ...tags].filter(Boolean).join('  ·  ')
+            : `Task for ${result.memoDay}`;
+    wrap.appendChild(sub);
+
+    const hint = document.createElement('div');
+    hint.className = 'preview-web-suggestion-hint';
+    const where = target === 'note' ? 'the note' : '/todo';
+    hint.innerHTML = `Press <kbd>Enter</kbd> to open ${where}`;
     wrap.appendChild(hint);
 
     panel.appendChild(wrap);

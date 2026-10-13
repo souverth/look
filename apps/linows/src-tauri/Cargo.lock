@@ -2529,6 +2529,7 @@ dependencies = [
 name = "look-notes"
 version = "0.1.0"
 dependencies = [
+ "look-matching",
  "rusqlite",
  "serde",
 ]
@@ -2570,6 +2571,7 @@ dependencies = [
 name = "look-todo"
 version = "0.1.0"
 dependencies = [
+ "look-matching",
  "rusqlite",
  "serde",
 ]

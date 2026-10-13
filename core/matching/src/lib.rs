@@ -1,5 +1,7 @@
 pub mod normalize;
+pub mod words;
 pub use normalize::normalize_for_search;
+pub use words::{text_match_score, text_match_score_normalized};
 
 pub struct PreparedQuery<'a> {
     raw: &'a str,

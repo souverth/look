@@ -72,7 +72,10 @@ const WEB_SUGGEST_ID = 'websuggest:';
 const WEB_URL_ID = 'weburl:';
 const CALC_ID = 'calc:';
 const QUICK_ID = 'quick:';
+const MEMO_NOTE_ID = 'memonote:';
+const MEMO_TASK_ID = 'memotask:';
 const DISCOVERY_CHAR = '"';
+export const NOTES_PREFIX = 'n"';
 
 // Google-autocomplete row glyph: Lucide `search` (mirrors macOS, which uses
 // SF Symbols "magnifyingglass"). Inlined here rather than imported as a
@@ -96,6 +99,11 @@ const PREFIX_ENTRIES = [
         description: 'Clipboard history search (latest 10 text clips)',
     },
     { prefix: 'ci"', argHint: 'word', description: 'Copied images, newest first' },
+    {
+        prefix: NOTES_PREFIX,
+        argHint: 'word',
+        description: 'Your notes, newest first (optional filter)',
+    },
     { prefix: 't"', argHint: 'word', description: 'Web translate (VI/EN/JA)' },
 ];
 
@@ -353,6 +361,83 @@ export function calcResult(expr, calculation) {
     };
 }
 
+// Notes and open tasks matching a plain query (core/notes, core/todo search).
+// Enter opens the note in /note, or /todo for a task. `path` is the text Ctrl+C
+// copies; the preview keys on the id, since two notes may share a title.
+const MONTH_ABBR = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+];
+
+export function noteResult(hit) {
+    const tags = hit.tags?.length ? hit.tags.map((t) => `#${t}`).join(' ') : '';
+    const detail = [hit.snippet, tags].filter(Boolean).join('  ·  ');
+    return {
+        id: `${MEMO_NOTE_ID}${hit.id}`,
+        kind: 'app',
+        title: hit.title,
+        subtitle: detail ? `Note  ·  ${detail}` : 'Note',
+        path: hit.title,
+        score: hit.score,
+        iconSvg: notebook,
+        memoSnippet: hit.snippet,
+        memoTags: hit.tags || [],
+    };
+}
+
+/** `2026-10-13` against today `2026-10-13` -> "today"; else "Oct 15". */
+export function taskDayLabel(dueDate, todayKey, tomorrowKey) {
+    if (dueDate === todayKey) return 'today';
+    if (dueDate === tomorrowKey) return 'tomorrow';
+    const [, m, d] = dueDate.split('-').map(Number);
+    const label = `${MONTH_ABBR[m - 1]} ${d}`;
+    return dueDate < todayKey ? `${label}, late` : label;
+}
+
+export function taskResult(hit, todayKey, tomorrowKey) {
+    const day = taskDayLabel(hit.due_date, todayKey, tomorrowKey);
+    return {
+        id: `${MEMO_TASK_ID}${hit.id}`,
+        kind: 'app',
+        title: hit.name,
+        subtitle: `Task  ·  ${day}`,
+        path: hit.name,
+        score: hit.score,
+        iconSvg: listChecks,
+        memoDay: day,
+    };
+}
+
+// Rows the engine found stay in charge of the top: a note sits below the best
+// few local matches, so typing an app's name still launches that app on Enter.
+export const MEMO_ROWS_AFTER = 3;
+
+export function placeMemoRows(memo, ranked) {
+    if (memo.length === 0) return ranked;
+    const at = Math.min(MEMO_ROWS_AFTER, ranked.length);
+    return [...ranked.slice(0, at), ...memo, ...ranked.slice(at)];
+}
+
+function memoFromResultId(resultId) {
+    if (resultId?.startsWith(MEMO_NOTE_ID)) {
+        return { target: 'note', id: resultId.slice(MEMO_NOTE_ID.length) };
+    }
+    if (resultId?.startsWith(MEMO_TASK_ID)) {
+        return { target: 'task', id: resultId.slice(MEMO_TASK_ID.length) };
+    }
+    return null;
+}
+
 export function calcRawFromResultId(resultId) {
     return resultId?.startsWith(CALC_ID) ? resultId.slice(CALC_ID.length) : null;
 }
@@ -377,6 +462,9 @@ export function classifyResultId(resultId) {
 
     const quick = quickFromResultId(resultId);
     if (quick) return { kind: 'quick', ...quick };
+
+    const memo = memoFromResultId(resultId);
+    if (memo) return { kind: 'memo', ...memo };
 
     return null;
 }

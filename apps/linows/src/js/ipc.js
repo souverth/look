@@ -373,6 +373,14 @@ export async function notesList() {
     return invoke('notes_list');
 }
 
+export async function notesSearch(query, limit) {
+    return invoke('notes_search', { query, limit });
+}
+
+export async function todoSearch(query, since, limit) {
+    return invoke('todo_search', { query, since, limit });
+}
+
 export async function notesSave(note) {
     return invoke('notes_save', { note });
 }

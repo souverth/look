@@ -232,6 +232,12 @@ export function exit() {
     current = null;
 }
 
+/** Opens one note in the editor, as a note picked from the main search does. */
+export async function openById(id) {
+    await load();
+    if (visible) openNote(id);
+}
+
 // Tab belongs to the editor (indent / title -> body), not to command switching.
 export function isEditing() {
     return visible && !!current && mode === 'edit';

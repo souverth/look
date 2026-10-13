@@ -717,6 +717,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 enterCommandMode();
                 queryInput.value = '';
                 return;
+            case 'memo':
+                commands.enterById(classified.target === 'note' ? 'note' : 'todo');
+                enterCommandMode();
+                queryInput.value = '';
+                if (classified.target === 'note') commands.openNote(classified.id);
+                return;
             case 'quick':
                 quickcapture.runQuick(classified).then((outcome) => {
                     if (outcome.clear) queryInput.value = '';

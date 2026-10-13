@@ -7,6 +7,8 @@ import {
     classifyUrl as ipcClassifyUrl,
     recentUrls as ipcRecentUrls,
     calcInline as ipcCalcInline,
+    notesSearch as ipcNotesSearch,
+    todoSearch as ipcTodoSearch,
 } from './ipc.js';
 import {
     isPrefixSuggestionQuery,
@@ -19,6 +21,10 @@ import {
     webUrlResult,
     placeUrlRow,
     calcResult,
+    noteResult,
+    taskResult,
+    placeMemoRows,
+    NOTES_PREFIX,
     processPidLabel,
     WEB_URL_OPEN_SUBTITLE,
     WEB_URL_RECENT_SUBTITLE,
@@ -34,6 +40,16 @@ const WEB_SUGGESTIONS_LIMIT = 6;
 const RECENT_URL_LIMIT = 5;
 const MIN_WEB_SUGGESTION_QUERY_LENGTH = 2;
 const CLIPBOARD_TITLE_MAX_CHARS = 80;
+// Notes and tasks blended into a plain search: a few of each, from 2 chars,
+// so a one-letter query does not fill the list with every note holding an `a`.
+const MEMO_NOTES_LIMIT = 3;
+const MEMO_TASKS_LIMIT = 3;
+const MIN_MEMO_QUERY_LENGTH = 2;
+// `n"` lists notes on their own, so it can show many more.
+const NOTES_MODE_LIMIT = 40;
+// A task this many days late is still completable in /todo (EXTENDED), so it
+// still shows; older ones are OVERDUE and locked. Mirrors todo.js.
+const TASK_LATE_DAYS = 3;
 // In step with core/engine modes.rs, which spells the same two prefixes.
 const CLIPBOARD_PREFIX = 'c"';
 const CLIPBOARD_IMAGE_PREFIX = 'ci"';
@@ -47,6 +63,7 @@ let clipboardMode = false;
 let clipboardImageMode = false;
 let translateMode = false;
 let recentMode = false;
+let notesMode = false;
 let processMode = false;
 // Set after a kill (or on mode entry) so the next process search re-enumerates
 // /proc instead of scoring the stale snapshot.
@@ -79,6 +96,11 @@ let lastRecentUrls = [];
 // Calculator row for the current query, or null. Local and instant, so unlike
 // the other legs it runs undebounced and settles before the engine answers.
 let lastCalc = null;
+// Note and task rows for the current query, placed below the top local results.
+// They paint only once the engine has answered: landing first, they would take
+// the selection and then be pushed down by the rows the engine puts above them.
+let lastMemoRows = [];
+let engineSettled = false;
 
 /** Resolved by the backend (Windows: SHGetKnownFolderPath; *nix: $HOME/<name>).
  *  Empty until setQuickFolders is called at boot. */
@@ -115,6 +137,10 @@ export function isRecentMode() {
 
 export function isProcessMode() {
     return processMode;
+}
+
+export function isNotesMode() {
+    return notesMode;
 }
 
 // Called after a kill so the next process search re-enumerates /proc. Callers
@@ -162,7 +188,10 @@ export function handleQueryInput(query) {
     lastUrlMatch = null;
     lastRecentUrls = [];
     lastCalc = null;
+    lastMemoRows = [];
+    engineSettled = false;
     quickCapture = null;
+    notesMode = false;
     if (query !== lastQueryString) {
         lastWebSuggestions = [];
     }
@@ -245,6 +274,14 @@ export function handleQueryInput(query) {
 
     recentMode = false;
 
+    if (query.startsWith(NOTES_PREFIX)) {
+        notesMode = true;
+        const filter = query.slice(NOTES_PREFIX.length);
+        const version = queryVersion;
+        debounceTimer = setTimeout(() => performNotesSearch(filter, version), DEBOUNCE_MS);
+        return;
+    }
+
     if (query.startsWith('ps"')) {
         processMode = true;
         // Re-enumerate on mode entry or after a kill; otherwise score the cached
@@ -289,12 +326,14 @@ export function handleQueryInput(query) {
     // Unlike web suggestions they ignore the AI gate - opening a typed address
     // is a launcher action, not a web answer.
     const wantsUrlRows = !prefixed;
+    const wantsMemo = !prefixed && query.trim().length >= MIN_MEMO_QUERY_LENGTH;
     // No debounce: local arithmetic on a short string, and it settles before
     // the engine, so the row never re-seats the selection.
     if (!prefixed) fetchCalc(query, myVersion);
     debounceTimer = setTimeout(() => {
         performSearch(query, myVersion);
         if (wantsUrlRows) fetchUrlRows(query, myVersion);
+        if (wantsMemo) fetchMemoRows(query, myVersion);
     }, DEBOUNCE_MS);
     if (wantsWeb) {
         webSuggestionTimer = setTimeout(() => fetchWebSuggestions(query, myVersion), DEBOUNCE_MS);
@@ -320,6 +359,7 @@ async function performSearch(query, version) {
         if (isStale(version)) return;
         lastEnginePayload = [];
     }
+    engineSettled = true;
     publish(query, version);
 }
 
@@ -389,6 +429,52 @@ async function fetchUrlRows(query, version) {
     publish(query, version);
 }
 
+const pad2 = (n) => String(n).padStart(2, '0');
+
+/** Local `yyyy-MM-dd`, `offsetDays` from today: the keys /todo groups by. */
+function dayKey(offsetDays = 0) {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+// Notes and open tasks for a plain query, one leg so they paint together.
+// Best-effort like the URL leg: a failure means no rows, never an error.
+async function fetchMemoRows(query, version) {
+    const term = query.trim();
+    try {
+        const [notes, tasks] = await Promise.all([
+            ipcNotesSearch(term, MEMO_NOTES_LIMIT),
+            ipcTodoSearch(term, dayKey(-TASK_LATE_DAYS), MEMO_TASKS_LIMIT),
+        ]);
+        if (isStale(version)) return;
+        const today = dayKey();
+        const tomorrow = dayKey(1);
+        lastMemoRows = [
+            ...(notes || []).map(noteResult),
+            ...(tasks || []).map((t) => taskResult(t, today, tomorrow)),
+        ];
+    } catch (err) {
+        console.warn('Note/task rows failed:', err);
+        if (isStale(version)) return;
+        lastMemoRows = [];
+    }
+    if (lastMemoRows.length && engineSettled) publish(query, version);
+}
+
+async function performNotesSearch(filter, version) {
+    const query = `${NOTES_PREFIX}${filter}`;
+    try {
+        const hits = await ipcNotesSearch(filter.trim(), NOTES_MODE_LIMIT);
+        if (isStale(version)) return;
+        if (onResultsCallback) onResultsCallback((hits || []).map(noteResult), query);
+    } catch (err) {
+        if (isStale(version)) return;
+        console.error('Notes search failed:', err);
+        if (onResultsCallback) onResultsCallback([], query);
+    }
+}
+
 // Stable score-descending merge of engine results and recent-URL rows, so a
 // frequently/recently opened URL rises exactly as far as its frecency earns
 // against local matches. Both inputs are already score-sorted; on ties the
@@ -426,7 +512,8 @@ function publish(query, version) {
     const recentRows = lastRecentUrls
         .filter((e) => e.url !== liveUrl)
         .map((e) => webUrlResult(e.url, WEB_URL_RECENT_SUBTITLE, e.score));
-    const ranked = mergeByScore(lastEnginePayload, recentRows);
+    const memoRows = engineSettled ? lastMemoRows : [];
+    const ranked = placeMemoRows(memoRows, mergeByScore(lastEnginePayload, recentRows));
     let combined;
     if (!lastUrlMatch) {
         combined = [...ranked, ...suggestionRows];

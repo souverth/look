@@ -626,6 +626,14 @@
     display: inline-flex;
 }
 
+/* Note and task rows reuse their 16px row glyph; draw it at the size of the
+ * other synthetic previews' large icons. */
+.preview-memo .preview-web-suggestion-icon svg {
+    width: 44px;
+    height: 44px;
+    stroke-width: 1.4;
+}
+
 .preview-web-suggestion-title {
     font-size: calc(var(--font-size) + 3px);
     font-weight: 600;

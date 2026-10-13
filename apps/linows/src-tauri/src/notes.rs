@@ -5,7 +5,7 @@
 //! `notes` table of the app's existing `look.db`.
 
 use crate::state::default_db_path;
-use look_notes::{Note, NoteStore, TagColor};
+use look_notes::{Note, NoteHit, NoteStore, TagColor};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn open_store() -> Result<NoteStore, String> {
@@ -22,6 +22,13 @@ fn now_unix_s() -> i64 {
 #[tauri::command]
 pub fn notes_list() -> Result<Vec<Note>, String> {
     open_store()?.list().map_err(|e| e.to_string())
+}
+
+/// Notes matching a main-search query (or the newest, for a blank `n"`).
+#[tauri::command]
+pub fn notes_search(query: String, limit: usize) -> Result<Vec<NoteHit>, String> {
+    let notes = open_store()?.list().map_err(|e| e.to_string())?;
+    Ok(look_notes::search(&notes, &query, limit))
 }
 
 /// Returns the stored note, or null when the note was blank and got removed.

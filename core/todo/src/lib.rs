@@ -19,6 +19,7 @@
 //! a future cross-machine merge can order edits and tell "deleted here"
 //! from "created elsewhere".
 
+use look_matching::{normalize_for_search, text_match_score_normalized};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -70,6 +71,48 @@ pub struct TodoTask {
     pub done: bool,
     pub due_date: String,
     pub created_at_unix_s: i64,
+}
+
+/// One open task matching a query typed in the launcher's main search box.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct TodoHit {
+    pub id: String,
+    pub name: String,
+    pub due_date: String,
+    pub score: i64,
+}
+
+/// Unfinished tasks due on or after `since` (`yyyy-MM-dd`) whose name holds
+/// every word of `query`, best first, at most `limit`. `since` is the
+/// caller's: a task too late to complete any more is not worth surfacing, and
+/// only the client knows its own day and how long a late task stays open.
+/// Ties go to the sooner day, so today's task leads tomorrow's.
+pub fn search(tasks: &[TodoTask], query: &str, since: &str, limit: usize) -> Vec<TodoHit> {
+    let query = normalize_for_search(query.trim());
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let mut hits: Vec<TodoHit> = tasks
+        .iter()
+        .filter(|t| !t.done && t.due_date.as_str() >= since)
+        .filter_map(|t| {
+            let score = text_match_score_normalized(&query, &normalize_for_search(&t.name))?;
+            Some(TodoHit {
+                id: t.id.clone(),
+                name: t.name.clone(),
+                due_date: t.due_date.clone(),
+                score,
+            })
+        })
+        .collect();
+    hits.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then_with(|| a.due_date.cmp(&b.due_date))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    hits.truncate(limit);
+    hits
 }
 
 pub struct TodoStore {
@@ -294,6 +337,48 @@ mod tests {
             due_date: due.into(),
             created_at_unix_s: 1_000,
         }
+    }
+
+    fn hit_ids(hits: &[TodoHit]) -> Vec<&str> {
+        hits.iter().map(|h| h.id.as_str()).collect()
+    }
+
+    #[test]
+    fn search_finds_open_tasks_from_since_on() {
+        let tasks = [
+            task("done", "call the bank", true, "2026-10-13"),
+            task("stale", "call the bank", false, "2026-10-01"),
+            task("today", "call the bank", false, "2026-10-13"),
+            task("other", "buy milk", false, "2026-10-13"),
+        ];
+        assert_eq!(
+            hit_ids(&search(&tasks, "bank", "2026-10-10", 10)),
+            ["today"]
+        );
+    }
+
+    #[test]
+    fn search_ranks_by_match_then_sooner_day() {
+        let tasks = [
+            task("later", "dentist", false, "2026-10-15"),
+            task("sooner", "dentist", false, "2026-10-13"),
+            task("words", "book the dentist", false, "2026-10-13"),
+        ];
+        assert_eq!(
+            hit_ids(&search(&tasks, "dentist", "2026-10-13", 10)),
+            ["sooner", "later", "words"]
+        );
+        assert_eq!(
+            hit_ids(&search(&tasks, "dentist", "2026-10-13", 1)),
+            ["sooner"]
+        );
+    }
+
+    #[test]
+    fn search_folds_diacritics_and_ignores_blank_query() {
+        let tasks = [task("a", "Đi chợ", false, "2026-10-13")];
+        assert_eq!(hit_ids(&search(&tasks, "di cho", "2026-10-13", 10)), ["a"]);
+        assert!(search(&tasks, "  ", "2026-10-13", 10).is_empty());
     }
 
     #[test]
