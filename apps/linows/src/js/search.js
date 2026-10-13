@@ -31,6 +31,9 @@ import {
 } from './catalog.js';
 import * as layout from './layout.js';
 import { quickCaptureRows } from './components/quickcapture.js';
+// A task this many days late is still completable in /todo (EXTENDED), so it
+// still shows; older ones are OVERDUE and locked.
+import { EXTENSION_WINDOW_DAYS as TASK_LATE_DAYS } from './screens/commands/todo.js';
 import { formatSize } from './components/preview.js';
 
 const DEBOUNCE_MS = 70;
@@ -47,9 +50,6 @@ const MEMO_TASKS_LIMIT = 3;
 const MIN_MEMO_QUERY_LENGTH = 2;
 // `n"` lists notes on their own, so it can show many more.
 const NOTES_MODE_LIMIT = 40;
-// A task this many days late is still completable in /todo (EXTENDED), so it
-// still shows; older ones are OVERDUE and locked. Mirrors todo.js.
-const TASK_LATE_DAYS = 3;
 // In step with core/engine modes.rs, which spells the same two prefixes.
 const CLIPBOARD_PREFIX = 'c"';
 const CLIPBOARD_IMAGE_PREFIX = 'ci"';

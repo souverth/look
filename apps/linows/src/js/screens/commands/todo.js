@@ -31,7 +31,7 @@ const TREND_MIN_MAX = 3;
 const UNDO_HISTORY_LIMIT = 50;
 // Days late an unfinished task stays completable (EXTENDED) before it
 // locks (OVERDUE). Mirrors macOS TodoCommand.extensionWindowDays.
-const EXTENSION_WINDOW_DAYS = 3;
+export const EXTENSION_WINDOW_DAYS = 3;
 // Browse mode shows future + today + this many past days; searching spans
 // the full retained year.
 const BROWSE_PAST_DAYS = 31;

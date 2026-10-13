@@ -176,7 +176,14 @@ fn clip(line: &str) -> String {
 /// so a short query does not drag in every long note. A blank query returns the
 /// most recently edited notes, which is what an empty `n"` lists.
 pub fn search(notes: &[Note], query: &str, limit: usize) -> Vec<NoteHit> {
-    let query = normalize_for_search(query.trim());
+    // `#work` means the tag `work`: tags are stored without the `#` that
+    // `:note ... #work` has the user type, so the mark is dropped from each word.
+    let query = normalize_for_search(query)
+        .split_whitespace()
+        .map(|word| word.trim_start_matches('#'))
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
     let mut hits: Vec<NoteHit> = notes
         .iter()
         .filter_map(|note| {
@@ -568,6 +575,17 @@ mod tests {
             hit_ids(&search(&notes, "milk", 10)),
             ["title", "tag", "body"]
         );
+    }
+
+    #[test]
+    fn hash_in_the_query_finds_the_tag() {
+        let mut n = note("a", "Standup", "notes");
+        n.tags = vec!["work".into()];
+        let notes = [n];
+        assert_eq!(hit_ids(&search(&notes, "#work", 10)), ["a"]);
+        assert_eq!(hit_ids(&search(&notes, "#work standup", 10)), ["a"]);
+        // A lone `#` is no query at all: everything, newest first.
+        assert_eq!(hit_ids(&search(&notes, "#", 10)), ["a"]);
     }
 
     #[test]

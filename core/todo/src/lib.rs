@@ -221,6 +221,32 @@ impl TodoStore {
         Ok(out)
     }
 
+    /// Unfinished tasks due on or after `since` (`yyyy-MM-dd`), for [`search`].
+    /// Read-only, unlike [`TodoStore::list`]: it runs on every keystroke of the
+    /// main search, which must not prune (write) each time.
+    pub fn list_open_since(&self, since: &str) -> TodoResult<Vec<TodoTask>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, done, due_date, created_at_unix_s
+             FROM todo_tasks
+             WHERE done = 0 AND due_date >= ?1
+             ORDER BY due_date ASC, created_at_unix_s ASC, id ASC",
+        )?;
+        let rows = stmt.query_map(params![since], |row| {
+            Ok(TodoTask {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                done: row.get::<_, i64>(2)? != 0,
+                due_date: row.get(3)?,
+                created_at_unix_s: row.get(4)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
     /// Replaces the entire task set with `tasks`. The client always holds
     /// the full set it loaded, so a full replace is lossless. Tasks with a
     /// blank name are dropped. Expired days are pruned afterwards.
@@ -355,6 +381,26 @@ mod tests {
             hit_ids(&search(&tasks, "bank", "2026-10-10", 10)),
             ["today"]
         );
+    }
+
+    #[test]
+    fn list_open_since_skips_done_and_older_days() {
+        let mut store = TodoStore::open_in_memory().expect("open");
+        // Dates relative to now, so the one-year prune in save keeps them.
+        store
+            .save(&[
+                task("old", "a", false, "2000-01-01"),
+                task("done", "b", true, "2999-01-01"),
+                task("open", "c", false, "2999-01-02"),
+            ])
+            .expect("save");
+        let ids: Vec<_> = store
+            .list_open_since("2999-01-01")
+            .expect("list")
+            .into_iter()
+            .map(|t| t.id)
+            .collect();
+        assert_eq!(ids, ["open"]);
     }
 
     #[test]

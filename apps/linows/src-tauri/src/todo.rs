@@ -25,6 +25,8 @@ pub fn todo_save(tasks: Vec<TodoTask>) -> Result<(), String> {
 /// worth showing, from the frontend, which owns the local calendar.
 #[tauri::command]
 pub fn todo_search(query: String, since: String, limit: usize) -> Result<Vec<TodoHit>, String> {
-    let tasks = open_store()?.list().map_err(|e| e.to_string())?;
+    let tasks = open_store()?
+        .list_open_since(&since)
+        .map_err(|e| e.to_string())?;
     Ok(look_todo::search(&tasks, &query, &since, limit))
 }
