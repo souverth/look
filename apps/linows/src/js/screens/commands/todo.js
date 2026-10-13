@@ -21,10 +21,13 @@ import {
 } from '../../icons.js';
 import * as tooltip from '../../components/tooltip.js';
 
-// Mirrors macOS TodoState limits: at most 3 unfinished tasks per day
-// (completing one frees a slot) and at most 3 upcoming date groups.
-const UNFINISHED_LIMIT = 3;
+// At most 3 upcoming date groups, as macOS TodoState. Unlike macOS, a day takes
+// any number of unfinished tasks: the per-day cap is commented out below
+// (search UNFINISHED_LIMIT) and can be turned back on by uncommenting it.
+// const UNFINISHED_LIMIT = 3;
 const FUTURE_GROUP_LIMIT = 3;
+// The trend chart's lowest y-axis ceiling, so a quiet month is not drawn full height.
+const TREND_MIN_MAX = 3;
 const UNDO_HISTORY_LIMIT = 50;
 // Days late an unfinished task stays completable (EXTENDED) before it
 // locks (OVERDUE). Mirrors macOS TodoCommand.extensionWindowDays.
@@ -409,7 +412,8 @@ const openCount = (key) => (tasksByDay.get(key) || []).filter((t) => !t.done).le
 
 function addTask(key, rawName) {
     const name = rawName.trim().slice(0, NAME_MAX_LEN);
-    if (!name || openCount(key) >= UNFINISHED_LIMIT) return false;
+    if (!name) return false;
+    // if (openCount(key) >= UNFINISHED_LIMIT) return false;
     rememberChange();
     if (!tasksByDay.has(key)) tasksByDay.set(key, []);
     tasksByDay.get(key).push({ id: newTaskId(), name, done: false, createdAt: nowUnixS() });
@@ -484,7 +488,7 @@ function commitField(input) {
         if (addTask(input.dataset.group, input.value)) {
             // Field stays open for rapid entry (renderAll re-focuses it) unless
             // the day just hit the unfinished cap.
-            if (openCount(input.dataset.group) >= UNFINISHED_LIMIT) editingAddKey = null;
+            // if (openCount(input.dataset.group) >= UNFINISHED_LIMIT) editingAddKey = null;
             renderDays();
         }
     } else {
@@ -687,11 +691,11 @@ function addRowHtml(key) {
       <span class="cmd-todo-add-hint">↵ add · esc</span>
     </div>`;
     }
-    if (openCount(key) >= UNFINISHED_LIMIT) {
-        return `<div class="cmd-todo-add cmd-todo-add-limit">
-      ${UNFINISHED_LIMIT} unfinished · complete one to add more
-    </div>`;
-    }
+    // if (openCount(key) >= UNFINISHED_LIMIT) {
+    //     return `<div class="cmd-todo-add cmd-todo-add-limit">
+    //   ${UNFINISHED_LIMIT} unfinished · complete one to add more
+    // </div>`;
+    // }
     return `<button class="cmd-todo-add" data-act="add-open" data-group="${key}">${plus} Add task</button>`;
 }
 
@@ -792,7 +796,7 @@ function streakHtml(streak) {
 function trendSvg(data, width, h) {
     const padX = 8;
     const padY = 10;
-    const maxV = Math.max(UNFINISHED_LIMIT, ...data);
+    const maxV = Math.max(TREND_MIN_MAX, ...data);
     const stepX = (width - padX * 2) / (data.length - 1);
     const x = (i) => (padX + i * stepX).toFixed(1);
     const y = (v) => (h - padY - (v / maxV) * (h - padY * 2)).toFixed(1);

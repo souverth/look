@@ -1221,11 +1221,14 @@
     cursor: default;
 }
 
+/* A step under the day title, so the header still reads as one when the
+ * user's font is a monospace with little weight contrast. */
 .cmd-todo-task-name {
     flex: 1;
     min-width: 0;
-    font-size: var(--font-size);
-    color: var(--font-color);
+    font-size: calc(var(--font-size) - 1px);
+    font-weight: 400;
+    color: color-mix(in srgb, var(--font-color) 88%, transparent);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1310,6 +1313,7 @@ button.cmd-todo-add:hover {
     color: var(--accent-color);
 }
 
+/* Used by the per-day unfinished cap, commented out in todo.js. */
 .cmd-todo-add-limit {
     cursor: default;
 }
