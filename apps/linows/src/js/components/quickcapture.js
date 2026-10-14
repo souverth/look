@@ -16,9 +16,8 @@ import { quickResultId, splitNoteTags } from '../catalog.js';
 import * as todoCmd from '../screens/commands/todo.js';
 import * as banner from './banner.js';
 
-// Mirrors /todo: names at most this long. The per-day unfinished cap is off,
-// as in /todo; uncomment UNFINISHED_LIMIT and its checks below to restore it.
-// const UNFINISHED_LIMIT = 3;
+// Mirrors /todo: at most this many unfinished tasks per day, names this long.
+const UNFINISHED_LIMIT = 3;
 const NAME_MAX_LEN = 256;
 const TITLE_MAX = 90;
 
@@ -73,21 +72,20 @@ export async function quickCaptureRows(q) {
 
     if (q.action === 'task') {
         if (!q.text) return [noteRow('Type a task', 'Everything after :todo is added to today', listChecks)];
-        // if (open.length >= UNFINISHED_LIMIT) {
-        //     return [
-        //         noteRow(
-        //             clip(q.text),
-        //             `Today already has ${UNFINISHED_LIMIT} unfinished tasks. Finish one first (:done)`,
-        //         ),
-        //     ];
-        // }
+        if (open.length >= UNFINISHED_LIMIT) {
+            return [
+                noteRow(
+                    clip(q.text),
+                    `Today already has ${UNFINISHED_LIMIT} unfinished tasks. Finish one first (:done)`,
+                ),
+            ];
+        }
         return [
             row(
                 'task',
                 q.text,
                 clip(q.text),
-                // `Add to today · ${open.length}/${UNFINISHED_LIMIT} unfinished · Enter`,
-                `Add to today · ${open.length} unfinished · Enter`,
+                `Add to today · ${open.length}/${UNFINISHED_LIMIT} unfinished · Enter`,
                 listChecks,
                 1,
             ),
@@ -160,10 +158,10 @@ async function addTask(text) {
     const name = text.trim().slice(0, NAME_MAX_LEN);
     if (!name || todoBlocked()) return { clear: false };
     const tasks = await allTasks();
-    // if (openToday(tasks).length >= UNFINISHED_LIMIT) {
-    //     banner.show(`Today already has ${UNFINISHED_LIMIT} unfinished tasks`, 'warning', 2.6);
-    //     return { clear: false };
-    // }
+    if (openToday(tasks).length >= UNFINISHED_LIMIT) {
+        banner.show(`Today already has ${UNFINISHED_LIMIT} unfinished tasks`, 'warning', 2.6);
+        return { clear: false };
+    }
     tasks.push({
         id: crypto.randomUUID(),
         name,

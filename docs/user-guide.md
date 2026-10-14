@@ -366,7 +366,7 @@ Unit conversion works the same way, in the search box and in `/calc`, offline: a
 
 `todo` quick reference:
 
-- Tasks are grouped by day, newest on top. Up to 3 unfinished tasks per day on macOS (complete one to add more; no limit on Linux and Windows) and up to 3 upcoming date groups (`Add date + N`)
+- Tasks are grouped by day, newest on top. Up to 3 unfinished tasks per day (complete one to add more) and up to 3 upcoming date groups (`Add date + N`)
 - Past days are non-editable. Unfinished tasks 1-3 days late show an `EXTENDED` badge and can still be marked done; unfinished tasks more than 3 days late show `OVERDUE` and their completion state is locked
 - Search matches task names and dates (`jul 3`, `yesterday`); case- and diacritic-insensitive
 - Nothing autosaves: hit `Save` or `Cmd+S`; `Cmd+N` flips between the Tasks and Stats pages
@@ -429,7 +429,7 @@ Ethan
 On the home screen, in the search box (Linux, Windows):
 
 - `:note buy milk #errands` saves a note straight away; words starting with `#` become tags
-- `:todo call the dentist` adds a task to today; if `/todo` has unsaved changes you are asked to save them first
+- `:todo call the dentist` adds a task to today, with the same limit `/todo` has (3 unfinished a day); if `/todo` has unsaved changes you are asked to save them first
 - `:done` lists today's open tasks and `Enter` ticks the highlighted one off; `:done dentist` narrows the list. The box stays, so you can tick the next one
 - A bare `:note` or `:todo` is still the command menu, and `Enter` on it opens the panel. Typing `:` lists these three at the bottom so they can be found
 
