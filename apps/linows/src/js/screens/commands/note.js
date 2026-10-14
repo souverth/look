@@ -11,7 +11,6 @@ import {
     notesTagColors,
     notesSetTagColor,
     notesRecordOpen,
-    highlightCode,
 } from '../../ipc.js';
 import {
     notebook,
@@ -22,10 +21,19 @@ import {
     arrowLeft,
 } from '../../icons.js';
 import { renderMarkdown, escapeHtml } from '../../markdown.js';
+import { TAG_HUES, tagPicks, tagIndex, swatchStyle, tagStyle } from './note-tag-style.js';
+import { highlightCodeBlocks, copyCode } from './note-code.js';
+import { createEditing } from './note-editing.js';
+import {
+    todayIso,
+    formatDate,
+    firstLine,
+    dropFirstLine,
+    plainPreview,
+    newId,
+} from './note-format.js';
 
 const AUTOSAVE_MS = 500;
-const PREVIEW_CHARS = 400;
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // "/" block menu. `text` is inserted in place of the typed "/word"; `|` marks
 // where the caret lands (removed from the text).
@@ -41,28 +49,6 @@ const SNIPPETS = [
     { key: 'divider', label: 'Divider', hint: '---', text: '---\n|' },
     { key: 'date', label: "Today's date", hint: '', text: () => `${todayIso()} |` },
 ];
-
-// Tag colours: the user can pick one per tag (stored, see tagPicks); a tag
-// with no pick gets a fixed colour derived from its name, so it still looks
-// the same on a card, in the editor and in the filter bar. The palette length
-// must match TAG_PALETTE_SIZE in core/notes.
-const TAG_HUES = [212, 152, 28, 340, 268, 48, 184, 4, 96, 304];
-const tagPicks = new Map(); // tag -> palette index
-
-function autoTagIndex(tag) {
-    let h = 0;
-    for (const ch of tag) h = (h * 31 + ch.codePointAt(0)) >>> 0;
-    return h % TAG_HUES.length;
-}
-
-const tagIndex = (tag) => tagPicks.get(tag) ?? autoTagIndex(tag);
-
-function swatchStyle(index) {
-    const hue = TAG_HUES[index];
-    return `--tag-bg:hsl(${hue} 68% 72%);--tag-fg:hsl(${hue} 45% 16%)`;
-}
-
-const tagStyle = (tag) => swatchStyle(tagIndex(tag));
 
 // --- State ---
 let notes = []; // newest edit first
@@ -84,6 +70,11 @@ let panel, searchBar, searchInput, toolbar, countEl, newBtn, grid;
 let tagBar, tagsEl, tagInput, tagMenu, colorsEl;
 let colorsTag = null; // tag the colour picker is open for
 let editor, backBtn, titleInput, statusEl, modeEl, deleteBtn, bodyEl, previewEl, suggestEl;
+
+// Act on the body textarea, which init() looks up after this module loads.
+const { replaceRange, lineBounds, wrapSelection, continueList, indentLines } = createEditing(
+    () => bodyEl,
+);
 
 export function init() {
     panel = document.getElementById('cmd-panel-note');
@@ -621,54 +612,6 @@ function renderPreview() {
     highlightCodeBlocks(previewEl);
 }
 
-// Highlighted HTML per (language, source), so re-rendering the preview (a task
-// tick, flipping back to it) repaints code at once instead of flashing plain.
-const highlightCache = new Map();
-const HIGHLIGHT_CACHE_MAX = 200;
-
-function highlightCodeBlocks(root) {
-    for (const code of root.querySelectorAll('code[data-lang]')) {
-        const lang = code.dataset.lang;
-        if (!lang) continue;
-        const source = code.textContent;
-        const key = `${lang}\u0000${source}`;
-        const hit = highlightCache.get(key);
-        if (hit !== undefined) {
-            code.innerHTML = hit;
-            continue;
-        }
-        highlightCode(source, lang)
-            .then((res) => {
-                if (highlightCache.size >= HIGHLIGHT_CACHE_MAX) {
-                    highlightCache.delete(highlightCache.keys().next().value);
-                }
-                highlightCache.set(key, res.html);
-                // The preview may have been re-rendered while this was in flight.
-                if (code.isConnected) code.innerHTML = res.html;
-            })
-            .catch((err) => console.error('[note] highlight failed:', err));
-    }
-}
-
-// Copies the block's plain text; the highlight spans add no characters, so the
-// code element's text is exactly what was written in the note.
-async function copyCode(button) {
-    const code = button.closest('.md-code')?.querySelector('code');
-    if (!code) return;
-    try {
-        await navigator.clipboard.writeText(code.textContent);
-        button.textContent = 'Copied';
-        button.classList.add('copied');
-    } catch (err) {
-        console.error('[note] copy failed:', err);
-        button.textContent = 'Failed';
-    }
-    setTimeout(() => {
-        button.textContent = 'Copy';
-        button.classList.remove('copied');
-    }, 1500);
-}
-
 // --- Tags (editor) ---
 
 const TAG_MAX = 24;
@@ -829,106 +772,6 @@ function setStatus(html, isError = false) {
     statusEl.classList.toggle('cmd-note-status-error', isError);
 }
 
-// --- Markdown editing helpers (all operate on the textarea in place) ---
-
-// Replace [start, end) with `text` and put the caret at `caret`. execCommand
-// keeps the browser's own undo stack (Ctrl+Z) intact; setRangeText is the
-// fallback where it is unavailable.
-function replaceRange(start, end, text, caret) {
-    bodyEl.focus();
-    bodyEl.setSelectionRange(start, end);
-    let ok = false;
-    try {
-        ok = document.execCommand('insertText', false, text);
-    } catch {
-        ok = false;
-    }
-    if (!ok) {
-        bodyEl.setRangeText(text, start, end, 'end');
-        bodyEl.dispatchEvent(new Event('input'));
-    }
-    bodyEl.setSelectionRange(caret, caret);
-}
-
-function lineBounds(pos) {
-    const v = bodyEl.value;
-    const start = v.lastIndexOf('\n', pos - 1) + 1;
-    let end = v.indexOf('\n', pos);
-    if (end < 0) end = v.length;
-    return [start, end];
-}
-
-function wrapSelection(mark) {
-    const { selectionStart: s, selectionEnd: e, value } = bodyEl;
-    const sel = value.slice(s, e);
-    if (sel.startsWith(mark) && sel.endsWith(mark) && sel.length >= mark.length * 2) {
-        const inner = sel.slice(mark.length, sel.length - mark.length);
-        replaceRange(s, e, inner, s + inner.length);
-        bodyEl.setSelectionRange(s, s + inner.length);
-        return;
-    }
-    replaceRange(s, e, `${mark}${sel}${mark}`, s + mark.length + sel.length);
-    if (sel) bodyEl.setSelectionRange(s + mark.length, s + mark.length + sel.length);
-}
-
-// Enter on a list/quote line starts the next item; Enter on an empty one ends
-// the list. Returns false when the line is not a list so Enter stays native.
-function continueList() {
-    const { selectionStart: pos, selectionEnd: end, value } = bodyEl;
-    if (pos !== end) return false;
-    const [ls] = lineBounds(pos);
-    const before = value.slice(ls, pos);
-    const m = before.match(/^(\s*)(?:([-*+])(?:\s+\[( |x|X)\])?|(\d+)([.)])|(>))\s+(.*)$/) ||
-        before.match(/^(\s*)(?:([-*+])(?:\s+\[( |x|X)\])?|(\d+)([.)])|(>))\s*$/);
-    if (!m) return false;
-    const [, indent, bullet, task, num, numSep, quote] = m;
-    const content = before.replace(/^(\s*)(?:[-*+](?:\s+\[[ xX]\])?|\d+[.)]|>)\s*/, '');
-    if (!content.trim()) {
-        // Empty item: drop the marker and leave a blank line.
-        replaceRange(ls, pos, '', ls);
-        return true;
-    }
-    let marker;
-    if (quote) marker = '> ';
-    else if (num) marker = `${Number(num) + 1}${numSep} `;
-    else marker = `${bullet} ${task !== undefined ? '[ ] ' : ''}`;
-    const insert = `\n${indent}${marker}`;
-    replaceRange(pos, pos, insert, pos + insert.length);
-    return true;
-}
-
-// Tab / Shift+Tab: indent or outdent every selected line by two spaces.
-function indentLines(outdent) {
-    const { selectionStart: s, selectionEnd: e, value } = bodyEl;
-    const [ls] = lineBounds(s);
-    const [, le] = lineBounds(e);
-    const lines = value.slice(ls, le).split('\n');
-    let delta0 = 0;
-    let total = 0;
-    const out = lines.map((line, idx) => {
-        let next;
-        let d;
-        if (outdent) {
-            const m = line.match(/^( {1,2}|\t)/);
-            d = m ? -m[0].length : 0;
-            next = m ? line.slice(m[0].length) : line;
-        } else {
-            d = 2;
-            next = `  ${line}`;
-        }
-        if (idx === 0) delta0 = d;
-        total += d;
-        return next;
-    });
-    if (s === e && !outdent) {
-        // Plain Tab with no selection inserts the indent at the caret.
-        replaceRange(s, s, '  ', s + 2);
-        return;
-    }
-    replaceRange(ls, le, out.join('\n'), ls);
-    bodyEl.setSelectionRange(Math.max(ls, s + delta0), e + total);
-}
-
 // --- "/" block menu ---
 
 function updateSuggest() {
@@ -1034,52 +877,4 @@ function applySuggestion(item) {
     const caretOffset = caretAt < 0 ? body.length : caretAt + (body.slice(0, caretAt).split('\n').length - 1) * indent.length;
     hideSuggest();
     replaceRange(ls + indent.length, pos, body, ls + indent.length + caretOffset);
-}
-
-// --- Formatting helpers ---
-
-const pad2 = (n) => String(n).padStart(2, '0');
-
-function todayIso() {
-    const d = new Date();
-    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-function formatDate(unixS) {
-    const d = new Date(unixS * 1000);
-    const now = new Date();
-    const sameDay = d.toDateString() === now.toDateString();
-    const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-    if (sameDay) return `Today ${time}`;
-    const year = d.getFullYear() === now.getFullYear() ? '' : ` ${d.getFullYear()}`;
-    return `${MONTHS[d.getMonth()]} ${d.getDate()}${year}`;
-}
-
-function firstLine(body) {
-    return plainPreview(body.split('\n').find((l) => l.trim()) || '').slice(0, 80);
-}
-
-function dropFirstLine(body) {
-    const lines = body.split('\n');
-    const i = lines.findIndex((l) => l.trim());
-    return i < 0 ? '' : lines.slice(i + 1).join('\n');
-}
-
-// Card text: Markdown markers stripped so the clamp shows words, not syntax.
-function plainPreview(body) {
-    return body
-        .slice(0, PREVIEW_CHARS * 2)
-        .replace(/```[\w+-]*/g, '')
-        .replace(/^\s{0,3}(#{1,6}|>|[-*+]\s+\[[ xX]\]|[-*+]|\d+[.)])\s+/gm, '')
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-        .replace(/(\*\*|__|~~|`|\*|_)/g, '')
-        .replace(/\s*\n\s*/g, ' ')
-        .trim()
-        .slice(0, PREVIEW_CHARS);
-}
-
-function newId() {
-    return globalThis.crypto?.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }

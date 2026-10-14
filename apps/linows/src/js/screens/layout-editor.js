@@ -31,76 +31,19 @@ import {
     check as checkIcon,
     copy as copyIcon,
     play,
-    listChecks,
-    bluetooth,
-    wifi,
-    moon,
-    battery,
-    coffee,
-    monitor,
-    mic,
-    refreshCw,
-    power,
-    cloudSun,
-    music,
     zap,
-    bot,
-    timer,
-    gauge,
-    notebook,
-    clock,
-    info as infoIcon,
 } from '../icons.js';
 import { escapeHtml } from '../markdown.js';
 import * as superactions from '../components/superactions.js';
-
-// Glyphs a tile may name in `icon`; anything else is read as an image path.
-const GLYPHS = {
-    bluetooth,
-    wifi,
-    theme: moon,
-    keepawake: coffee,
-    battery,
-    screensaver: monitor,
-    mic,
-    restart: refreshCw,
-    shutdown: power,
-};
-
-// Built-in tile -> glyph on the canvas.
-const TILE_ICON = {
-    lslot: listChecks,
-    bluetooth,
-    wifi,
-    battery,
-    theme: moon,
-    keepawake: coffee,
-    screensaver: monitor,
-    weather: cloudSun,
-    mic,
-    restart: refreshCw,
-    shutdown: power,
-    nowplaying: music,
-    agents: bot,
-    todo: listChecks,
-    pomo: timer,
-    speed: gauge,
-    notes: notebook,
-    clock,
-    system: infoIcon,
-};
-
-const REFRESH_CHOICES = [
-    ['', 'Default (1 min)'],
-    ['15s', 'Every 15 seconds'],
-    ['30s', 'Every 30 seconds'],
-    ['1m', 'Every minute'],
-    ['5m', 'Every 5 minutes'],
-    ['15m', 'Every 15 minutes'],
-    ['30m', 'Every 30 minutes'],
-    ['1h', 'Every hour'],
-    ['6h', 'Every 6 hours'],
-];
+import { GLYPHS, TILE_ICON, REFRESH_CHOICES } from './layout-editor-data.js';
+import {
+    overlaps,
+    inside as gridInside,
+    fits as gridFits,
+    findSpot as gridFindSpot,
+    titleCase,
+} from './layout-grid.js';
+import { createHistory } from './layout-history.js';
 
 const UNDO_LIMIT = 100;
 const VALIDATE_MS = 220;
@@ -111,8 +54,7 @@ const GAP = 6;
 let info = null; // what the backend reported: catalog, path, limits, defaults
 let draft = null; // the model being edited
 let savedJson = '';
-let undoStack = [];
-let redoStack = [];
+const editHistory = createHistory(UNDO_LIMIT);
 let selectedId = null;
 let tab = 'tiles';
 let issues = [];
@@ -208,8 +150,7 @@ export async function open() {
     info = state;
     draft = clone(state.model);
     savedJson = JSON.stringify(draft);
-    undoStack = [];
-    redoStack = [];
+    editHistory.clear();
     selectedId = null;
     tab = 'tiles';
     issues = state.warnings.slice();
@@ -287,42 +228,13 @@ function titleOf(id) {
     return c?.title || titleCase(id);
 }
 
-function titleCase(id) {
-    return id
-        .split(/[-_]/)
-        .filter(Boolean)
-        .map((w) => w[0].toUpperCase() + w.slice(1))
-        .join(' ');
-}
-
-function overlaps(a, b) {
-    return a.col < b.col + b.w && b.col < a.col + a.w && a.row < b.row + b.h && b.row < a.row + a.h;
-}
-
-function inside(r) {
-    return r.col >= 0 && r.row >= 0 && r.w >= 1 && r.h >= 1 &&
-        r.col + r.w <= draft.columns && r.row + r.h <= draft.rows;
-}
-
-// Whether `rect` fits the grid and overlaps nothing but the tiles in `ignore`.
-function fits(rect, ignore = []) {
-    if (!inside(rect)) return false;
-    return !draft.tiles.some((t) => !ignore.includes(t.id) && overlaps(rect, t));
-}
-
-function findSpot(w, h) {
-    for (let row = 0; row + h <= draft.rows; row++) {
-        for (let col = 0; col + w <= draft.columns; col++) {
-            if (fits({ col, row, w, h })) return { col, row };
-        }
-    }
-    return null;
-}
+// The placement rules (layout-grid.js), asked of the draft being edited.
+const inside = (r) => gridInside(r, draft);
+const fits = (rect, ignore = []) => gridFits(rect, draft, ignore);
+const findSpot = (w, h) => gridFindSpot(draft, w, h);
 
 function snapshot() {
-    undoStack.push(JSON.stringify(draft));
-    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
-    redoStack = [];
+    editHistory.record(JSON.stringify(draft));
 }
 
 // One undo step per edit; the render and the re-check follow.
@@ -338,17 +250,17 @@ function afterChange() {
 }
 
 function undo() {
-    if (!undoStack.length) return;
-    redoStack.push(JSON.stringify(draft));
-    draft = JSON.parse(undoStack.pop());
+    const previous = editHistory.undo(JSON.stringify(draft));
+    if (previous === null) return;
+    draft = JSON.parse(previous);
     keepSelection();
     afterChange();
 }
 
 function redo() {
-    if (!redoStack.length) return;
-    undoStack.push(JSON.stringify(draft));
-    draft = JSON.parse(redoStack.pop());
+    const next = editHistory.redo(JSON.stringify(draft));
+    if (next === null) return;
+    draft = JSON.parse(next);
     keepSelection();
     afterChange();
 }
@@ -590,8 +502,8 @@ function renderAll() {
 }
 
 function renderHeader() {
-    undoBtn.disabled = !undoStack.length;
-    redoBtn.disabled = !redoStack.length;
+    undoBtn.disabled = !editHistory.canUndo();
+    redoBtn.disabled = !editHistory.canRedo();
     const dirty = isDirty();
     saveBtn.disabled = saving || !dirty;
     saveBtn.innerHTML = saving
