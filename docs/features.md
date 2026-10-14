@@ -10,6 +10,34 @@ This document tracks what `look` supports today and what is planned next.
 - focused built-in tools (not plugin-first)
 - predictable behavior with clear controls
 
+## Platform support at a glance
+
+Most of Look is one Rust core under three shells, so most rows are the same
+everywhere. These are the ones that are not. The sections below say more.
+
+| Feature                                                        | macOS | Linux | Windows |
+| -------------------------------------------------------------- | :---: | :---: | :-----: |
+| Apps, files, folders, clipboard text and images, URL rows      |  yes  |  yes  |   yes   |
+| Calculator and unit conversion, web answer card                |  yes  |  yes  |   yes   |
+| `todo`, `pomo`, `kill`, `shell`, `calc`, `speed`, `sys`        |  yes  |  yes  |   yes   |
+| Super Actions strip, preferred tools, your own sources         |  yes  |  yes  |   yes   |
+| `note`, `agents`, quick capture (`:note`, `:todo`, `:done`)    |  no   |  yes  |   yes   |
+| Notes and tasks in the main search, `n"`                       |  no   |  yes  |   yes   |
+| Text snippets, `s"`                                            |  no   |  yes  |   yes   |
+| Window finder, `w"`                                            |  no   |  no   |   yes   |
+| Super Actions widgets and the layout editor                    |  no   |  yes  |   yes   |
+| `lookapp sources list / show / add`                            |  no   |  yes  |   yes   |
+| AI actions and the `>` chat, calendar and Contacts, `tw"`      |  yes  |  no   |   no    |
+| `rc"` recent files, move to Trash with `Cmd+D`                 |  yes  |  no   |   no    |
+| Run as administrator                                           |  no   |  no   |   yes   |
+| Rebind in-app shortcuts, with a recorder in Settings           |  yes  |  no   |   no    |
+| Rebind the row shortcuts in `~/.look/config`                   |  yes  |  yes  |   yes   |
+| Rebind the global launcher hotkey in Settings                  |  yes  |  no   |   yes   |
+
+Linux binds the launcher hotkey through the compositor, so there it accepts
+`none` only and you bind `lookapp --toggle` yourself. Window titles are not
+listed on Linux because each compositor exposes them differently, or not at all.
+
 ## Available now
 
 ### Core search and launch
