@@ -16,11 +16,14 @@
     <div class="cmd-todo-toolbar" id="cmd-note-toolbar">
         <span class="cmd-todo-count" id="cmd-note-count"></span>
         <div class="cmd-todo-toolbar-right">
+            <button class="cmd-todo-btn" id="cmd-note-tpl-btn" title="Templates"></button>
             <button class="cmd-todo-btn" id="cmd-note-new-btn"></button>
         </div>
     </div>
     <div class="cmd-note-tagbar" id="cmd-note-tagbar" hidden></div>
     <div class="cmd-content cmd-note-grid" id="cmd-note-grid"></div>
+    <!-- Templates: the list of them and the editor for one (built by note.js) -->
+    <div class="cmd-note-templates" id="cmd-note-templates" hidden></div>
 
     <!-- Editor view -->
     <div class="cmd-note-editor" id="cmd-note-editor" hidden>
@@ -56,6 +59,8 @@
                 <button data-mode="preview" title="Read it (Ctrl+E)">Preview</button>
             </div>
             <div class="cmd-todo-toolbar-right">
+                <button class="cmd-todo-btn" id="cmd-note-keys-btn" title="Keyboard shortcuts (F1)"></button>
+                <button class="cmd-todo-btn" id="cmd-note-goto-btn" title="Go to a line or heading (Ctrl+G)"></button>
                 <button class="cmd-todo-btn" id="cmd-note-delete-btn"></button>
             </div>
         </div>

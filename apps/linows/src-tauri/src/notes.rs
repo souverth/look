@@ -4,7 +4,7 @@
 //! per-note upsert/delete rather than a full-set save. Notes live in the
 //! `notes` table of the app's existing `look.db`.
 
-use crate::state::default_db_path;
+use linows_backend::state::default_db_path;
 use look_notes::{Note, NoteHit, NoteStore, TagColor};
 use std::time::{SystemTime, UNIX_EPOCH};
 

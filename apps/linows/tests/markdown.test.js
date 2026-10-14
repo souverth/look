@@ -3,6 +3,20 @@ import assert from 'node:assert/strict';
 import { renderMarkdown, parseFenceInfo, escapeHtml } from '../src/js/markdown.js';
 import { agentLogo } from '../src/js/agent-logos.js';
 
+test('a fence with line=N shows the file and numbers lines from N', () => {
+    assert.deepEqual(parseFenceInfo('ts index.ts line=1'), { lang: 'ts', path: 'index.ts', line: 1 });
+    assert.deepEqual(parseFenceInfo('tsx filename="src/app.tsx" line=5'), {
+        lang: 'tsx',
+        path: 'src/app.tsx',
+        line: 5,
+    });
+    assert.deepEqual(parseFenceInfo('ts line=3'), { lang: 'ts', path: '', line: 3 });
+    const html = renderMarkdown('```ts index.ts line=7\na\nb\n```');
+    assert.ok(html.includes('<b>index.ts</b>'));
+    assert.ok(html.includes('md-code-nums" aria-hidden="true">7\n8<'));
+    assert.ok(!renderMarkdown('```ts\na\n```').includes('md-code-nums'));
+});
+
 test('user text is escaped before any markup is added', () => {
     const html = renderMarkdown('<script>alert(1)</script> & "quotes"');
     assert.ok(!html.includes('<script>'));

@@ -620,3 +620,183 @@ html:not([data-os="linux"]) .settings-linux-only {
     color: var(--font-secondary);
     padding: 10px 0 2px;
 }
+
+/* A heading inside a dropdown, above a group of its items (My themes). */
+.settings-dropdown-heading {
+    padding: 6px 12px 3px;
+    border-top: 1px solid var(--divider-color);
+    margin-top: 4px;
+    font-size: calc(var(--font-size) - 3px);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--font-muted);
+}
+
+/* The groups of the key list in Settings > Notes. */
+.settings-shortcut-group {
+    margin: 8px 0 2px;
+    font-size: calc(var(--font-size) - 3px);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-color);
+}
+
+/* Theme editors (Settings > Appearance > Colors, Settings > Notes > Theme colours) */
+.theme-intro {
+    margin: 2px 0 8px;
+    color: var(--font-muted);
+    font-size: calc(var(--font-size) - 2px);
+    line-height: 1.5;
+}
+
+.theme-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    margin-bottom: 8px;
+}
+
+.theme-actions .settings-text-input {
+    width: 190px;
+}
+
+.theme-actions .settings-btn[disabled] {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.theme-msg {
+    font-size: calc(var(--font-size) - 2px);
+    color: var(--color-success);
+}
+
+.theme-msg.error {
+    color: var(--color-danger);
+}
+
+.theme-colors {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    gap: 0 24px;
+}
+
+.theme-colors-group {
+    margin-bottom: 10px;
+}
+
+.theme-colors-title {
+    margin: 4px 0 2px;
+    font-size: calc(var(--font-size) - 3px);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent-color);
+}
+
+.theme-color-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.theme-color-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: calc(var(--font-size) - 1px);
+    color: var(--font-secondary);
+}
+
+.theme-color-row.changed .theme-color-label {
+    color: var(--font-color);
+    font-weight: 600;
+}
+
+.theme-color-swatch {
+    flex: none;
+    width: 28px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--divider-color);
+    border-radius: var(--micro-radius);
+    background: transparent;
+    cursor: pointer;
+}
+
+.theme-color-swatch::-webkit-color-swatch-wrapper {
+    padding: 2px;
+}
+
+.theme-color-swatch::-webkit-color-swatch {
+    border: none;
+    border-radius: calc(var(--micro-radius) - 1px);
+}
+
+.theme-color-hex {
+    flex: none;
+    width: 82px;
+    padding: 2px 6px;
+    border: 1px solid var(--divider-color);
+    border-radius: var(--micro-radius);
+    background: var(--control-fill);
+    color: var(--font-color);
+    font: calc(var(--font-size) - 2px) var(--font-mono);
+    outline: none;
+}
+
+.theme-color-hex:focus {
+    border-color: var(--accent-color);
+}
+
+.theme-color-alpha {
+    flex: none;
+    width: 64px;
+    height: 3px;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 2px;
+    background: var(--divider-color);
+    outline: none;
+}
+
+.theme-color-alpha::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--font-secondary);
+    cursor: pointer;
+}
+
+.theme-color-alpha-gap {
+    flex: none;
+    width: 64px;
+}
+
+.theme-color-reset {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: var(--micro-radius);
+    background: transparent;
+    color: var(--font-muted);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    visibility: hidden;
+}
+
+.theme-color-row.changed .theme-color-reset {
+    visibility: visible;
+}
+
+.theme-color-reset:hover {
+    background: rgba(var(--lift), 0.12);
+    color: var(--font-color);
+}

@@ -411,6 +411,48 @@ export async function notesDelete(id) {
     return invoke('notes_delete', { id });
 }
 
+// Saves a pasted or dropped picture (base64 data, no `data:` prefix) under
+// ~/.look/note-images and resolves to its path, for `![](path)`.
+export async function notesSaveImage(data, ext) {
+    return invoke('notes_save_image', { data, ext });
+}
+// Deletes the pictures in ~/.look/note-images that no note mentions (and that are
+// over an hour old). Resolves to how many went.
+export async function notesPruneImages() {
+    return invoke('notes_prune_images');
+}
+
+// Note templates, kept as Markdown files in ~/.look/note-templates: `[{ name, body }]`.
+// The first call on a fresh install writes a starter set.
+export async function notesTemplatesList() {
+    return invoke('notes_templates_list');
+}
+
+// Saves a template; `oldName` is the name it had when opened, so a new name renames
+// it. Resolves to the name it was stored under, rejects when that name is taken.
+export async function notesTemplateSave(name, body, oldName) {
+    return invoke('notes_template_save', { name, body, oldName: oldName ?? null });
+}
+
+export async function notesTemplateDelete(name) {
+    return invoke('notes_template_delete', { name });
+}
+// Themes the user saved, one JSON file each in ~/.look/themes/<kind>/ (kind: "look" for the
+// launcher, "note" for the /note editor). `themesList` resolves to `[{ name, data }]`, `data`
+// being the file's JSON text; what is in a theme is for the caller to say.
+export async function themesList(kind) {
+    return invoke('themes_list', { kind });
+}
+
+// Saves a theme and resolves to the name it was stored under. `oldName` is the name it had
+// when opened, so a new name renames it; it rejects when that name belongs to another theme.
+export async function themeSave(kind, name, data, oldName) {
+    return invoke('theme_save', { kind, name, data, oldName: oldName ?? null });
+}
+
+export async function themeDelete(kind, name) {
+    return invoke('theme_delete', { kind, name });
+}
 // Picked tag colours as `[{ tag, color }]` (color = palette index). Tags with
 // no pick are absent. notesSetTagColor(tag, null) clears a pick.
 export async function notesTagColors() {

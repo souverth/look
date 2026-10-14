@@ -112,7 +112,7 @@ const COMMAND_HINTS = {
     kill: 'Y: Confirm \u2022 N: Cancel \u2022 Esc: Back',
     sys: 'Esc: Back',
     agents: 'R: Refresh \u2022 L: Live quota \u2022 Esc: Back',
-    note: 'Ctrl+N: New • Ctrl+E: Preview • Ctrl+\\: Split • /: Blocks • Esc: Back',
+    note: 'Ctrl+N: New • Arrows: Pick • Ctrl+E: Preview • Ctrl+\\: Split • /: Blocks • Esc: Back',
     calc: 'Enter: Evaluate \u2022 Tab: Select \u2022 Esc: Back',
     shell: 'Enter: Run \u2022 Tab: Select \u2022 Esc: Back',
 };

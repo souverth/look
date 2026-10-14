@@ -3,7 +3,9 @@
 //
 // `text` is inserted in place of the typed "/word"; `|` marks where the caret
 // lands. `hint` is the markup the item types, shown on the right of its row.
-// `tone` gives an alert its colour.
+// `tone` gives an alert its colour. An item with an `action` does something instead
+// of inserting text (opens the Go to list, or the template list); `firstLineOnly`
+// keeps it out of the menu everywhere but the first line of the note.
 
 import {
     code,
@@ -19,6 +21,8 @@ import {
     info,
     lightbulb,
     triangleAlert,
+    search,
+    fileText,
 } from '../../icons.js';
 import { todayIso } from './note-format.js';
 
@@ -107,6 +111,34 @@ export const SNIPPETS = [
         hint: '',
         icon: calendar,
         text: () => `${todayIso()} |`,
+    },
+    {
+        key: 'template',
+        aliases: ['templates', 'tpl'],
+        group: 'basic',
+        label: 'Template',
+        hint: '',
+        icon: fileText,
+        action: 'template',
+        firstLineOnly: true,
+    },
+    {
+        key: 'keys',
+        aliases: ['shortcuts', 'help', 'keyboard'],
+        group: 'basic',
+        label: 'Keyboard shortcuts',
+        hint: 'F1',
+        icon: info,
+        action: 'keys',
+    },
+    {
+        key: 'goto',
+        aliases: ['jump', 'outline', 'line', 'section'],
+        group: 'basic',
+        label: 'Go to…',
+        hint: 'Ctrl+G',
+        icon: search,
+        action: 'goto',
     },
     alert('CAUTION', alertCircle),
     alert('IMPORTANT', messageWarning),

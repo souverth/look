@@ -414,20 +414,21 @@
 }
 
 .cmd-note-preview h1 {
-    font-size: 1.65em;
-    padding-bottom: 0.3em;
-    border-bottom: 1px solid var(--divider-color);
+    font-size: 1.7em;
+    letter-spacing: -0.02em;
+    padding-bottom: 0.32em;
+    /* A rule that fades out instead of a hard line across the page. */
+    border-bottom: 1px solid transparent;
+    border-image: linear-gradient(90deg, var(--divider-color), transparent 85%) 1;
 }
 
 .cmd-note-preview h2 {
-    font-size: 1.35em;
-    padding-bottom: 0.2em;
-    border-bottom: 1px solid color-mix(in srgb, var(--divider-color) 50%, transparent);
+    font-size: 1.36em;
+    letter-spacing: -0.015em;
 }
 
 .cmd-note-preview h3 {
-    font-size: 1.12em;
-    color: var(--accent-color);
+    font-size: 1.1em;
 }
 
 .cmd-note-preview h4,
@@ -436,7 +437,26 @@
     font-size: 0.82em;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--font-muted);
+}
+
+/* Each heading level has its colour, the same ones the editor uses. */
+.cmd-note-preview h1 {
+    color: var(--tok-h1);
+}
+.cmd-note-preview h2 {
+    color: var(--tok-h2);
+}
+.cmd-note-preview h3 {
+    color: var(--tok-h3);
+}
+.cmd-note-preview h4 {
+    color: var(--tok-h4);
+}
+.cmd-note-preview h5 {
+    color: var(--tok-h5);
+}
+.cmd-note-preview h6 {
+    color: var(--tok-h6);
 }
 
 .cmd-note-preview p {
@@ -485,15 +505,88 @@
     background: var(--accent-color);
 }
 
+.cmd-note-preview ol > li {
+    /* room for the widest label (viii.) in front of the text */
+    padding-left: 2.9em;
+}
+
 .cmd-note-preview ol > li::before {
-    content: counter(md-item) '.';
+    content: attr(data-n) '.';
     position: absolute;
     left: 0;
-    width: 1.3em;
+    width: 2.3em;
+    white-space: nowrap;
     text-align: right;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: var(--accent-color);
+}
+
+/* Bullets change colour and shape with depth: disc, ring, square, diamond. */
+.cmd-note-preview ul > li.md-d0::before {
+    background: var(--lv0);
+}
+.cmd-note-preview ul > li.md-d1::before {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--lv1);
+}
+.cmd-note-preview ul > li.md-d2::before {
+    border-radius: 2px;
+    background: var(--lv2);
+}
+.cmd-note-preview ul > li.md-d3::before {
+    border-radius: 1px;
+    background: var(--lv3);
+    transform: rotate(45deg) scale(0.9);
+}
+.cmd-note-preview ul > li.md-d4::before {
+    /* a small triangle, drawn with borders */
+    width: 0;
+    height: 0;
+    border-radius: 0;
+    background: transparent;
+    border-left: 0.42em solid var(--lv4);
+    border-top: 0.26em solid transparent;
+    border-bottom: 0.26em solid transparent;
+    top: 0.62em;
+    left: 0.38em;
+}
+.cmd-note-preview ul > li.md-d5::before {
+    /* a short dash */
+    width: 0.6em;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--lv5);
+    top: 0.88em;
+    left: 0.3em;
+}
+.cmd-note-preview ol > li.md-d0::before {
+    color: var(--lv0);
+}
+.cmd-note-preview ol > li.md-d1::before {
+    color: var(--lv1);
+}
+.cmd-note-preview ol > li.md-d2::before {
+    color: var(--lv2);
+}
+.cmd-note-preview ol > li.md-d3::before {
+    color: var(--lv3);
+}
+.cmd-note-preview ol > li.md-d4::before {
+    color: var(--lv4);
+}
+.cmd-note-preview ol > li.md-d5::before {
+    color: var(--lv5);
+}
+
+/* Quotes inside quotes step through the same colours. */
+.cmd-note-preview blockquote blockquote {
+    border-left-color: var(--lv1);
+    background: color-mix(in srgb, var(--lv1) 8%, transparent);
+}
+.cmd-note-preview blockquote blockquote blockquote {
+    border-left-color: var(--lv2);
+    background: color-mix(in srgb, var(--lv2) 8%, transparent);
 }
 
 .cmd-note-preview li.md-d1 {
@@ -506,6 +599,14 @@
 
 .cmd-note-preview li.md-d3 {
     margin-left: 4.2em;
+}
+
+.cmd-note-preview li.md-d4 {
+    margin-left: 5.6em;
+}
+
+.cmd-note-preview li.md-d5 {
+    margin-left: 7em;
 }
 
 /* Task items: a drawn checkbox, clickable to tick the line in the note. */
@@ -562,18 +663,19 @@
 .cmd-note-preview code {
     font-family: var(--font-mono);
     font-size: 0.88em;
-    padding: 0.12em 0.45em;
-    border-radius: 5px;
-    background: color-mix(in srgb, var(--accent-color) 14%, transparent);
+    padding: 0.1em 0.42em;
+    border-radius: var(--micro-radius);
+    background: color-mix(in srgb, var(--accent-color) 11%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 18%, transparent);
     color: color-mix(in srgb, var(--accent-color) 70%, var(--font-color));
 }
 
 .cmd-note-preview pre {
     margin: 0.9em 0;
-    padding: 12px 14px;
+    padding: 12px 16px;
     border-radius: var(--bar-radius);
     border-left: 3px solid var(--accent-color);
-    background: rgba(var(--scrim), 0.28);
+    background: rgba(var(--scrim), 0.24);
     overflow-x: auto;
     line-height: 1.55;
 }
@@ -581,16 +683,140 @@
 .cmd-note-preview pre code {
     padding: 0;
     background: none;
+    box-shadow: none;
+    border-radius: 0;
     color: var(--font-color);
     font-size: 0.9em;
 }
 
+/* Tables: columns fit their content; a wide one scrolls rather than squeezes. */
+.cmd-note-preview .md-table {
+    margin: 0.9em 0;
+    overflow-x: auto;
+}
+
+.cmd-note-preview .md-table table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: auto;
+    border: 1px solid var(--divider-color);
+    border-radius: var(--bar-radius);
+    overflow: hidden;
+}
+
+.cmd-note-preview .md-table th,
+.cmd-note-preview .md-table td {
+    padding: 6px 14px;
+    text-align: left;
+}
+
+.cmd-note-preview .md-table td {
+    border-top: 1px solid color-mix(in srgb, var(--divider-color) 70%, transparent);
+}
+
+.cmd-note-preview .md-table tbody tr:hover td {
+    background: color-mix(in srgb, var(--accent-color) 6%, transparent);
+}
+
+.cmd-note-preview .md-table th {
+    background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+    font-size: 0.86em;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.cmd-note-preview kbd {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    padding: 0.1em 0.5em;
+    border: 1px solid color-mix(in srgb, var(--divider-color) 90%, transparent);
+    border-radius: var(--micro-radius);
+    background: linear-gradient(180deg, rgba(var(--lift), 0.07), rgba(var(--scrim), 0.18));
+    box-shadow: 0 1.5px 0 color-mix(in srgb, var(--divider-color) 90%, transparent);
+}
+
+.cmd-note-preview sub,
+.cmd-note-preview sup {
+    font-size: 0.75em;
+}
+
+.cmd-note-preview cite,
+.cmd-note-preview dfn,
+.cmd-note-preview var {
+    font-style: italic;
+    color: var(--font-secondary);
+}
+
+.cmd-note-preview samp {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    color: var(--font-secondary);
+}
+
+.cmd-note-preview q::before,
+.cmd-note-preview q::after {
+    color: var(--font-muted);
+}
+
+/* <details>: a fold with a chevron that turns, the body indented under a hairline. */
+.cmd-note-preview .md-details {
+    margin: 0.8em 0;
+    border: 1px solid var(--divider-color);
+    border-radius: var(--bar-radius);
+    background: color-mix(in srgb, var(--accent-color) 4%, transparent);
+}
+
+.cmd-note-preview .md-details > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 6px 14px 6px 32px;
+    font-weight: 600;
+    position: relative;
+    user-select: none;
+}
+
+.cmd-note-preview .md-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.cmd-note-preview .md-details > summary::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    width: 0.4em;
+    height: 0.4em;
+    border: solid var(--font-muted);
+    border-width: 0 2px 2px 0;
+    transform: translateY(-70%) rotate(-45deg);
+    transition: transform 0.15s ease;
+}
+
+.cmd-note-preview .md-details[open] > summary::before {
+    transform: translateY(-70%) rotate(45deg);
+}
+
+.cmd-note-preview .md-details-body {
+    margin: 0 14px 8px 18px;
+    padding-left: 14px;
+    border-left: 1px solid var(--divider-color);
+}
+
+.cmd-note-preview .md-details-body > :first-child {
+    margin-top: 0.4em;
+}
+
+.cmd-note-preview .md-details-body > :last-child {
+    margin-bottom: 0;
+}
+
 .cmd-note-preview blockquote {
     margin: 0.9em 0;
-    padding: 0.4em 14px;
-    border-left: 3px solid var(--accent-color);
+    padding: 0.45em 16px;
+    border-left: 3px solid color-mix(in srgb, var(--accent-color) 80%, transparent);
     border-radius: 0 var(--chip-radius) var(--chip-radius) 0;
-    background: color-mix(in srgb, var(--accent-color) 9%, transparent);
+    background: color-mix(in srgb, var(--accent-color) 7%, transparent);
     color: var(--font-secondary);
 }
 
@@ -612,8 +838,14 @@
 .cmd-note-preview .md-link {
     color: var(--accent-color);
     text-decoration: underline;
-    text-decoration-style: dotted;
-    text-underline-offset: 3px;
+    text-decoration-color: color-mix(in srgb, var(--accent-color) 40%, transparent);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 0.24em;
+    transition: text-decoration-color 0.15s ease;
+}
+
+.cmd-note-preview .md-link:hover {
+    text-decoration-color: var(--accent-color);
 }
 
 .cmd-note-preview .md-empty {
@@ -621,6 +853,281 @@
     font-style: italic;
 }
 
+/* Images: drawn at their own size, or the width written in the alt text, never wider
+ * than the page. The round handle at the corner resizes; double-click clears it. */
+.cmd-note-preview .md-imgbox {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: top;
+    margin: 0.3em 0;
+    line-height: 0;
+}
+
+.cmd-note-preview .md-img {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--control-radius);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--divider-color) 80%, transparent);
+    background: color-mix(in srgb, var(--accent-color) 6%, transparent);
+    cursor: default;
+}
+
+/* Until the image arrives (or when it never does) the box still has a body. */
+.cmd-note-preview .md-imgbox:not(.loaded) .md-img {
+    min-height: 3em;
+}
+
+.cmd-note-preview .md-imgbox.broken {
+    /* a missing image has no width of its own, and the message needs room */
+    width: min(100%, 22em);
+}
+
+.cmd-note-preview .md-imgbox.broken .md-img {
+    visibility: hidden;
+    height: 3em;
+}
+
+.cmd-note-preview .md-imgbox.broken::before {
+    content: 'Image not found: ' attr(data-alt);
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    border: 1px dashed var(--divider-color);
+    border-radius: var(--control-radius);
+    color: var(--font-muted);
+    font-size: 0.85em;
+    line-height: 1.4;
+}
+
+.cmd-note-preview .md-img-handle {
+    position: absolute;
+    right: -7px;
+    bottom: -7px;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--panel-fill);
+    border-radius: 50%;
+    background: var(--accent-color);
+    cursor: nwse-resize;
+    opacity: 0;
+    transform: scale(0.7);
+    transition:
+        opacity 0.15s ease,
+        transform 0.15s ease;
+    touch-action: none;
+}
+
+.cmd-note-preview .md-imgbox:hover .md-img-handle,
+.cmd-note-preview .md-imgbox.resizing .md-img-handle {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.cmd-note-preview .md-imgbox.resizing {
+    user-select: none;
+}
+
+.cmd-note-preview .md-imgbox.resizing .md-img {
+    box-shadow: 0 0 0 2px var(--accent-color);
+    cursor: nwse-resize;
+}
+
+/* The size while dragging. */
+.cmd-note-preview .md-imgbox.resizing::after {
+    content: attr(data-size);
+    position: absolute;
+    left: 50%;
+    top: 8px;
+    transform: translateX(-50%);
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(var(--scrim), 0.72);
+    color: #fff;
+    font: 600 11px/1.5 var(--font-mono);
+    pointer-events: none;
+}
+
+.cmd-note-preview .md-img-missing {
+    color: var(--font-muted);
+    font-style: italic;
+}
+/* The template manager: the list on the left, one template open on the right. */
+.cmd-note-templates {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 8px 8px;
+}
+
+.cmd-note-templates[hidden] {
+    display: none;
+}
+
+.cmd-note-tplm-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 2px 0;
+}
+
+.cmd-note-tplm-title {
+    font-weight: 700;
+}
+
+.cmd-note-tplm-sub {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--font-muted);
+    font-size: 0.86em;
+}
+
+.cmd-note-tplm-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 10px;
+}
+
+.cmd-note-tplm-list {
+    flex: none;
+    width: 230px;
+    overflow-y: auto;
+    padding: 6px;
+    background: var(--panel-fill);
+    border-radius: var(--bar-radius);
+}
+
+.cmd-note-tplm-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    width: 100%;
+    padding: 7px 10px;
+    border: none;
+    border-radius: var(--control-radius);
+    background: transparent;
+    color: var(--font-color);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cmd-note-tplm-item:hover {
+    background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+}
+
+.cmd-note-tplm-item.active {
+    background: color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+.cmd-note-tplm-item-name {
+    font-weight: 600;
+}
+
+.cmd-note-tplm-item-line {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--font-muted);
+    font-size: 0.82em;
+}
+
+.cmd-note-tplm-empty {
+    padding: 10px;
+    color: var(--font-muted);
+}
+
+.cmd-note-tplm-form {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cmd-note-tplm-name,
+.cmd-note-tplm-text {
+    box-sizing: border-box;
+    border: none;
+    outline: none;
+    border-radius: var(--bar-radius);
+    background: var(--panel-fill);
+    color: var(--font-color);
+    font: inherit;
+}
+
+.cmd-note-tplm-name {
+    padding: 8px 12px;
+    font-weight: 600;
+}
+
+.cmd-note-tplm-text {
+    flex: 1;
+    min-height: 0;
+    padding: 10px 12px;
+    resize: none;
+    font-family: var(--font-mono);
+    font-size: calc(var(--font-size) - 1px);
+    line-height: 1.55;
+}
+
+.cmd-note-tplm-vars {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--font-muted);
+    font-size: 0.82em;
+}
+
+.cmd-note-tplm-vars button {
+    padding: 2px 8px;
+    border: 1px solid var(--divider-color);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--accent-color);
+    font: 11px var(--font-mono);
+    cursor: pointer;
+}
+
+.cmd-note-tplm-vars button:hover {
+    background: color-mix(in srgb, var(--accent-color) 14%, transparent);
+}
+
+.cmd-note-tplm-foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cmd-note-tplm-msg {
+    flex: 1;
+    color: var(--color-success);
+    font-size: 0.86em;
+}
+
+.cmd-note-tplm-msg.error {
+    color: var(--color-danger);
+}
+
+.cmd-note-tplm-save {
+    background: var(--accent-color);
+    color: var(--on-accent-color);
+}
+
+.cmd-note-tplm-foot .armed {
+    color: var(--color-danger);
+}
 /* The "/" menu and the selection toolbar are in note-editor.css. */
 
 /* /agents: detected agents with quota meters and token windows */
@@ -632,7 +1139,7 @@
 .cmd-note-preview .md-code {
     margin: 0.9em 0;
     border-radius: var(--bar-radius);
-    background: rgba(var(--scrim), 0.28);
+    background: rgba(var(--scrim), 0.24);
     border: 1px solid var(--divider-color);
     overflow: hidden;
 }
@@ -724,4 +1231,25 @@
 .cmd-note-preview .md-code pre code {
     display: block;
     white-space: pre;
+}
+
+/* line=N: numbers in a column of their own, beside the code. */
+.cmd-note-preview .md-code-body {
+    display: flex;
+    align-items: flex-start;
+}
+
+.cmd-note-preview .md-code-body > pre:not(.md-code-nums) {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.cmd-note-preview .md-code pre.md-code-nums {
+    flex: none;
+    padding-right: 0;
+    text-align: right;
+    color: var(--font-muted);
+    opacity: 0.7;
+    user-select: none;
 }

@@ -21,6 +21,7 @@ let useApi = false;
 let configLoaded = false;
 let loading = false;
 let loadedOnce = false;
+let loadError = null;
 let visible = false;
 const quickListeners = [];
 let latestQuick = null;
@@ -136,9 +137,10 @@ async function refresh({ quiet = false } = {}) {
         // Minutes east of UTC; Date reports the opposite sign.
         statuses = await agentsStatus(useApi, -new Date().getTimezoneOffset());
         loadedOnce = true;
+        loadError = null;
     } catch (err) {
         console.error('[agents] status failed:', err);
-        if (visible) listEl.innerHTML = `<div class="cmd-agents-empty">Couldn't read agents: ${escapeHtml(String(err))}</div>`;
+        loadError = String(err);
     } finally {
         loading = false;
     }
@@ -203,7 +205,11 @@ function render() {
     const missing = statuses.filter((s) => !s.installed);
     countEl.innerHTML = loadedOnce
         ? `${bot} ${installed.length} detected`
-        : `${bot} Scanning…`;
+        : `${bot} ${loadError ? 'Scan failed' : 'Scanning…'}`;
+    if (loadError) {
+        listEl.innerHTML = `<div class="cmd-agents-empty">Couldn't read agents: ${escapeHtml(loadError)}</div>`;
+        return;
+    }
     if (!loadedOnce) {
         listEl.innerHTML = '<div class="cmd-agents-empty">Looking for agents on this machine…</div>';
         return;

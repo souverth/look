@@ -75,6 +75,17 @@ export function createEditing(getBody) {
         return true;
     }
 
+    // Enter / Tab inside a Markdown table: lay the table out to its content and
+    // put the caret in the right cell. False when the caret is not in a table.
+    function applyTable(op, ...args) {
+        const area = getBody();
+        const result = op(area.value, area.selectionStart, area.selectionEnd, ...args);
+        if (!result) return false;
+        replaceRange(result.from, result.to, result.insert, result.select[1]);
+        area.setSelectionRange(result.select[0], result.select[1]);
+        return true;
+    }
+
     // Tab / Shift+Tab: indent or outdent every selected line by two spaces.
     function indentLines(outdent) {
         const { selectionStart: s, selectionEnd: e, value } = getBody();
@@ -107,5 +118,5 @@ export function createEditing(getBody) {
         getBody().setSelectionRange(Math.max(ls, s + delta0), e + total);
     }
 
-    return { replaceRange, lineBounds, wrapSelection, applyOp, continueList, indentLines };
+    return { replaceRange, lineBounds, wrapSelection, applyOp, continueList, applyTable, indentLines };
 }

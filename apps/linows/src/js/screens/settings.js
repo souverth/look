@@ -22,6 +22,7 @@ import { layoutGrid } from '../icons.js';
 import * as shortcutrecorder from '../components/shortcutrecorder.js';
 import * as shortcuts from '../shortcuts.js';
 import * as notesettings from '../components/notesettings.js';
+import * as lookthemes from '../components/lookthemes.js';
 import * as noteSettings from './commands/note-settings.js';
 import {
     BLUR_PRESETS,
@@ -146,7 +147,46 @@ function setThemeDropdown(themeId) {
 }
 
 function markCustomTheme() {
-    setThemeDropdown('custom');
+    // A tweak to a saved theme is still that theme (now changed), not an anonymous Custom.
+    const mine = lookthemes.activeThemeName();
+    if (mine) setThemeLabel(mine, true);
+    else setThemeDropdown('custom');
+}
+
+// The Theme menu's label, for a saved theme (which has an item of its own) or a built-in one.
+function setThemeLabel(text, mine) {
+    const dd = document.getElementById('settings-theme');
+    dd.querySelector('.settings-dropdown-label').textContent = text;
+    const value = mine ? `user:${text}` : 'custom';
+    for (const el of dd.querySelector('.settings-dropdown-menu').children) {
+        el.classList.toggle('settings-dropdown-active', el.dataset.value === value);
+    }
+}
+
+// What lookthemes.js needs of this screen to read and set a look.
+function lookHost() {
+    return {
+        saveConfig,
+        applyPreset: (id) => applyThemePreset(id),
+        setSlider: (key, value) => {
+            const row = screen.querySelector(`.settings-row[data-key="${key}"]`);
+            const slider = row?.querySelector('.settings-slider');
+            if (!slider) return;
+            slider.value = value;
+            row.querySelector('.settings-slider-value').textContent = formatValue(key, parseFloat(value));
+            CSS_MAP[key]?.(parseFloat(value));
+        },
+        sliderValue: (key) => String(getSliderVal(key)),
+        applyFont: (name) => {
+            document.getElementById('settings-font-name').value = name;
+            applyFontFamily(name);
+        },
+        fontName: () => document.getElementById('settings-font-name').value.trim() || THEME_DEFAULTS.ui_font_name,
+        applySurface: (surface) => applySurface(surface),
+        base: () => document.documentElement.getAttribute('data-theme') || '',
+        surface: () => document.documentElement.getAttribute('data-surface') ?? '',
+        setThemeLabel,
+    };
 }
 
 // Applied on hydration: the stylesheets carry no fallback copy of these.
@@ -195,6 +235,7 @@ export function init(exitFn) {
     screen = document.getElementById('settings-screen');
     shortcutrecorder.init(screen);
     notesettings.init(screen);
+    lookthemes.init(screen, lookHost());
     hydrateDefaults();
 
     // Tab clicks
@@ -216,11 +257,18 @@ export function init(exitFn) {
         const item = e.target.closest('.settings-dropdown-item');
         if (!item) return;
         const theme = item.dataset.value;
-        setThemeDropdown(theme);
         themeMenu.hidden = true;
+        // A theme the user saved: its whole look goes on (lookthemes.js).
+        if (theme.startsWith('user:')) {
+            lookthemes.applyUserTheme(theme.slice(5));
+            return;
+        }
+        setThemeDropdown(theme);
         const overrides = switchOverrides(theme);
         applyThemePreset(theme, overrides);
         saveConfig({ ui_theme: theme, [SURFACE_KEY]: surfaceToPersist(theme), ...overrides });
+        // A built-in theme has colours of its own: the ones changed on the last one go.
+        lookthemes.presetChosen();
     });
 
     // Blur style dropdown - populate labels from platform
@@ -311,6 +359,9 @@ export function init(exitFn) {
             if (THEME_KEYS.has(key)) {
                 markCustomTheme();
                 updates.ui_theme = 'custom';
+                // The built-in theme it was made from, so a restart still has its other variables.
+                const base = document.documentElement.getAttribute('data-theme');
+                if (base) updates.ui_theme_base = base;
             }
             saveConfig(updates);
         });
@@ -559,6 +610,7 @@ export function init(exitFn) {
             hydrateDefaults();
             applyFontFamily(THEME_DEFAULTS.ui_font_name);
             applyThemePreset(DEFAULT_THEME_ID);
+            lookthemes.applyFromConfig({});
             banner.show('Config reset to defaults', 'success', 1.5);
         } catch {
             banner.show('Reset failed', 'error', 1.5);
@@ -673,7 +725,9 @@ export function init(exitFn) {
             // Theme
             const themeDD = document.getElementById('settings-theme');
             const activeThemeItem = themeDD.querySelector('.settings-dropdown-active');
-            updates.ui_theme = activeThemeItem?.dataset.value ?? '';
+            const chosen = activeThemeItem?.dataset.value ?? '';
+            // A saved theme is stored as a custom one that carries its name (lookthemes.js).
+            updates.ui_theme = chosen.startsWith('user:') ? 'custom' : chosen;
             // Live, not derived: a tweaked Liquid reads as "custom" here.
             updates[SURFACE_KEY] = surfaceToPersist(updates.ui_theme);
 
@@ -814,6 +868,7 @@ export async function reloadFromFile({ announceSuccess = true } = {}) {
             applyFontColorFromMap(map);
             applyBorderFromMap(map);
         }
+        lookthemes.applyFromConfig(map);
 
         // Font
         CSS_MAP.ui_font_size(valueOr(map, 'ui_font_size'));
@@ -851,6 +906,7 @@ export async function enter(contentArea, searchBar) {
     screen.style.display = '';
     updateSettingsHint();
     await loadConfig();
+    lookthemes.refresh();
     // Tint alpha includes the Settings Blur multiplier only while `active`,
     // so recompute on entry and exit. Without the exit pass the multiplied
     // alpha leaks into the launcher until restart.
@@ -926,6 +982,7 @@ export async function restoreOnStartup() {
             applyFontColorFromMap(map);
             applyBorderFromMap(map);
         }
+        lookthemes.applyFromConfig(map);
 
         // Font
         CSS_MAP.ui_font_size(valueOr(map, 'ui_font_size'));
@@ -1045,6 +1102,7 @@ async function loadConfig() {
 
         // Theme dropdown (custom)
         setThemeDropdown(resolveThemeId(map));
+        void lookthemes.populate(map);
 
         // Blur style dropdown
         const blurStyle = valueOr(map, 'ui_blur_style');

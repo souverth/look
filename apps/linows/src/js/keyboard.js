@@ -285,8 +285,9 @@ function handleKeyDown(e) {
         return; // swallow all other keys while help is open
     }
 
-    // Ctrl+/ toggles command mode
-    if (e.ctrlKey && isChord(e, 'command')) {
+    // Ctrl+/ toggles command mode, except in the /note editor, where it comments
+    // the line.
+    if (e.ctrlKey && isChord(e, 'command') && !commandMode?.editorOwnsCommandChord?.()) {
         e.preventDefault();
         if (commandMode?.isActive()) {
             commandMode.exit();

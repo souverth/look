@@ -92,6 +92,21 @@
                         <span class="settings-toggle-track"></span>
                     </label>
                 </div>
+                <div class="theme-actions" id="settings-look-themes">
+                    <input
+                        type="text"
+                        class="settings-text-input"
+                        id="settings-look-theme-name"
+                        placeholder="Name this theme"
+                        maxlength="60"
+                        spellcheck="false"
+                        autocomplete="off"
+                    />
+                    <button type="button" class="settings-btn" id="settings-look-theme-save">Save as new theme</button>
+                    <button type="button" class="settings-btn" id="settings-look-theme-update" hidden>Update</button>
+                    <button type="button" class="settings-btn" id="settings-look-theme-delete" hidden>Delete theme</button>
+                    <span class="theme-msg" id="settings-look-theme-msg"></span>
+                </div>
 
                 <div class="settings-divider"></div>
 
@@ -299,6 +314,21 @@
                         <input type="range" class="settings-slider" min="0" max="1" step="0.01" />
                         <span class="settings-slider-value"></span>
                     </div>
+                </div>
+
+                <div class="settings-divider"></div>
+
+                <!-- Colors: the rest of the launcher's colours, one by one -->
+                <div class="settings-section-header">
+                    <span class="settings-section-arrow">&#9654;</span><span>Colors</span>
+                    <button type="button" class="settings-btn" id="settings-look-colors-reset" disabled>Reset changes</button>
+                </div>
+                <div class="settings-section">
+                    <div class="theme-intro">
+                        Accent, status, surfaces and code colours. A change shows at once and keeps the theme
+                        as a custom one; Save as new theme (above) keeps it for good.
+                    </div>
+                    <div id="settings-look-color-rows"></div>
                 </div>
             </div>
 
@@ -595,34 +625,39 @@
                 <div class="settings-divider"></div>
 
                 <div class="settings-section-header">
+                    <span class="settings-section-arrow">&#9654;</span><span>Theme colours</span>
+                </div>
+                <div class="settings-section" id="settings-note-colors">
+                    <div class="theme-intro">
+                        Every colour of the editor and the preview. A change shows at once; name it
+                        and save it as a theme to keep and reuse it.
+                    </div>
+                    <div class="theme-actions">
+                        <input
+                            type="text"
+                            class="settings-text-input"
+                            id="settings-note-theme-name"
+                            placeholder="Name this theme"
+                            maxlength="60"
+                            spellcheck="false"
+                            autocomplete="off"
+                        />
+                        <button type="button" class="settings-btn" id="settings-note-theme-save">Save as new</button>
+                        <button type="button" class="settings-btn" id="settings-note-theme-update" hidden>Update</button>
+                        <button type="button" class="settings-btn" id="settings-note-theme-reset">Reset changes</button>
+                        <button type="button" class="settings-btn" id="settings-note-theme-delete" hidden>Delete theme</button>
+                        <span class="theme-msg" id="settings-note-theme-msg"></span>
+                    </div>
+                    <div id="settings-note-color-rows"></div>
+                </div>
+
+                <div class="settings-divider"></div>
+
+                <div class="settings-section-header">
                     <span class="settings-section-arrow">&#9654;</span><span>Keys in a note</span>
+                    <span class="settings-hint-text">F1 in a note shows the same list</span>
                 </div>
-                <div class="settings-section">
-                    <div class="settings-shortcut">
-                        <kbd>Ctrl+E</kbd><span>Read the note, and back to writing</span>
-                    </div>
-                    <div class="settings-shortcut">
-                        <kbd>Ctrl+\</kbd><span>Open or close the split view</span>
-                    </div>
-                    <div class="settings-shortcut">
-                        <kbd>/</kbd><span>At the start of a line: headings, lists, code, GitHub alerts</span>
-                    </div>
-                    <div class="settings-shortcut">
-                        <kbd>Select text</kbd><span>A toolbar appears: bold, links, lists, quote, alert</span>
-                    </div>
-                    <div class="settings-shortcut">
-                        <kbd>Ctrl+B / Ctrl+I</kbd><span>Bold, italic</span>
-                    </div>
-                    <div class="settings-shortcut">
-                        <kbd>Ctrl+Shift+X</kbd><span>Strikethrough</span>
-                    </div>
-                    <div class="settings-shortcut">
-                        <kbd>Ctrl+K</kbd><span>Link</span>
-                    </div>
-                    <div class="settings-shortcut">
-                        <kbd>Ctrl+S</kbd><span>Save now (it also saves as you type)</span>
-                    </div>
-                </div>
+                <div class="settings-section" id="settings-note-keys"></div>
             </div>
 
             <!-- Advanced tab -->

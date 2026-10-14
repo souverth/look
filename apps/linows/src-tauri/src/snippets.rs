@@ -5,6 +5,7 @@
 //! documented seed, so the file exists for the user to open.
 
 use look_snippets::{Context, Loaded, SnippetHit};
+use linows_backend::look_engine;
 use std::path::PathBuf;
 
 /// Overrides the location, for dotfiles kept elsewhere and for tests.

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as settings from '../src/js/screens/commands/note-settings.js';
+import * as noteSettings from '../src/js/screens/commands/note-settings.js';
 import { highlightLines, inlineHtml } from '../src/js/screens/commands/note-syntax.js';
 import { SNIPPETS, GROUPS, filter, arrange } from '../src/js/screens/commands/note-slash.js';
 import * as ops from '../src/js/screens/commands/note-format-ops.js';
@@ -38,6 +39,7 @@ test('note settings read what is configured and ignore what is not valid', () =>
         highlight: true, // "maybe" is not a boolean: the default stays
         theme: 'monokai',
         size: 'normal', // "huge" is not a size
+        colors: {}, // none changed on top of the theme
     });
     assert.equal(settings.parseMap({ note_editor_theme: 'nope' }).theme, 'look');
     assert.equal(settings.parseMap({ note_default_view: '' }).defaultView, 'edit');
@@ -89,35 +91,41 @@ test('colouring never changes the text, only wraps it', () => {
     });
 });
 
+test('an empty line, in a code block or not, is "" so the view can give it a row', () => {
+    assert.deepEqual(highlightLines('```\n\n```\n\nend').map((h) => h === ''), [
+        false, true, false, true, false,
+    ]);
+});
+
 test('a bare heading marker is colored before the space is typed', () => {
     const [h, tag] = highlightLines('##\n#tag');
-    assert.equal(h, '<span class="tok-marker">##</span>');
+    assert.equal(h, '<span class="tok-marker tok-h2">##</span>');
     assert.doesNotMatch(tag, /tok-marker/);
 });
 
 test('headings, markers, tasks and rules get their own tokens', () => {
     const [h, t, n, hr] = highlightLines('## Hi\n- [x] done\n12. step\n***');
-    assert.match(h, /<span class="tok-marker">##<\/span> <span class="tok-heading">Hi<\/span>/);
-    assert.match(t, /tok-marker">-<\/span> <span class="tok-task">\[x\]<\/span> done/);
-    assert.match(n, /tok-marker">12\.<\/span> step/);
+    assert.match(h, /<span class="tok-marker tok-h2">##<\/span> <span class="tok-heading tok-h2">Hi<\/span>/);
+    assert.match(t, /tok-marker tok-l0">-<\/span> <span class="tok-task">\[x\]<\/span> done/);
+    assert.match(n, /tok-marker tok-l0">12\.<\/span> step/);
     assert.match(hr, /tok-hr/);
 });
 
 test('a fenced block is code until it closes, and its text is left alone', () => {
     const lines = highlightLines('```js\n# not a heading\n**not bold**\n```\n# heading');
     assert.match(lines[0], /tok-fence">```<\/span><span class="tok-info">js/);
-    assert.match(lines[1], /tok-codeblock/);
+    assert.equal(lines[1], '# not a heading', 'code text is not read as Markdown');
     assert.ok(!lines[1].includes('tok-heading') && !lines[2].includes('tok-bold'));
     assert.match(lines[3], /tok-fence/);
     assert.match(lines[4], /tok-heading/, 'colouring resumes after the fence');
     // An unclosed fence stays code to the end instead of breaking later lines.
-    assert.match(highlightLines('```\n# x')[1], /tok-codeblock/);
+    assert.ok(!/tok-heading/.test(highlightLines('```\n# x')[1]));
 });
 
 test('alerts and quotes are told apart', () => {
     const [a, q] = highlightLines('> [!TIP]\n> just a quote');
     assert.match(a, /tok-alert tok-alert-tip">\[!TIP\]/);
-    assert.match(q, /tok-quote">just a quote/);
+    assert.match(q, /tok-quote tok-q0">just a quote/);
 });
 
 test('inline marks colour what they enclose, and not what only looks like one', () => {
@@ -152,7 +160,8 @@ test('the menu offers the basic blocks and the five GitHub alerts, in two groups
     }
     for (const s of SNIPPETS) {
         assert.ok(s.icon.startsWith('<svg'), `${s.label} has an icon`);
-        assert.ok(String(typeof s.text === 'function' ? s.text() : s.text).length > 0);
+        // An item either types something or does something.
+        assert.ok(s.action || String(typeof s.text === 'function' ? s.text() : s.text).length > 0);
     }
 });
 
@@ -333,10 +342,48 @@ test('a quote starting with [!KIND] renders as a coloured alert', () => {
 
 test('a task inside an alert still points at its own source line', () => {
     const html = renderMarkdown('intro\n\n> [!TIP]\n> - [ ] ship it');
-    assert.match(html, /<li class="md-d0 md-task" data-line="3">/);
+    assert.match(html, /<li class="md-d0 md-task" data-line="3"/);
 });
 
 test('==text== is highlighted, and the text is still escaped', () => {
     assert.match(renderMarkdown('a ==hi== b'), /<mark>hi<\/mark>/);
     assert.equal(renderMarkdown('==<b>=='), '<p><mark>&lt;b&gt;</mark></p>');
+});
+
+test('a saved theme is named user:Name, and the colours changed on top are kept', () => {
+    const s = noteSettings.parseMap({
+        note_editor_theme: 'user:My Night',
+        note_theme_colors: '--accent-color:#ff0000;--nope:#fff;--tok-h1:banana',
+    });
+    assert.equal(s.theme, 'user:My Night');
+    assert.deepEqual(s.colors, { '--accent-color': '#ff0000' });
+    assert.equal(noteSettings.userThemeName(s.theme), 'My Night');
+    assert.equal(noteSettings.userThemeName('vs-dark'), null);
+    assert.equal(noteSettings.parseMap({ note_editor_theme: 'user:' }).theme, 'look', 'a theme with no name is the default');
+    assert.deepEqual(noteSettings.toUpdates({ colors: { '--accent-color': '#ff0000' }, theme: 'user:A' }), {
+        note_theme_colors: '--accent-color:#ff0000',
+        note_editor_theme: 'user:A',
+    });
+    assert.equal(noteSettings.toUpdates({ colors: {} }).note_theme_colors, '', 'no changes writes an empty value');
+});
+
+test('a theme file is read as far as it can be, and never throws', () => {
+    const file = JSON.stringify({ base: 'vs-dark', colors: { '--panel-fill': '#101010', '--bogus': '#fff', '--font-color': 'oops' } });
+    assert.deepEqual(noteSettings.parseUserTheme(file), { base: 'vs-dark', colors: { '--panel-fill': '#101010' } });
+    assert.deepEqual(noteSettings.parseUserTheme('{ not json'), { base: 'look', colors: {} });
+    assert.deepEqual(noteSettings.parseUserTheme('{"base":"made-up"}'), { base: 'look', colors: {} });
+    assert.deepEqual(noteSettings.parseUserTheme('null'), { base: 'look', colors: {} });
+});
+
+test('the editor look is the theme with the changes laid over it', () => {
+    const saved = [{ name: 'My Night', data: JSON.stringify({ base: 'monokai', colors: { '--accent-color': '#111111', '--tok-h1': '#222222' } }) }];
+    const settings = { ...noteSettings.DEFAULTS, theme: 'user:my night', colors: { '--tok-h1': '#999999' } };
+    assert.deepEqual(noteSettings.resolveTheme(settings, saved), {
+        base: 'monokai',
+        colors: { '--accent-color': '#111111', '--tok-h1': '#999999' },
+    });
+    // the theme is gone: the default, and the changes still apply
+    assert.deepEqual(noteSettings.resolveTheme(settings, []), { base: 'look', colors: { '--tok-h1': '#999999' } });
+    // a built-in theme
+    assert.deepEqual(noteSettings.resolveTheme({ ...noteSettings.DEFAULTS, theme: 'vs-light' }), { base: 'vs-light', colors: {} });
 });

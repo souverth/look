@@ -27,7 +27,9 @@ let mainSearchInput = null;
 
 let active = false;
 let selectedIndex = 0;
-let activeCommandId = 'calc';
+// The command the panel opens on: the first in the sidebar the first time, then
+// whichever was open last.
+let activeCommandId = COMMANDS[0].id;
 let onExit = null;
 let onCommandChange = null;
 
@@ -158,6 +160,13 @@ export function handleKey(e) {
 
     // Delegate to active command module
     return currentModule().handleKey(e);
+}
+
+// True while the /note editor is open for writing. Ctrl+/ then belongs to the
+// editor (it comments the line) instead of toggling command mode; Esc still
+// leaves the editor, and from the notes list Ctrl+/ works as everywhere.
+export function editorOwnsCommandChord() {
+    return active && activeCommandId === 'note' && !!currentModule().isEditing?.();
 }
 
 export function getActiveCommand() {
