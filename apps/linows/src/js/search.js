@@ -39,6 +39,7 @@ import {
     WEB_URL_RECENT_SUBTITLE,
 } from './catalog.js';
 import * as layout from './layout.js';
+import * as shortcuts from './shortcuts.js';
 import { quickCaptureRows } from './components/quickcapture.js';
 // A task this many days late is still completable in /todo (EXTENDED), so it
 // still shows; older ones are OVERDUE and locked.
@@ -768,7 +769,9 @@ function prependQuickFolders(results, query) {
             id: `quickfolder:${folder.title.toLowerCase()}`,
             kind: 'folder',
             title: folder.title,
-            subtitle: isTrash ? 'Pinned · Ctrl+D to empty' : 'Pinned home folder',
+            subtitle: isTrash
+                ? `Pinned · ${shortcuts.display('main.trash')} to empty`
+                : 'Pinned home folder',
             path: folder.path,
             score: 999999,
         };

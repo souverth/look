@@ -20,6 +20,7 @@ import * as superactions from '../components/superactions.js';
 import * as layoutEditor from './layout-editor.js';
 import { layoutGrid } from '../icons.js';
 import * as shortcutrecorder from '../components/shortcutrecorder.js';
+import * as shortcuts from '../shortcuts.js';
 import {
     BLUR_PRESETS,
     DEFAULT_THEME_ID,
@@ -774,6 +775,12 @@ export async function reloadFromFile({ announceSuccess = true } = {}) {
         platform.setCompositorBlurWanted(compositorBlurWanted(map));
         // Re-sends the blur region, which the switch above may have emptied.
         layout.refresh();
+
+        // Rebound in-app shortcuts, and the labels that name them.
+        const shortcutProblem = shortcuts.describeProblems(
+            shortcuts.applyConfig(Object.entries(map).map(([key, value]) => ({ key, value }))),
+        );
+        if (shortcutProblem) banner.show(shortcutProblem, 'warning', 6);
 
         platform.setAnimationsEnabled(map.animations_enabled !== 'false');
 

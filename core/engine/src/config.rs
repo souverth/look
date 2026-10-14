@@ -557,9 +557,10 @@ fn launcher_hotkey_config_section() -> String {
 {LAUNCHER_HOTKEY_CONFIG_KEY}={}\n\
 \n\
 # In-app shortcuts, same grammar. Only the ones you rebind are written here;\n\
-# everything else keeps its default. Rebind them in Settings > Shortcuts, or by\n\
-# hand: shortcut_<group>_<action>, as listed in that tab. Separate several\n\
-# chords for one action with |. Examples:\n\
+# everything else keeps its default. On macOS rebind them in Settings >\n\
+# Shortcuts; on Linux and Windows write them here, then reload with\n\
+# Ctrl+Shift+;. The key is shortcut_<group>_<action>. Separate several chords\n\
+# for one action with |. (cmd means ctrl off macOS.) Examples:\n\
 # shortcut_main_copy=cmd+c\n\
 # shortcut_main_reveal=cmd+shift+f\n\
 \n",

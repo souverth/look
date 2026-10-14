@@ -751,7 +751,7 @@ These keys have no control in the Settings screens. Edit `~/.look/config` direct
 
 - `clipboard_history_limit` (clipboard history size, range 10 to 100, default 10)
 - `launcher_hotkey` (global shortcut that shows and hides Look; modifiers `cmd`/`win`, `ctrl`, `alt`/`option`, `shift` plus one key: a letter, digit, `space`, `enter`, `tab`, `esc`, `f1`-`f20`, or a symbol like `` ` ``. Examples: `ctrl+space`, `alt+shift+space`, `f13`. Default `cmd+space` on macOS, `alt+space` on Windows and Linux. `none` stops Look registering any key, so you can bind `lookapp --toggle` in your desktop or a tool like skhd/AutoHotkey instead; Linux accepts only `none` and applies it on restart. An invalid value falls back to the default and the reload banner says why)
-- `shortcut_<group>_<action>` (macOS; an in-app shortcut, same grammar as `launcher_hotkey` plus Shift-only chords on keys that type nothing, like `shift+enter`. The name follows the row in `Settings > Shortcuts`: `shortcut_main_copy`, `shortcut_view_zoom_in`. Several chords for one action are separated by `|`. Only rebound shortcuts appear in the file; a chord Look cannot parse is ignored and the shortcut keeps its default)
+- `shortcut_<group>_<action>` (macOS, and the row verbs on Linux and Windows - see [Keyboard shortcuts](#keyboard-shortcuts-quick-reference); an in-app shortcut, same grammar as `launcher_hotkey` plus Shift-only chords on keys that type nothing, like `shift+enter`. The name follows the row in `Settings > Shortcuts`: `shortcut_main_copy`, `shortcut_view_zoom_in`. Several chords for one action are separated by `|`. Only rebound shortcuts appear in the file; a chord Look cannot parse is ignored and the shortcut keeps its default)
 - `query_retention_seconds` (how long the main query survives while Look is hidden, in seconds; the first open past it returns to the empty home screen; default 5, `0` clears on every hide, and any negative value keeps the query indefinitely)
 - `text_editor`, `code_editor`, `terminal`, `file_manager` (the tools `Cmd+E` / `Cmd+T` / `Cmd+F` act through, see [Preferred tools](#preferred-tools); undeclared means the system default)
 
@@ -812,6 +812,24 @@ Config (or set `shortcut_<group>_<action>` in `~/.look/config`). The keys that
 structure navigation - `Enter`, `Tab`, `Escape`, the arrows, the `Y`/`N`
 confirmations - stay fixed, since each means something different in the main
 bar, AI mode, command mode and a confirmation.
+
+On Linux and Windows the row verbs are rebound in `~/.look/config` (reload with
+`Ctrl+Shift+;`): `shortcut_main_copy`, `shortcut_main_pick`,
+`shortcut_main_clear_picks`, `shortcut_main_open_picked`, `shortcut_main_trash`,
+`shortcut_main_reveal`, `shortcut_main_edit`, `shortcut_main_terminal`,
+`shortcut_main_web_search`, `shortcut_main_hide_app`,
+`shortcut_main_quick_action_toggle`, `shortcut_clipboard_paste` and
+`shortcut_view_toggle_layout`, with the same names and grammar as macOS:
+
+```ini
+shortcut_main_reveal=ctrl+r|alt+r      # several chords for one action: separate with |
+shortcut_main_edit=ctrl+shift+e
+```
+
+- A chord is modifiers joined by `+`, then one key: `ctrl`, `alt`, `shift`, `win`, and a letter, digit, punctuation, `enter`, `esc`, `space`, `tab`, an arrow or `f1`..`f20`. It needs a modifier besides Shift (an F-key may stand alone, and `shift+enter` is fine). `cmd` is read as `ctrl`, so a config written on a Mac works as it is
+- Only the ones you rebind need a line. A value Look cannot parse leaves that shortcut on its default and says so in a banner; a chord claimed by two actions is reported too, and the earlier one in the list above wins
+- Letters follow what your keyboard prints, and fall back to the physical key on a layout with no Latin letters. The help screen, the Settings shortcut list, the `Ctrl+K` menu and the hint bar all show the chord you set
+- Settings, reload config, command mode, help, zoom, the `Ctrl+K` menu and `Ctrl+1`..`Ctrl+9` keep their chords on these platforms for now, and there is no recorder in Settings for the others yet
 
 - `Enter`: open selected result / run command
 - `Tab` / `Shift+Tab`: next/previous result (app list) or command (command mode)

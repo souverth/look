@@ -32,6 +32,7 @@ import * as sourceblocks from './sourceblocks.js';
 import * as banner from './banner.js';
 import { renderMarkdown } from '../markdown.js';
 import { expand as expandSnippet } from './snippets.js';
+import * as shortcuts from '../shortcuts.js';
 import {
     classifyResultId,
     WEB_URL_OPEN_SUBTITLE,
@@ -878,7 +879,7 @@ async function renderBlockPreview(result, cacheKey) {
         // A row that names its own path reveals that, like every other row with
         // one, so the chord belongs to the declaration only when the row has
         // nothing of its own to point at.
-        if (!result.path) footer.appendChild(hintRow('Ctrl+F', 'Reveal that file'));
+        if (!result.path) footer.appendChild(hintRow(shortcuts.display('main.reveal'), 'Reveal that file'));
     }
 
     // The declared `preview` runs a command, so it is read last and only after
@@ -1142,7 +1143,7 @@ function renderMemoPreview(result, target) {
     hint.innerHTML =
         target === 'note'
             ? 'Press <kbd>Enter</kbd> to open the note'
-            : 'Press <kbd>Enter</kbd> to open /todo, <kbd>Ctrl+D</kbd> to mark it done';
+            : `Press <kbd>Enter</kbd> to open /todo, <kbd>${shortcuts.display('main.trash')}</kbd> to mark it done`;
     wrap.appendChild(hint);
 
     panel.appendChild(wrap);
@@ -1206,8 +1207,7 @@ function renderSnippetPreview(result, id, cacheKey) {
 
     const hint = document.createElement('div');
     hint.className = 'preview-web-suggestion-hint preview-note-hint';
-    hint.innerHTML =
-        'Press <kbd>Enter</kbd> to paste into the app you were in, <kbd>Ctrl+C</kbd> to copy';
+    hint.innerHTML = `Press <kbd>Enter</kbd> to paste into the app you were in, <kbd>${shortcuts.display('main.copy')}</kbd> to copy`;
     wrap.appendChild(hint);
     panel.appendChild(wrap);
 

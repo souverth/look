@@ -44,6 +44,7 @@ import * as layoutEditor from './screens/layout-editor.js';
 import * as quickcapture from './components/quickcapture.js';
 import * as snippets from './components/snippets.js';
 import * as windowfinder from './components/windowfinder.js';
+import * as shortcuts from './shortcuts.js';
 
 // Matches the macOS info banner for the same action.
 const CLIP_BANNER_DURATION = 1.1;
@@ -228,14 +229,15 @@ function handleKeyDown(e) {
 
     // Ctrl+Shift+C: flip split/compact until Look quits; the config is untouched.
     // Works in settings too, where the picker rings whichever one it lands on.
-    if (e.ctrlKey && (e.shiftKey || shiftHeld) && !e.altKey && (e.key === 'C' || e.key === 'c')) {
+    // (This and the verbs below are rebindable: see shortcuts.js.)
+    if (shortcuts.matches(e, 'view.toggleLayout', shiftHeld)) {
         e.preventDefault();
         document.dispatchEvent(new CustomEvent('look:toggle-session-layout'));
         return;
     }
 
     // Ctrl+Shift+H: hide the selected app from Look
-    if (e.ctrlKey && (e.shiftKey || shiftHeld) && (e.key === 'H' || e.key === 'h')) {
+    if (shortcuts.matches(e, 'main.hideApp', shiftHeld)) {
         e.preventDefault();
         if (settingsModule?.isActive()) return;
         if (helpScreen && !helpScreen.hidden) return;
@@ -371,6 +373,10 @@ function handleKeyDown(e) {
         return;
     }
 
+    // The row verbs (copy, pick, trash, reveal, edit, ...), wherever they are bound.
+    const verb = shortcuts.actionFor(e, shiftHeld);
+    if (verb && runVerb(verb, e)) return;
+
     switch (e.key) {
         case 'ArrowDown':
             e.preventDefault();
@@ -400,9 +406,12 @@ function handleKeyDown(e) {
             ) {
                 // Ctrl+Shift+Enter: launch the selected app elevated (UAC).
                 openSelected(true);
-            } else if (e.ctrlKey) {
+            } else if (shortcuts.matches(e, 'main.webSearch', shiftHeld)) {
                 searchWeb();
-            } else if ((e.shiftKey || shiftHeld) && results.hasPickedItems()) {
+            } else if (
+                shortcuts.matches(e, 'main.openPicked', shiftHeld) &&
+                results.hasPickedItems()
+            ) {
                 openAllPicked();
             } else {
                 openSelected();
@@ -433,98 +442,93 @@ function handleKeyDown(e) {
             }
             break;
 
-        case 'e':
-            if (e.ctrlKey) {
-                e.preventDefault();
-                if (isDiscoveryMode()) break;
-                rowactions.run(rowactions.EDIT);
-            }
-            break;
+    }
+}
 
-        case 't':
-            if (e.ctrlKey) {
-                e.preventDefault();
-                if (isDiscoveryMode()) break;
-                rowactions.run(rowactions.TERMINAL);
-            }
-            break;
+// The row verbs, by the action they are bound to (shortcuts.js). True when the
+// event was one of them, so the key goes no further. Enter's two variants
+// (web search, open picked) are decided in the Enter branch, which has modes
+// of its own to ask first, so they answer false here.
+function runVerb(verb, e) {
+    switch (verb) {
+        case 'main.edit':
+            e.preventDefault();
+            if (!isDiscoveryMode()) rowactions.run(rowactions.EDIT);
+            return true;
 
-        case 'f':
-            if (e.ctrlKey) {
-                e.preventDefault();
-                if (isDiscoveryMode()) break;
-                revealSelected();
-            }
-            break;
+        case 'main.terminal':
+            e.preventDefault();
+            if (!isDiscoveryMode()) rowactions.run(rowactions.TERMINAL);
+            return true;
 
-        case 'c':
-            if (e.ctrlKey && !window.getSelection()?.toString()) {
-                e.preventDefault();
-                if (isDiscoveryMode()) break;
-                if (search.isProcessMode()) {
-                    copySelectedPid();
-                } else {
-                    copySelectedPath();
-                }
-            }
-            break;
+        case 'main.reveal':
+            e.preventDefault();
+            if (!isDiscoveryMode()) revealSelected();
+            return true;
 
-        case 'p':
-        case 'P':
-            if (e.ctrlKey && (e.shiftKey || shiftHeld)) {
-                e.preventDefault();
-                results.clearPicks();
-            } else if (e.ctrlKey) {
-                e.preventDefault();
-                if (isDiscoveryMode()) break;
-                // Only files/folders are pickable - apps/settings/clipboard rows have
-                // no real path to copy and would leave the picked panel rendering
-                // nonsense. Mirrors macOS togglePickForSelectedResult.
-                const sel = results.getSelected();
-                if (!sel) break;
-                if (sel.kind !== 'file' && sel.kind !== 'folder') {
-                    banner.show('Only files or folders can be picked', 'info', 1.2);
-                    break;
-                }
-                results.togglePick(sel);
+        case 'main.copy':
+            // A selection of text on the page copies as text, as the browser does.
+            if (window.getSelection()?.toString()) return false;
+            e.preventDefault();
+            if (isDiscoveryMode()) return true;
+            if (search.isProcessMode()) {
+                copySelectedPid();
+            } else {
+                copySelectedPath();
             }
-            break;
+            return true;
 
-        case 'd':
-        case 'D':
-            if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
-                e.preventDefault();
-                if (isDiscoveryMode()) break;
-                const memo = classifyResultId(results.getSelected()?.id);
-                if (memo?.kind === 'memo' && memo.target === 'task') {
-                    completeSelectedTask(memo.id);
-                } else if (search.isProcessMode()) {
-                    killSelectedProcess();
-                } else if (search.isAnyClipboardMode()) {
-                    removeSelectedClip();
-                } else {
-                    handleTrashShortcut();
-                }
-            }
-            break;
+        case 'main.clearPicks':
+            e.preventDefault();
+            results.clearPicks();
+            return true;
 
-        case 'i':
-            if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
-                e.preventDefault();
-                if (isDiscoveryMode()) break;
-                if (search.isAnyClipboardMode()) pasteSelectedClip();
+        case 'main.pick': {
+            e.preventDefault();
+            if (isDiscoveryMode()) return true;
+            // Only files/folders are pickable - apps/settings/clipboard rows have
+            // no real path to copy and would leave the picked panel rendering
+            // nonsense. Mirrors macOS togglePickForSelectedResult.
+            const sel = results.getSelected();
+            if (!sel) return true;
+            if (sel.kind !== 'file' && sel.kind !== 'folder') {
+                banner.show('Only files or folders can be picked', 'info', 1.2);
+                return true;
             }
-            break;
+            results.togglePick(sel);
+            return true;
+        }
 
-        case 'o':
-            // Ctrl+O flips the selected result's toggle Quick Action
-            // (Bluetooth, ...). Mirrors Cmd+O on macOS; no-op when the
-            // selection has none.
-            if (e.ctrlKey && !e.shiftKey && !e.altKey) {
-                e.preventDefault();
-                qactions.togglePrimary();
+        case 'main.trash': {
+            e.preventDefault();
+            if (isDiscoveryMode()) return true;
+            const memo = classifyResultId(results.getSelected()?.id);
+            if (memo?.kind === 'memo' && memo.target === 'task') {
+                completeSelectedTask(memo.id);
+            } else if (search.isProcessMode()) {
+                killSelectedProcess();
+            } else if (search.isAnyClipboardMode()) {
+                removeSelectedClip();
+            } else {
+                handleTrashShortcut();
             }
-            break;
+            return true;
+        }
+
+        case 'clipboard.paste':
+            e.preventDefault();
+            if (!isDiscoveryMode() && search.isAnyClipboardMode()) pasteSelectedClip();
+            return true;
+
+        case 'main.quickActionToggle':
+            // Flips the selected result's toggle Quick Action (Bluetooth, ...).
+            // Mirrors Cmd+O on macOS; no-op when the selection has none.
+            e.preventDefault();
+            qactions.togglePrimary();
+            return true;
+
+        default:
+            return false;
     }
 }
 

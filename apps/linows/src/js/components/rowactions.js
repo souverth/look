@@ -17,6 +17,7 @@ import * as banner from './banner.js';
 import * as sourceblocks from './sourceblocks.js';
 import { isSyntheticResultId } from '../catalog.js';
 import { systemFileManager } from '../platform.js';
+import * as shortcuts from '../shortcuts.js';
 
 // Core's action ids (look_tools::Action::id).
 export const EDIT = 'edit';
@@ -38,23 +39,29 @@ const BANNER_SECONDS = 2.4;
 // has been asked what it is.
 const CATALOG = [
     { id: `${PREFIX}open`, plain: 'Open', chord: '⏎', own: 'open' },
-    { id: `${PREFIX}edit`, plain: 'Edit', named: 'Edit in', chord: 'Ctrl+E', tool: EDIT },
+    {
+        id: `${PREFIX}edit`,
+        plain: 'Edit',
+        named: 'Edit in',
+        shortcut: 'main.edit',
+        tool: EDIT,
+    },
     {
         id: `${PREFIX}terminal`,
         plain: 'Open terminal here',
         named: 'Open in',
-        chord: 'Ctrl+T',
+        shortcut: 'main.terminal',
         tool: TERMINAL,
     },
     {
         id: `${PREFIX}reveal`,
         plain: 'Reveal',
         named: 'Reveal in',
-        chord: 'Ctrl+F',
+        shortcut: 'main.reveal',
         tool: REVEAL,
         fallbackTool: systemFileManager,
     },
-    { id: `${PREFIX}copypath`, plain: 'Copy path', chord: 'Ctrl+C', own: 'copyPath' },
+    { id: `${PREFIX}copypath`, plain: 'Copy path', shortcut: 'main.copy', own: 'copyPath' },
 ];
 
 // What split's side panels (picked items, clipboard preview) offer; compact has
@@ -63,21 +70,21 @@ const PANEL_ENTRIES = [
     {
         id: `${PREFIX}openallpicked`,
         plain: 'Open picked',
-        chord: 'Shift+Enter',
+        shortcut: 'main.openPicked',
         own: 'openAllPicked',
         offered: () => results.hasPickedItems(),
     },
     {
         id: `${PREFIX}clearpicked`,
         plain: 'Clear picked',
-        chord: 'Ctrl+Shift+P',
+        shortcut: 'main.clearPicks',
         own: 'clearPicked',
         offered: () => results.hasPickedItems(),
     },
     {
         id: `${PREFIX}deleteclipboard`,
         plain: 'Delete from history',
-        chord: 'Ctrl+D',
+        shortcut: 'main.trash',
         own: 'deleteClipboard',
         offered: () => results.getSelected()?.kind === 'clipboard',
     },
@@ -155,7 +162,7 @@ export async function descriptorsFor() {
             title: label(entry, entry.tool && tools.get(entry.tool)),
             // The chord that already performs this, set beside the label rather
             // than trailing it, so the keys line up down one edge.
-            chord: entry.chord,
+            chord: chordOf(entry),
         })),
         ...declared,
     ];
@@ -165,8 +172,13 @@ export function panelDescriptors() {
     return PANEL_ENTRIES.filter((entry) => entry.offered()).map((entry) => ({
         id: entry.id,
         title: entry.plain,
-        chord: entry.chord,
+        chord: chordOf(entry),
     }));
+}
+
+// The chord set beside a verb: whatever it is bound to now, so a rebind shows.
+function chordOf(entry) {
+    return entry.shortcut ? shortcuts.display(entry.shortcut) : entry.chord;
 }
 
 function describe(targets) {

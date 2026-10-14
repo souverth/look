@@ -14,6 +14,7 @@ import * as layoutEditor from './screens/layout-editor.js';
 import * as quickcapture from './components/quickcapture.js';
 import * as snippets from './components/snippets.js';
 import * as windowfinder from './components/windowfinder.js';
+import * as shortcuts from './shortcuts.js';
 import { listChecks } from './icons.js';
 import * as settings from './screens/settings.js';
 import { mountUpdateWidget } from './screens/update_widget.js';
@@ -80,9 +81,13 @@ const HINT_MAIN = 'Enter: Open \u2022 Ctrl+K: Actions \u2022 Ctrl+H: Help';
 // Inside a level the way out is the thing to say.
 const HINT_LEVEL = 'Enter: Open \u2022 Ctrl+K: Actions \u2022 Esc: Back';
 const HINT_TRANSLATE = 'Enter: Translate \u2022 Copy per result \u2022 Ctrl+H: Help';
-const HINT_CLIPBOARD = 'Enter: Copy clip \u2022 Ctrl+I: Paste \u2022 Ctrl+D: Remove clip';
-const HINT_CLIPBOARD_IMAGE = 'Enter: Copy image \u2022 Ctrl+I: Paste \u2022 Ctrl+D: Remove image';
-const HINT_PROCESS = 'Enter: CPU \u2022 Ctrl+D: Kill \u2022 Ctrl+C: Copy PID';
+// These name rebindable shortcuts, so they are read when shown, not when loaded.
+const hintClipboard = () =>
+    `Enter: Copy clip \u2022 ${shortcuts.display('clipboard.paste')}: Paste \u2022 ${shortcuts.display('main.trash')}: Remove clip`;
+const hintClipboardImage = () =>
+    `Enter: Copy image \u2022 ${shortcuts.display('clipboard.paste')}: Paste \u2022 ${shortcuts.display('main.trash')}: Remove image`;
+const hintProcess = () =>
+    `Enter: CPU \u2022 ${shortcuts.display('main.trash')}: Kill \u2022 ${shortcuts.display('main.copy')}: Copy PID`;
 // Discovery-menu hints \u2014 mirror macOS prefixSuggestion / commandSuggestion
 // hint bars (LauncherView.swift hintItems).
 const HINT_PREFIX_DISCOVERY = 'Enter: Pick prefix \u2022 Up/Down: Move \u2022 Esc: Clear';
@@ -441,6 +446,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     runningApps.init(document.getElementById('running-apps-strip'));
     getConfig().then((cfg) => {
         applyLayoutSetting(cfg.entries.find((e) => e.key === 'layout')?.value);
+        const shortcutProblem = shortcuts.describeProblems(shortcuts.applyConfig(cfg.entries));
+        if (shortcutProblem) banner.show(shortcutProblem, 'warning', 6);
 
         const placement = cfg.entries.find((e) => e.key === 'running_apps_placement');
         const on = !placement || placement.value !== 'none';
@@ -671,10 +678,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (search.isAnyClipboardMode()) {
-            setHint(hintMessage, search.isClipboardMode() ? HINT_CLIPBOARD : HINT_CLIPBOARD_IMAGE);
+            setHint(hintMessage, search.isClipboardMode() ? hintClipboard() : hintClipboardImage());
             results.setEmptyState({ mode: clipboardEmptyMode() });
         } else if (search.isProcessMode()) {
-            setHint(hintMessage, HINT_PROCESS);
+            setHint(hintMessage, hintProcess());
             results.setEmptyState({ mode: 'default' });
         } else if (search.isNotesMode()) {
             renderMainHint();

@@ -19,6 +19,7 @@ import {
     fileText,
     alertCircle,
 } from './icons.js';
+import * as shortcuts from './shortcuts.js';
 
 // The two histories share one empty screen and differ only in the wording, so
 // the words travel as data (macOS ClipboardEmptyStateCopy). results.js draws
@@ -433,7 +434,7 @@ export function taskResult(hit, todayKey, tomorrowKey) {
         id: `${MEMO_TASK_ID}${hit.id}`,
         kind: 'app',
         title: hit.name,
-        subtitle: `Task  ·  ${day}  ·  Ctrl+D done`,
+        subtitle: `Task  ·  ${day}  ·  ${shortcuts.display('main.trash')} done`,
         path: hit.name,
         score: hit.score,
         iconSvg: listChecks,

@@ -8,6 +8,7 @@
 
 import { quickActions, quickActionState, quickActionApply, quickActionApplyItem } from '../ipc.js';
 import * as banner from './banner.js';
+import * as shortcuts from '../shortcuts.js';
 
 // Banner durations (seconds), matching macOS Banner constants.
 const BANNER_SUCCESS = 1.2;
@@ -17,7 +18,8 @@ const BANNER_PERMISSION = 2.2;
 // up for the whole wait and the outcome banner takes over when it lands.
 const DEVICE_PENDING = 6;
 
-const TOGGLE_HINT = 'Ctrl+O';
+// Read when drawn, since the chord can be rebound (shortcuts.js).
+const toggleHint = () => shortcuts.display('main.quickActionToggle');
 
 let token = 0; // bumped on every render/clear; async work checks it
 let primary = null; // handle of the first toggle action (drives Ctrl+O)
@@ -147,7 +149,7 @@ function buildAction(section, descriptor) {
 
         const hint = document.createElement('span');
         hint.className = 'qaction-hint';
-        hint.textContent = TOGGLE_HINT;
+        hint.textContent = toggleHint();
         controlWrap.appendChild(hint);
         handle.switchEl = switchEl;
     } else {
