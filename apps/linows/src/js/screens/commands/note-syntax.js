@@ -82,8 +82,10 @@ export function highlightLines(source) {
             return span('tok-fence', fence[1]) + span('tok-info', fence[2]);
         }
 
-        const heading = line.match(/^(#{1,6})(\s+)(.*)$/);
+        const heading = line.match(/^(#{1,6})(?:(\s+)(.*))?$/);
         if (heading) {
+            // A bare "##" is already a heading marker, so it colors before the space.
+            if (heading[2] === undefined) return span('tok-marker', heading[1]);
             return (
                 span('tok-marker', heading[1]) +
                 escapeHtml(heading[2]) +

@@ -89,6 +89,12 @@ test('colouring never changes the text, only wraps it', () => {
     });
 });
 
+test('a bare heading marker is colored before the space is typed', () => {
+    const [h, tag] = highlightLines('##\n#tag');
+    assert.equal(h, '<span class="tok-marker">##</span>');
+    assert.doesNotMatch(tag, /tok-marker/);
+});
+
 test('headings, markers, tasks and rules get their own tokens', () => {
     const [h, t, n, hr] = highlightLines('## Hi\n- [x] done\n12. step\n***');
     assert.match(h, /<span class="tok-marker">##<\/span> <span class="tok-heading">Hi<\/span>/);
