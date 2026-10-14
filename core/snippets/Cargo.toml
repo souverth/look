@@ -1,0 +1,12 @@
+[package]
+name = "look-snippets"
+edition = "2024"
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+version = "0.1.0"
+
+[dependencies]
+look-matching = { path = "../matching" }
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"

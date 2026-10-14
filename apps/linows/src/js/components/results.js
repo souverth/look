@@ -9,6 +9,7 @@ import {
     settingIcon,
     historyLg,
     notebookLg,
+    fileTextLg,
 } from '../icons.js';
 import * as sourceblocks from './sourceblocks.js';
 import { getSettingsIcon as getWindowsSettingsIcon } from '../settings-icons/windows.js';
@@ -121,6 +122,18 @@ function renderEmptyState() {
             emptyState.filtered ? 'No note matches' : 'No notes yet'
         }</div>
         <div class="empty-state-help">Save one without opening a panel: type <kbd>:note buy milk #errands</kbd>, then <kbd>Enter</kbd>. Type <kbd>n"word</kbd> to filter, <kbd>n"#tag</kbd> for a tag.</div>
+      </div>`;
+    }
+    // `s"`: no snippet at all, or none matching what was typed.
+    if (emptyState.mode === 'snippets') {
+        return `
+      <div class="empty-state empty-state-rich">
+        <div class="empty-state-icon">${fileTextLg}</div>
+        <div class="empty-state-title">Snippets</div>
+        <div class="empty-state-body">${
+            emptyState.filtered ? 'No snippet matches' : 'No snippets yet'
+        }</div>
+        <div class="empty-state-help">They live in <kbd>.look/snippets.toml</kbd> in your home folder: add a <kbd>[snippets.name]</kbd> table with a <kbd>text</kbd>. <kbd>{date}</kbd> and <kbd>{clipboard}</kbd> fill in when you paste.</div>
       </div>`;
     }
     // AI two-col mode: the right column hosts web suggestions, which routinely

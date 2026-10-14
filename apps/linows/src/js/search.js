@@ -9,6 +9,8 @@ import {
     calcInline as ipcCalcInline,
     notesSearch as ipcNotesSearch,
     todoSearch as ipcTodoSearch,
+    snippetsSearch as ipcSnippetsSearch,
+    snippetsInfo as ipcSnippetsInfo,
 } from './ipc.js';
 import {
     isPrefixSuggestionQuery,
@@ -24,8 +26,11 @@ import {
     calcResult,
     noteResult,
     taskResult,
+    snippetResult,
+    snippetsProblemRows,
     placeMemoRows,
     NOTES_PREFIX,
+    SNIPPETS_PREFIX,
     processPidLabel,
     WEB_URL_OPEN_SUBTITLE,
     WEB_URL_RECENT_SUBTITLE,
@@ -51,6 +56,7 @@ const MEMO_TASKS_LIMIT = 3;
 const MIN_MEMO_QUERY_LENGTH = 2;
 // `n"` lists notes on their own, so it can show many more.
 const NOTES_MODE_LIMIT = 40;
+const SNIPPETS_MODE_LIMIT = 40;
 // In step with core/engine modes.rs, which spells the same two prefixes.
 const CLIPBOARD_PREFIX = 'c"';
 const CLIPBOARD_IMAGE_PREFIX = 'ci"';
@@ -65,6 +71,7 @@ let clipboardImageMode = false;
 let translateMode = false;
 let recentMode = false;
 let notesMode = false;
+let snippetsMode = false;
 let processMode = false;
 // Set after a kill (or on mode entry) so the next process search re-enumerates
 // /proc instead of scoring the stale snapshot.
@@ -144,6 +151,10 @@ export function isNotesMode() {
     return notesMode;
 }
 
+export function isSnippetsMode() {
+    return snippetsMode;
+}
+
 // Called after a kill so the next process search re-enumerates /proc. Callers
 // dispatch an input event to re-run the current query.
 export function forceProcessRefresh() {
@@ -193,6 +204,7 @@ export function handleQueryInput(query) {
     engineSettled = false;
     quickCapture = null;
     notesMode = false;
+    snippetsMode = false;
     if (query !== lastQueryString) {
         lastWebSuggestions = [];
     }
@@ -280,6 +292,14 @@ export function handleQueryInput(query) {
         const filter = query.slice(NOTES_PREFIX.length);
         const version = queryVersion;
         debounceTimer = setTimeout(() => performNotesSearch(filter, version), DEBOUNCE_MS);
+        return;
+    }
+
+    if (query.startsWith(SNIPPETS_PREFIX)) {
+        snippetsMode = true;
+        const filter = query.slice(SNIPPETS_PREFIX.length);
+        const version = queryVersion;
+        debounceTimer = setTimeout(() => performSnippetsSearch(filter, version), DEBOUNCE_MS);
         return;
     }
 
@@ -475,6 +495,26 @@ async function performNotesSearch(filter, version) {
     } catch (err) {
         if (isStale(version)) return;
         console.error('Notes search failed:', err);
+        if (onResultsCallback) onResultsCallback([], query);
+    }
+}
+
+async function performSnippetsSearch(filter, version) {
+    const query = `${SNIPPETS_PREFIX}${filter}`;
+    try {
+        const hits = await ipcSnippetsSearch(filter.trim(), SNIPPETS_MODE_LIMIT);
+        if (isStale(version)) return;
+        let rows = (hits || []).map(snippetResult);
+        // A file that cannot be read says why, instead of looking like no snippets.
+        if (rows.length === 0 && filter.trim() === '') {
+            const info = await ipcSnippetsInfo();
+            if (isStale(version)) return;
+            rows = snippetsProblemRows(info?.warnings || []);
+        }
+        if (onResultsCallback) onResultsCallback(rows, query);
+    } catch (err) {
+        if (isStale(version)) return;
+        console.error('Snippets search failed:', err);
         if (onResultsCallback) onResultsCallback([], query);
     }
 }

@@ -278,6 +278,8 @@ Don't remember the prefixes? Type a single `"` to open a menu listing every pref
 - `ps"term` -> running processes; `Enter` measures that process's CPU, `Cmd+D` (`Ctrl+D`) kills it, `Cmd+C` (`Ctrl+C`) copies its PID
 - `c"term` -> clipboard history search
 - `ci"term` -> copied images, newest first
+- `n"term` -> your notes, newest first (optional filter; Linux and Windows). See [Notes and tasks in the main search](#notes-and-tasks-in-the-main-search)
+- `s"term` -> text snippets, pasted into the app you were in (Linux and Windows). See [Snippets](#snippets)
 - `t"text` -> quick translation panel
 - `tw"text` -> dictionary lookup panel
 
@@ -399,6 +401,28 @@ On Linux and Windows, typing in the home search box also finds your notes and op
 - `lookapp notes` (or `lookapp notes trip`) opens straight into `n"`, for binding to a key. `n"` with no notes yet says how to save the first one
 - Tasks shown are the ones still completable: today's, upcoming, and up to 3 days late
 
+### Snippets
+
+On Linux and Windows, `s"` finds text you paste often and types it into the app you were using.
+
+```toml
+# ~/.look/snippets.toml
+[snippets.sig]
+name = "Email signature"      # optional; the key is the name when absent
+keyword = "sig"               # optional; the key when absent
+text = """
+Best regards,
+Ethan
+"""
+```
+
+- `s"` lists them by name; `s"sig` finds the one whose keyword is `sig` first, then any whose name or text holds every word typed
+- `Enter` pastes into the app underneath. If nothing can type for you (no XTEST on X11, no virtual keyboard on Wayland), the text is still copied and Look says to press `Ctrl+V`. `Ctrl+C` copies without pasting. The preview shows exactly what will be pasted
+- Placeholders, filled in when you paste: `{date}` (`2026-10-13`), `{time}` (`14:05`), `{datetime}`, `{weekday}` (`Tuesday`), `{clipboard}` (the newest clip, read before the paste replaces it) and `{uuid}`. A word in braces that is none of these stays as written, so a snippet holding JSON or code needs no escaping; type `{{` and `}}` when you want a literal brace next to a placeholder
+- A line break right at the end of `text` is dropped; end the text with a blank line to keep one
+- The file is read on every search, so an edit applies at once. A snippet with no `text`, or a file that is not valid TOML, shows up as a "snippets.toml has a problem" row naming what is wrong, and the rest keep working
+- `lookapp snippets sig` (or `lookapp snip`) opens straight into it, to bind to a key
+
 ### Quick capture from the search box
 
 On the home screen, in the search box (Linux, Windows):
@@ -436,6 +460,8 @@ The mode name comes first, and everything after it is the term, verbatim: `looka
 | --- | --- | --- | --- |
 | `clipboard` | `clip`, `cb` | `c"` clipboard history | all |
 | `clipboard-image` | `clipimg`, `ci` | `ci"` copied images | all |
+| `notes` | `n` | `n"` your notes, newest first | Linux, Windows |
+| `snippets` | `snip`, `s` | `s"` text snippets | Linux, Windows |
 | `apps` | `app` | `a"` applications only | all |
 | `files` | `file` | `f"` files only | all |
 | `folders` | `folder`, `dirs` | `d"` folders only | all |

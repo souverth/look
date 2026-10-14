@@ -377,6 +377,19 @@ export async function notesSearch(query, limit) {
     return invoke('notes_search', { query, limit });
 }
 
+export async function snippetsSearch(query, limit) {
+    return invoke('snippets_search', { query, limit });
+}
+
+export async function snippetsExpand(id, context) {
+    return invoke('snippets_expand', { id, context });
+}
+
+// `{ path, count, warnings }` for ~/.look/snippets.toml.
+export async function snippetsInfo() {
+    return invoke('snippets_info');
+}
+
 export async function notesRecordOpen(id) {
     return invoke('notes_record_open', { id });
 }

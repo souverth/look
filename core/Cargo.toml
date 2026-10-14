@@ -12,6 +12,7 @@ members = [
   "netspeed",
   "notes",
   "ranking",
+  "snippets",
   "sources",
   "storage",
   "todo",

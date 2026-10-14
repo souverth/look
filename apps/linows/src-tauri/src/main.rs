@@ -26,6 +26,7 @@ mod platform;
 mod process;
 mod qactions;
 mod shell;
+mod snippets;
 mod sources;
 mod state;
 mod sysinfo;
@@ -915,6 +916,10 @@ fn main() {
             todo::todo_search,
             // Coding-agent detection and quota (shared look-agents crate)
             agents::agents_status,
+            // Text snippets (shared look-snippets crate, ~/.look/snippets.toml)
+            snippets::snippets_search,
+            snippets::snippets_expand,
+            snippets::snippets_info,
             // Quick notes (shared look-notes store)
             notes::notes_list,
             notes::notes_search,

@@ -420,6 +420,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "look-snippets"
+version = "0.1.0"
+dependencies = [
+ "look-matching",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "look-sources"
 version = "0.1.0"
 dependencies = [

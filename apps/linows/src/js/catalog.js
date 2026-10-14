@@ -16,6 +16,8 @@ import {
     globe,
     clipboard,
     image,
+    fileText,
+    alertCircle,
 } from './icons.js';
 
 // The two histories share one empty screen and differ only in the wording, so
@@ -74,8 +76,10 @@ const CALC_ID = 'calc:';
 const QUICK_ID = 'quick:';
 const MEMO_NOTE_ID = 'memonote:';
 const MEMO_TASK_ID = 'memotask:';
+const SNIPPET_ID = 'snippet:';
 const DISCOVERY_CHAR = '"';
 export const NOTES_PREFIX = 'n"';
+export const SNIPPETS_PREFIX = 's"';
 
 // Google-autocomplete row glyph: Lucide `search` (mirrors macOS, which uses
 // SF Symbols "magnifyingglass"). Inlined here rather than imported as a
@@ -103,6 +107,11 @@ const PREFIX_ENTRIES = [
         prefix: NOTES_PREFIX,
         argHint: 'word',
         description: 'Your notes, newest first (optional filter)',
+    },
+    {
+        prefix: SNIPPETS_PREFIX,
+        argHint: 'word',
+        description: 'Text snippets, pasted into the app you were in',
     },
     { prefix: 't"', argHint: 'word', description: 'Web translate (VI/EN/JA)' },
 ];
@@ -425,6 +434,41 @@ export function taskResult(hit, todayKey, tomorrowKey) {
     };
 }
 
+// A snippet from `s"`. Enter pastes it into the app underneath; the row says
+// what it would paste, and its keyword when that is not just its name.
+export function snippetResult(hit) {
+    const keyword = hit.keyword && hit.keyword !== hit.name ? `${hit.keyword}  ·  ` : '';
+    return {
+        id: `${SNIPPET_ID}${hit.id}`,
+        kind: 'app',
+        title: hit.name,
+        subtitle: `${keyword}${hit.preview}`,
+        // Ctrl+C copies the expanded text, not this; the path only keys the preview.
+        path: hit.id,
+        score: hit.score,
+        iconSvg: fileText,
+        snippetKeyword: hit.keyword || '',
+    };
+}
+
+// What `s"` shows when the file lists nothing but has something to say: one row
+// per warning, which Enter repeats as a banner (the `quick:none` rows).
+export function snippetsProblemRows(warnings) {
+    return warnings.map((message) => ({
+        id: quickResultId('none', message),
+        kind: 'app',
+        title: 'snippets.toml has a problem',
+        subtitle: message,
+        path: '',
+        score: 0,
+        iconSvg: alertCircle,
+    }));
+}
+
+function snippetFromResultId(resultId) {
+    return resultId?.startsWith(SNIPPET_ID) ? resultId.slice(SNIPPET_ID.length) : null;
+}
+
 // Rows the engine found stay in charge of the top: a note sits below the best
 // few local matches, so typing an app's name still launches that app on Enter.
 export const MEMO_ROWS_AFTER = 3;
@@ -472,6 +516,9 @@ export function classifyResultId(resultId) {
 
     const memo = memoFromResultId(resultId);
     if (memo) return { kind: 'memo', ...memo };
+
+    const snippet = snippetFromResultId(resultId);
+    if (snippet != null) return { kind: 'snippet', id: snippet };
 
     return null;
 }

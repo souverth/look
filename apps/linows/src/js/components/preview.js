@@ -30,6 +30,7 @@ import {
 import * as sourceblocks from './sourceblocks.js';
 import * as banner from './banner.js';
 import { renderMarkdown } from '../markdown.js';
+import { expand as expandSnippet } from './snippets.js';
 import {
     classifyResultId,
     WEB_URL_OPEN_SUBTITLE,
@@ -149,6 +150,9 @@ export function update(result) {
             return;
         case 'memo':
             renderMemoPreview(result, classified.target);
+            return;
+        case 'snippet':
+            renderSnippetPreview(result, classified.id, cacheKey);
             return;
     }
 
@@ -1138,6 +1142,47 @@ function renderMemoPreview(result, target) {
     wrap.appendChild(hint);
 
     panel.appendChild(wrap);
+}
+
+// A snippet: the text exactly as Enter would paste it, placeholders filled in.
+// The text arrives a moment after the frame, so a selection that moved on in the
+// meantime is not overwritten.
+function renderSnippetPreview(result, id, cacheKey) {
+    const wrap = document.createElement('div');
+    wrap.className = 'preview-snippet';
+
+    const head = document.createElement('div');
+    head.className = 'preview-note-head';
+    const title = document.createElement('div');
+    title.className = 'preview-note-title';
+    title.textContent = result.title;
+    head.appendChild(title);
+    if (result.snippetKeyword) {
+        const keyword = document.createElement('div');
+        keyword.className = 'preview-note-tags';
+        keyword.textContent = `keyword: ${result.snippetKeyword}`;
+        head.appendChild(keyword);
+    }
+    wrap.appendChild(head);
+
+    const text = document.createElement('pre');
+    text.className = 'preview-snippet-text';
+    wrap.appendChild(text);
+
+    const hint = document.createElement('div');
+    hint.className = 'preview-web-suggestion-hint preview-note-hint';
+    hint.innerHTML =
+        'Press <kbd>Enter</kbd> to paste into the app you were in, <kbd>Ctrl+C</kbd> to copy';
+    wrap.appendChild(hint);
+    panel.appendChild(wrap);
+
+    expandSnippet(id)
+        .then((expanded) => {
+            if (currentPath === cacheKey) text.textContent = expanded;
+        })
+        .catch((err) => {
+            if (currentPath === cacheKey) text.textContent = `Could not read this snippet: ${err}`;
+        });
 }
 
 // The note's own text, drawn by the same Markdown renderer and styles /note's

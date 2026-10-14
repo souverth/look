@@ -42,6 +42,7 @@ import * as platform from './platform.js';
 import * as layout from './layout.js';
 import * as layoutEditor from './screens/layout-editor.js';
 import * as quickcapture from './components/quickcapture.js';
+import * as snippets from './components/snippets.js';
 
 // Matches the macOS info banner for the same action.
 const CLIP_BANNER_DURATION = 1.1;
@@ -745,6 +746,10 @@ async function openSelected(elevated = false) {
                 return;
             }
             break;
+        case 'snippet':
+            // Into the app underneath; the text is on the clipboard either way.
+            await snippets.paste(classified.id);
+            return;
         case 'quick': {
             // :note / :todo / :done: do it here, no panel. A note or task added empties
             // the box; ticking one off re-runs the query so the list shrinks.
@@ -810,6 +815,13 @@ async function completeSelectedTask(id) {
 async function copySelectedPath() {
     const item = results.getSelected();
     if (!item) return;
+
+    // A snippet copies what it would paste, placeholders filled in.
+    const snippet = classifyResultId(item.id);
+    if (snippet?.kind === 'snippet') {
+        await snippets.copy(snippet.id);
+        return;
+    }
 
     try {
         if (item.kind === 'file' || item.kind === 'folder') {

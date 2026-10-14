@@ -18,6 +18,7 @@ look-matching = { path = "../../../core/matching" }
 look-netspeed = { path = "../../../core/netspeed" }
 look-notes = { path = "../../../core/notes" }
 look-qactions = { path = "../../../core/qactions" }
+look-snippets = { path = "../../../core/snippets" }
 look-sources = { path = "../../../core/sources" }
 look-storage = { path = "../../../core/storage" }
 look-todo = { path = "../../../core/todo" }

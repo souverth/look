@@ -12,6 +12,7 @@ import * as todoCmd from './screens/commands/todo.js';
 import * as agentsCmd from './screens/commands/agents.js';
 import * as layoutEditor from './screens/layout-editor.js';
 import * as quickcapture from './components/quickcapture.js';
+import * as snippets from './components/snippets.js';
 import { listChecks } from './icons.js';
 import * as settings from './screens/settings.js';
 import { mountUpdateWidget } from './screens/update_widget.js';
@@ -60,6 +61,7 @@ import {
     isPrefixedQuery,
     isTagQuery,
     NOTES_PREFIX,
+    SNIPPETS_PREFIX,
     parseQuickCapture,
 } from './catalog.js';
 
@@ -678,6 +680,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 mode: 'notes',
                 filtered: value.slice(NOTES_PREFIX.length).trim() !== '',
             });
+        } else if (search.isSnippetsMode()) {
+            renderMainHint();
+            results.setEmptyState({
+                mode: 'snippets',
+                filtered: value.slice(SNIPPETS_PREFIX.length).trim() !== '',
+            });
         } else if (search.isPrefixHintMode() || search.isCommandHintMode()) {
             setHint(
                 hintMessage,
@@ -731,6 +739,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 queryInput.value = '';
                 if (classified.target === 'note') commands.openNote(classified.id);
                 else commands.revealTask(classified.id);
+                return;
+            case 'snippet':
+                snippets.paste(classified.id);
                 return;
             case 'quick':
                 quickcapture.runQuick(classified).then((outcome) => {

@@ -75,6 +75,13 @@ pub const MODES: &[Mode] = &[
         about: "your notes, newest first",
     },
     Mode {
+        name: "snippets",
+        aliases: &["snip", "s"],
+        prefix: "s\"",
+        platforms: Platforms::LinuxWindows,
+        about: "text snippets, pasted into the app you were in",
+    },
+    Mode {
         name: "apps",
         aliases: &["app"],
         prefix: "a\"",
@@ -596,6 +603,18 @@ mod tests {
             shown("n\"trip")
         };
         assert_eq!(parse(&["notes", "trip"]), expected);
+    }
+
+    #[test]
+    fn snippets_open_their_list_where_the_shell_has_one() {
+        assert_eq!(resolve("snip").unwrap().name, "snippets");
+        assert_eq!(resolve("s").unwrap().name, "snippets");
+        let expected = if cfg!(target_os = "macos") {
+            Launch::UnavailableMode("snippets".to_string())
+        } else {
+            shown("s\"sig")
+        };
+        assert_eq!(parse(&["snippets", "sig"]), expected);
     }
 
     #[test]
