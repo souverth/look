@@ -49,21 +49,39 @@
         </div>
         <div class="cmd-todo-toolbar">
             <div class="cmd-todo-segmented" id="cmd-note-mode">
-                <button data-mode="edit">Edit</button>
-                <button data-mode="preview">Preview</button>
+                <button data-mode="edit" title="Write (Ctrl+E flips to Preview)">Edit</button>
+                <button data-mode="split" title="Write on the left, see it on the right (Ctrl+\)">
+                    Split
+                </button>
+                <button data-mode="preview" title="Read it (Ctrl+E)">Preview</button>
             </div>
             <div class="cmd-todo-toolbar-right">
                 <button class="cmd-todo-btn" id="cmd-note-delete-btn"></button>
             </div>
         </div>
-        <div class="cmd-note-body-wrap">
-            <textarea
-                id="cmd-note-body"
-                placeholder="Write an idea… Markdown works. Type / at the start of a line for blocks."
-                spellcheck="false"
-            ></textarea>
+        <div
+            class="cmd-note-body-wrap"
+            id="cmd-note-body-wrap"
+            data-view="edit"
+            data-ed-theme="look"
+            data-size="normal"
+        >
+            <!-- Write: numbers | colours drawn behind a transparent textarea -->
+            <div class="cmd-note-pane" id="cmd-note-pane">
+                <div class="cmd-note-gutter" id="cmd-note-gutter" aria-hidden="true"></div>
+                <div class="cmd-note-stack" id="cmd-note-stack" data-hl="on" data-wrap="on">
+                    <div class="cmd-note-hl" id="cmd-note-hl" aria-hidden="true"></div>
+                    <textarea
+                        id="cmd-note-body"
+                        placeholder="Write an idea… Markdown works. Type / at the start of a line for blocks."
+                        spellcheck="false"
+                    ></textarea>
+                    <div class="cmd-note-suggest" id="cmd-note-suggest" hidden></div>
+                </div>
+            </div>
             <div class="cmd-note-preview md" id="cmd-note-preview" hidden></div>
-            <div class="cmd-note-suggest" id="cmd-note-suggest" hidden></div>
+            <!-- Outside the pane, which clips: the toolbar may be wider than a split half -->
+            <div class="cmd-note-bubble" id="cmd-note-bubble" hidden></div>
         </div>
     </div>
 </div>

@@ -377,11 +377,16 @@ Unit conversion works the same way, in the search box and in `/calc`, offline: a
 
 `note` quick reference (Linux, Windows):
 
-- `Ctrl+N` new note, `Ctrl+S` save now (it also autosaves half a second after you stop typing), `Ctrl+E` flip between Edit and Preview, `Esc` back to the cards
+- `Ctrl+N` new note, `Ctrl+S` save now (it also autosaves half a second after you stop typing), `Esc` back to the cards
+- Three views, on the Edit / Split / Preview switch: **Edit** is the writing pane alone, **Preview** the rendered note alone, and **Split** writes on the left while the right half redraws as you type and scrolls with you. `Ctrl+E` goes to Preview and back to whichever writing view you were in; `Ctrl+\` opens and closes Split. Which one a note opens in is a setting (below)
 - Hover a card to see up to three lines of the note. Tags are added in the editor (`Enter`, `Tab` or a comma adds one; suggestions list the tags you already use). Click the dot on a tag to pick its colour, or right-click a tag in the filter bar. Click a tag in the bar to filter, again to clear; `Esc` clears the search, then the tag
-- In the editor, type `/` at the start of a line for a block menu (headings, lists, task list, quote, code block, divider, today's date). `Enter` continues a list, `Tab` / `Shift+Tab` indent it, `Ctrl+B` / `Ctrl+I` wrap the selection
+- In the editor, type `/` at the start of a line for a block menu, in two groups with an icon on each row and the markup it types on the right: **Basic Formatting** (code block, headings 1 to 4, horizontal rule, bullet, ordered and task lists, quote, today's date) and **GitHub Alerts** (Caution, Important, Note, Tip, Warning). Keep typing to narrow it (`/h3`, `/warn`, `/alert`); `Up` / `Down` and `Enter` or `Tab` pick. `Enter` continues a list, `Tab` / `Shift+Tab` indent it
+- Select text and a toolbar appears over it: clear formatting, heading (H1, H2, H3, off), **B**, *I*, ~~S~~, highlight, link, inline code, code block, bullet, numbered and task lists, quote, and a GitHub alert (pressing it again steps through the five kinds). List, quote, heading and alert tools act on every line the selection touches and turn off again when they are all on. Keys: `Ctrl+B` bold, `Ctrl+I` italic, `Ctrl+Shift+X` strikethrough, `Ctrl+K` link (the address is left selected to type over)
+- Preview understands GitHub alerts (`> [!NOTE]` on the first line of a quote makes a coloured callout with an icon) and `==highlight==`
+- Numbers beside every line, and Markdown coloured as you type (headings, list marks, tasks, quotes, code, links, alerts); a line that wraps keeps one number at its top. Both are settings, as is word wrap
 - In Preview, click a checkbox to tick it (the note's own `[ ]` becomes `[x]`). A fenced block takes its language and, if you give one, a file: ` ```ts `, ` ```ts:src/app.ts `, ` ```ts title="src/app.ts" ` or ` ```src/app.ts `. The header shows the language or the path with the file name emphasised, and a Copy button
 - Deleting a note asks twice and cannot be undone; notes are plain text in the local database
+- `Settings > Notes` (saved the moment you change it, and `Ctrl+Shift+;` re-reads the file): **Open notes in** Edit, Split or Preview; **Editor Theme** Follow Look (the launcher's own), VS Dark+, VS Light+, Monokai, Solarized Dark / Light, GitHub Dark / Light, which also colour the preview; **Text Size** Small, Normal or Large; **Line Numbers**, **Word Wrap** (off scrolls sideways) and **Syntax Colours**. In `~/.look/config`: `note_default_view`, `note_editor_theme`, `note_text_size`, `note_line_numbers`, `note_word_wrap`, `note_syntax_highlight`; a value it does not know is the default
 
 `agents` quick reference (Linux, Windows):
 

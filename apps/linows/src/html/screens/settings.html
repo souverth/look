@@ -13,6 +13,7 @@
             <button class="settings-tab settings-tab-active" data-tab="appearance">
                 Appearance
             </button>
+            <button class="settings-tab" data-tab="notes">Notes</button>
             <button class="settings-tab" data-tab="advanced">Advanced</button>
             <button class="settings-tab" data-tab="shortcuts">Shortcuts</button>
         </div>
@@ -506,6 +507,120 @@
                     </div>
                     <div class="settings-shortcut-footer">
                         Tips: t"word for web EN/VI/JA translation | /kill to force quit apps
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notes tab: how /note looks and opens (components/notesettings.js) -->
+            <div class="settings-tab-content" id="settings-tab-notes" hidden>
+                <div class="settings-section-header">
+                    <span class="settings-section-arrow">&#9654;</span><span>Editor</span>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-row" title="Which view a note opens in">
+                        <label class="settings-label">Open notes in</label>
+                        <div class="settings-segment" id="settings-note-view" role="group">
+                            <button
+                                class="settings-segment-item settings-segment-active"
+                                type="button"
+                                data-value="edit"
+                            >
+                                Edit
+                            </button>
+                            <button class="settings-segment-item" type="button" data-value="split">
+                                Split
+                            </button>
+                            <button
+                                class="settings-segment-item"
+                                type="button"
+                                data-value="preview"
+                            >
+                                Preview
+                            </button>
+                        </div>
+                        <span class="settings-hint-text">Split writes on the left, previews on the right</span>
+                    </div>
+                    <div class="settings-row" title="The editor's colours; Follow Look uses the launcher's own theme">
+                        <label class="settings-label">Editor Theme</label>
+                        <div class="settings-dropdown" id="settings-note-theme">
+                            <button class="settings-dropdown-btn" type="button">
+                                <span class="settings-dropdown-label">Follow Look</span>
+                                <span class="settings-dropdown-arrow">&#9662;</span>
+                            </button>
+                            <div class="settings-dropdown-menu" hidden></div>
+                        </div>
+                        <span class="settings-hint-text">Also colours the preview</span>
+                    </div>
+                    <div class="settings-row" title="Text size in the editor and the preview">
+                        <label class="settings-label">Text Size</label>
+                        <div class="settings-segment" id="settings-note-size" role="group">
+                            <button class="settings-segment-item" type="button" data-value="small">
+                                Small
+                            </button>
+                            <button
+                                class="settings-segment-item settings-segment-active"
+                                type="button"
+                                data-value="normal"
+                            >
+                                Normal
+                            </button>
+                            <button class="settings-segment-item" type="button" data-value="large">
+                                Large
+                            </button>
+                        </div>
+                    </div>
+                    <div class="settings-row" title="A number beside every line, one per paragraph line when wrapping">
+                        <label class="settings-label">Line Numbers</label>
+                        <label class="settings-toggle">
+                            <input type="checkbox" id="settings-note-line-numbers" aria-label="Line numbers" checked />
+                            <span class="settings-toggle-track"></span>
+                        </label>
+                    </div>
+                    <div class="settings-row" title="Wrap long lines; off scrolls sideways instead">
+                        <label class="settings-label">Word Wrap</label>
+                        <label class="settings-toggle">
+                            <input type="checkbox" id="settings-note-wrap" aria-label="Word wrap" checked />
+                            <span class="settings-toggle-track"></span>
+                        </label>
+                    </div>
+                    <div class="settings-row" title="Colour headings, lists, quotes, code and links while you type">
+                        <label class="settings-label">Syntax Colours</label>
+                        <label class="settings-toggle">
+                            <input type="checkbox" id="settings-note-highlight" aria-label="Syntax colours" checked />
+                            <span class="settings-toggle-track"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-divider"></div>
+
+                <div class="settings-section-header">
+                    <span class="settings-section-arrow">&#9654;</span><span>Keys in a note</span>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-shortcut">
+                        <kbd>Ctrl+E</kbd><span>Read the note, and back to writing</span>
+                    </div>
+                    <div class="settings-shortcut">
+                        <kbd>Ctrl+\</kbd><span>Open or close the split view</span>
+                    </div>
+                    <div class="settings-shortcut">
+                        <kbd>/</kbd><span>At the start of a line: headings, lists, code, GitHub alerts</span>
+                    </div>
+                    <div class="settings-shortcut">
+                        <kbd>Select text</kbd><span>A toolbar appears: bold, links, lists, quote, alert</span>
+                    </div>
+                    <div class="settings-shortcut">
+                        <kbd>Ctrl+B / Ctrl+I</kbd><span>Bold, italic</span>
+                    </div>
+                    <div class="settings-shortcut">
+                        <kbd>Ctrl+Shift+X</kbd><span>Strikethrough</span>
+                    </div>
+                    <div class="settings-shortcut">
+                        <kbd>Ctrl+K</kbd><span>Link</span>
+                    </div>
+                    <div class="settings-shortcut">
+                        <kbd>Ctrl+S</kbd><span>Save now (it also saves as you type)</span>
                     </div>
                 </div>
             </div>

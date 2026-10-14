@@ -11,6 +11,7 @@ import {
     notesTagColors,
     notesSetTagColor,
     notesRecordOpen,
+    getConfig,
 } from '../../ipc.js';
 import {
     notebook,
@@ -19,35 +20,66 @@ import {
     search as searchIcon,
     check as checkIcon,
     arrowLeft,
+    sparkles,
+    link as linkIcon,
+    code as codeIcon,
+    braces,
+    highlighter,
+    listBullets,
+    listOrdered,
+    listChecks,
+    quote as quoteIcon,
+    megaphone,
 } from '../../icons.js';
 import { renderMarkdown, escapeHtml } from '../../markdown.js';
 import { TAG_HUES, tagPicks, tagIndex, swatchStyle, tagStyle } from './note-tag-style.js';
 import { highlightCodeBlocks, copyCode } from './note-code.js';
 import { createEditing } from './note-editing.js';
-import {
-    todayIso,
-    formatDate,
-    firstLine,
-    dropFirstLine,
-    plainPreview,
-    newId,
-} from './note-format.js';
+import { createEditorView } from './note-editor-view.js';
+import * as noteSettings from './note-settings.js';
+import * as slash from './note-slash.js';
+import * as ops from './note-format-ops.js';
+import { formatDate, firstLine, dropFirstLine, plainPreview, newId } from './note-format.js';
 
 const AUTOSAVE_MS = 500;
+// How long the split view waits after a keystroke before redrawing its preview.
+const PREVIEW_DELAY_MS = 120;
 
-// "/" block menu. `text` is inserted in place of the typed "/word"; `|` marks
-// where the caret lands (removed from the text).
-const SNIPPETS = [
-    { key: 'h1', label: 'Heading 1', hint: '#', text: '# |' },
-    { key: 'h2', label: 'Heading 2', hint: '##', text: '## |' },
-    { key: 'h3', label: 'Heading 3', hint: '###', text: '### |' },
-    { key: 'bullet', label: 'Bullet list', hint: '-', text: '- |' },
-    { key: 'number', label: 'Numbered list', hint: '1.', text: '1. |' },
-    { key: 'todo', label: 'Task list', hint: '[ ]', text: '- [ ] |' },
-    { key: 'quote', label: 'Quote', hint: '>', text: '> |' },
-    { key: 'code', label: 'Code block', hint: '```', text: '```\n|\n```' },
-    { key: 'divider', label: 'Divider', hint: '---', text: '---\n|' },
-    { key: 'date', label: "Today's date", hint: '', text: () => `${todayIso()} |` },
+// The selection toolbar, left to right: clear, then inline marks, then code,
+// then block marks. `glyph` buttons show a letter, the rest an icon.
+const inlineMark = (open, close = open) => (text, start, end) =>
+    ops.toggleInline(text, start, end, open, close);
+const blockMark = (kind) => (text, start, end) => ops.toggleLinePrefix(text, start, end, kind);
+
+const BUBBLE = [
+    { id: 'clear', icon: sparkles, title: 'Clear formatting', run: ops.clearFormatting },
+    'sep',
+    { id: 'heading', glyph: '#', title: 'Heading (H1, H2, H3, off)', run: ops.cycleHeading },
+    { id: 'bold', glyph: 'B', cls: 'glyph-bold', title: 'Bold (Ctrl+B)', run: inlineMark('**') },
+    { id: 'italic', glyph: 'I', cls: 'glyph-italic', title: 'Italic (Ctrl+I)', run: inlineMark('*') },
+    {
+        id: 'strike',
+        glyph: 'S',
+        cls: 'glyph-strike',
+        title: 'Strikethrough (Ctrl+Shift+X)',
+        run: inlineMark('~~'),
+    },
+    { id: 'mark', icon: highlighter, title: 'Highlight', run: inlineMark('==') },
+    { id: 'link', icon: linkIcon, title: 'Link (Ctrl+K)', run: ops.toLink },
+    'sep',
+    { id: 'code', icon: codeIcon, title: 'Inline code', run: inlineMark('`') },
+    { id: 'fence', icon: braces, title: 'Code block', run: ops.toggleFence },
+    'sep',
+    { id: 'bullet', icon: listBullets, title: 'Bullet list', run: blockMark('bullet') },
+    { id: 'ordered', icon: listOrdered, title: 'Numbered list', run: blockMark('ordered') },
+    { id: 'task', icon: listChecks, title: 'Task list', run: blockMark('task') },
+    { id: 'quote', icon: quoteIcon, title: 'Quote', run: blockMark('quote') },
+    {
+        id: 'alert',
+        icon: megaphone,
+        title: 'GitHub alert (again: next kind)',
+        run: (text, start, end) => ops.toggleAlert(text, start, end),
+    },
 ];
 
 // --- State ---
@@ -55,13 +87,17 @@ let notes = []; // newest edit first
 let loaded = false;
 let visible = false;
 let current = null; // note open in the editor, or null in list view
-let mode = 'edit'; // 'edit' | 'preview'
+let mode = 'edit'; // 'edit' | 'split' | 'preview'
+let lastWritingMode = 'edit'; // what Preview returns to
+let settings = { ...noteSettings.DEFAULTS };
+let previewTimer = null;
 let saveTimer = null;
 let pendingSave = Promise.resolve();
 let dirty = false;
 let deleteArmed = false;
 let deleteTimer = null;
-let suggestItems = [];
+let suggestItems = []; // what Up/Down and Enter walk, in the order shown
+let suggestRows = []; // the same, with the group headings between
 let suggestIndex = 0;
 let activeTag = null; // tag the list is filtered to, or null for all
 
@@ -70,11 +106,12 @@ let panel, searchBar, searchInput, toolbar, countEl, newBtn, grid;
 let tagBar, tagsEl, tagInput, tagMenu, colorsEl;
 let colorsTag = null; // tag the colour picker is open for
 let editor, backBtn, titleInput, statusEl, modeEl, deleteBtn, bodyEl, previewEl, suggestEl;
+let wrapEl, paneEl, bubbleEl;
+let view = null; // colours and line numbers around the textarea (note-editor-view.js)
 
 // Act on the body textarea, which init() looks up after this module loads.
-const { replaceRange, lineBounds, wrapSelection, continueList, indentLines } = createEditing(
-    () => bodyEl,
-);
+const { replaceRange, lineBounds, wrapSelection, applyOp, continueList, indentLines } =
+    createEditing(() => bodyEl);
 
 export function init() {
     panel = document.getElementById('cmd-panel-note');
@@ -97,6 +134,24 @@ export function init() {
     bodyEl = document.getElementById('cmd-note-body');
     previewEl = document.getElementById('cmd-note-preview');
     suggestEl = document.getElementById('cmd-note-suggest');
+    wrapEl = document.getElementById('cmd-note-body-wrap');
+    paneEl = document.getElementById('cmd-note-pane');
+    bubbleEl = document.getElementById('cmd-note-bubble');
+
+    view = createEditorView({
+        stack: document.getElementById('cmd-note-stack'),
+        textarea: bodyEl,
+        overlay: document.getElementById('cmd-note-hl'),
+        gutter: document.getElementById('cmd-note-gutter'),
+    });
+    buildBubble();
+    applySettings(settings);
+    // The settings in the config, now and whenever Settings (or a reload of the
+    // file) changes them.
+    getConfig()
+        .then((cfg) => applySettings(noteSettings.parse(cfg.entries)))
+        .catch((err) => console.warn('[note] could not read its settings:', err));
+    document.addEventListener('look:note-settings-changed', (e) => applySettings(e.detail));
 
     document.getElementById('cmd-note-search-icon').innerHTML = searchIcon;
     newBtn.innerHTML = `${plus} New note`;
@@ -190,10 +245,23 @@ export function init() {
     bodyEl.addEventListener('input', () => {
         scheduleSave();
         updateSuggest();
+        schedulePreview();
+        updateBubble();
     });
     bodyEl.addEventListener('click', updateSuggest);
-    bodyEl.addEventListener('scroll', positionSuggest);
-    bodyEl.addEventListener('blur', hideSuggest);
+    bodyEl.addEventListener('scroll', () => {
+        positionSuggest();
+        syncPreviewScroll();
+        updateBubble();
+    });
+    bodyEl.addEventListener('blur', () => {
+        hideSuggest();
+        hideBubble();
+    });
+    // A range selected shows the toolbar; the mouse and the keys both make one.
+    for (const type of ['mouseup', 'keyup', 'select']) {
+        bodyEl.addEventListener(type, updateBubble);
+    }
     suggestEl.addEventListener('mousedown', (e) => {
         // mousedown, not click: the click would blur the textarea first.
         const row = e.target.closest('[data-i]');
@@ -218,6 +286,7 @@ export function exit() {
     visible = false;
     panel.hidden = true;
     hideSuggest();
+    hideBubble();
     closeColorPicker();
     disarmDelete();
     void flush();
@@ -232,7 +301,7 @@ export async function openById(id) {
 
 // Tab belongs to the editor (indent / title -> body), not to command switching.
 export function isEditing() {
-    return visible && !!current && mode === 'edit';
+    return visible && !!current && mode !== 'preview';
 }
 
 export function handleKey(e) {
@@ -281,9 +350,16 @@ export function handleKey(e) {
         void flush(true);
         return true;
     }
+    // Ctrl+E reads what you wrote and takes you back to writing the way you were
+    // (edit or split); Ctrl+\ opens and closes the split view.
     if (ctrl && !e.shiftKey && key === 'e') {
         e.preventDefault();
-        setMode(mode === 'edit' ? 'preview' : 'edit');
+        setMode(mode === 'preview' ? lastWritingMode : 'preview');
+        return true;
+    }
+    if (ctrl && !e.shiftKey && key === '\\') {
+        e.preventDefault();
+        setMode(mode === 'split' ? 'edit' : 'split');
         return true;
     }
     if (e.key === 'Escape') {
@@ -349,6 +425,16 @@ export function handleKey(e) {
     if (ctrl && !e.shiftKey && (key === 'b' || key === 'i')) {
         e.preventDefault();
         wrapSelection(key === 'b' ? '**' : '*');
+        return true;
+    }
+    if (ctrl && !e.shiftKey && key === 'k') {
+        e.preventDefault();
+        applyOp(ops.toLink);
+        return true;
+    }
+    if (ctrl && e.shiftKey && key === 'x') {
+        e.preventDefault();
+        wrapSelection('~~');
         return true;
     }
     if (e.key === 'Enter' && !e.shiftKey && !ctrl) {
@@ -547,6 +633,7 @@ function openEditor(note) {
     dirty = false;
     titleInput.value = note.title;
     bodyEl.value = note.body;
+    view.refreshNow();
     tagInput.value = '';
     renderTags();
     setStatus('');
@@ -556,33 +643,74 @@ function openEditor(note) {
     tagBar.hidden = true;
     grid.hidden = true;
     editor.hidden = false;
-    setMode('edit');
+    // Opens the way the setting says; a note is never opened already scrolled.
+    setMode(settings.defaultView);
+    bodyEl.scrollTop = 0;
 }
 
 async function closeEditor() {
     hideSuggest();
+    hideBubble();
     disarmDelete();
     await flush();
     showList();
 }
 
+// Edit shows the writing pane alone, Preview the rendered text alone, Split both
+// side by side. The preview is only drawn while it is on screen.
 function setMode(next) {
     mode = next;
+    if (next !== 'preview') lastWritingMode = next;
+    wrapEl.dataset.view = next;
     modeEl.querySelectorAll('button').forEach((b) => {
         b.classList.toggle('active', b.dataset.mode === next);
     });
     hideSuggest();
+    hideBubble();
+    paneEl.hidden = next === 'preview';
+    previewEl.hidden = next === 'edit';
+    if (next !== 'edit') renderPreview();
     if (next === 'preview') {
-        renderPreview();
-        bodyEl.hidden = true;
-        previewEl.hidden = false;
         // Take focus off the hidden textarea so keys don't reach it.
         document.activeElement?.blur?.();
     } else {
-        previewEl.hidden = true;
-        bodyEl.hidden = false;
+        // The pane may just have come back from hidden, or changed width.
+        view.refreshNow();
         bodyEl.focus();
+        syncPreviewScroll();
     }
+}
+
+// The settings in force: how the editor looks, and how a note opens.
+function applySettings(next) {
+    settings = { ...noteSettings.DEFAULTS, ...next };
+    wrapEl.dataset.edTheme = settings.theme;
+    wrapEl.dataset.size = settings.size;
+    view.configure({
+        lineNumbers: settings.lineNumbers,
+        highlight: settings.highlight,
+        wrap: settings.wrap,
+    });
+    // A note already open keeps its view; the setting is for the next one.
+}
+
+// In the split view the preview follows the typing, a beat behind it.
+function schedulePreview() {
+    if (mode !== 'split') return;
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+        renderPreview();
+        syncPreviewScroll();
+    }, PREVIEW_DELAY_MS);
+}
+
+// Scrolls the preview to the same fraction of its length as the editor, so the
+// two stay roughly abreast without knowing which line is which.
+function syncPreviewScroll() {
+    if (mode !== 'split') return;
+    const room = bodyEl.scrollHeight - bodyEl.clientHeight;
+    const ratio = room > 0 ? bodyEl.scrollTop / room : 0;
+    previewEl.scrollTop = ratio * Math.max(0, previewEl.scrollHeight - previewEl.clientHeight);
 }
 
 // Flips `[ ]` / `[x]` on one source line (also inside a quote) and re-renders
@@ -598,6 +726,7 @@ function toggleTask(lineNo) {
     if (next === line) return;
     lines[lineNo] = next;
     bodyEl.value = lines.join('\n');
+    view.refreshNow();
     scheduleSave();
     const scroll = previewEl.scrollTop;
     renderPreview();
@@ -775,16 +904,15 @@ function setStatus(html, isError = false) {
 // --- "/" block menu ---
 
 function updateSuggest() {
-    if (mode !== 'edit' || !current) return hideSuggest();
+    if (mode === 'preview' || !current) return hideSuggest();
     const { selectionStart: pos, selectionEnd: end, value } = bodyEl;
     if (pos !== end) return hideSuggest();
     const [ls] = lineBounds(pos);
     const m = value.slice(ls, pos).match(/^\s*\/([a-z0-9]*)$/i);
     if (!m) return hideSuggest();
-    const q = m[1].toLowerCase();
-    suggestItems = SNIPPETS.filter(
-        (s) => s.key.startsWith(q) || s.label.toLowerCase().includes(q),
-    );
+    const arranged = slash.arrange(slash.filter(m[1]));
+    suggestItems = arranged.ordered;
+    suggestRows = arranged.rows;
     if (!suggestItems.length) return hideSuggest();
     suggestIndex = 0;
     suggestEl.hidden = false;
@@ -797,13 +925,21 @@ function renderSuggest() {
     // the highlighted row into view; otherwise Up/Down walks off the visible
     // part of a long menu.
     const scroll = suggestEl.scrollTop;
-    suggestEl.innerHTML = suggestItems
-        .map(
-            (s, i) =>
-                `<div class="cmd-note-suggest-row${i === suggestIndex ? ' active' : ''}" data-i="${i}">
-                    <span>${escapeHtml(s.label)}</span><code>${escapeHtml(s.hint)}</code>
-                </div>`,
-        )
+    // Group headings between the rows; only the rows carry a data-i, so a click on
+    // a heading picks nothing.
+    suggestEl.innerHTML = suggestRows
+        .map((row) => {
+            if (row.type === 'group') {
+                return `<div class="cmd-note-suggest-group">${escapeHtml(row.label)}</div>`;
+            }
+            const { item, index } = row;
+            const tone = item.tone ? ` tone-${item.tone}` : '';
+            return `<div class="cmd-note-suggest-row${index === suggestIndex ? ' active' : ''}" data-i="${index}">
+                    <span class="cmd-note-suggest-icon${tone}">${item.icon}</span>
+                    <span class="cmd-note-suggest-label">${escapeHtml(item.label)}</span>
+                    ${item.hint ? `<code>${escapeHtml(item.hint)}</code>` : ''}
+                </div>`;
+        })
         .join('');
     suggestEl.scrollTop = scroll;
     suggestEl.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
@@ -862,6 +998,64 @@ function positionSuggest() {
 function hideSuggest() {
     if (suggestEl) suggestEl.hidden = true;
     suggestItems = [];
+    suggestRows = [];
+}
+
+// --- Selection toolbar ---
+
+function buildBubble() {
+    bubbleEl.innerHTML = BUBBLE.map((tool) => {
+        if (tool === 'sep') return '<span class="sep"></span>';
+        const body = tool.icon ?? escapeHtml(tool.glyph);
+        return `<button type="button" data-tool="${tool.id}" class="${tool.cls ?? ''}" title="${escapeHtml(tool.title)}">${body}</button>`;
+    }).join('');
+    // mousedown, not click, and never default: a click would blur the textarea
+    // and take the selection (and this toolbar) away before it ran.
+    bubbleEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const button = e.target.closest('[data-tool]');
+        const tool = button && BUBBLE.find((t) => t !== 'sep' && t.id === button.dataset.tool);
+        if (!tool) return;
+        applyOp(tool.run);
+        view.refresh();
+        updateBubble();
+    });
+}
+
+// Shown over a selected range in the writing pane, hidden otherwise.
+function updateBubble() {
+    if (!current || mode === 'preview' || document.activeElement !== bodyEl) return hideBubble();
+    const { selectionStart: start, selectionEnd: end } = bodyEl;
+    if (start === end || !suggestEl.hidden) return hideBubble();
+    bubbleEl.hidden = false;
+    positionBubble(start, end);
+}
+
+function hideBubble() {
+    if (bubbleEl) bubbleEl.hidden = true;
+}
+
+// Above the start of the selection, centred over it when it is on one line;
+// below its last line when there is no room above. The toolbar lives in the
+// body wrap (the writing pane clips, and the toolbar can be wider than a split
+// half), so the caret's coordinates, which are the textarea's, are moved over.
+function positionBubble(start, end) {
+    const first = caretPosition(start);
+    const last = caretPosition(end);
+    const wrap = wrapEl.getBoundingClientRect();
+    const area = bodyEl.getBoundingClientRect();
+    const dx = area.left - wrap.left;
+    const dy = area.top - wrap.top;
+    const width = bubbleEl.offsetWidth;
+    const height = bubbleEl.offsetHeight;
+    const sameLine = Math.abs(first.top - last.top) < 1;
+    const middle = dx + (sameLine ? (first.left + last.left) / 2 : first.left + 24);
+    const left = Math.max(4, Math.min(middle - width / 2, wrap.width - width - 4));
+    let top = dy + first.top - height - 8;
+    if (top < 4) top = dy + last.top + last.lineHeight + 8;
+    top = Math.min(top, wrap.height - height - 4);
+    bubbleEl.style.left = `${left}px`;
+    bubbleEl.style.top = `${Math.max(4, top)}px`;
 }
 
 function applySuggestion(item) {

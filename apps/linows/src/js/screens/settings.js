@@ -21,6 +21,8 @@ import * as layoutEditor from './layout-editor.js';
 import { layoutGrid } from '../icons.js';
 import * as shortcutrecorder from '../components/shortcutrecorder.js';
 import * as shortcuts from '../shortcuts.js';
+import * as notesettings from '../components/notesettings.js';
+import * as noteSettings from './commands/note-settings.js';
 import {
     BLUR_PRESETS,
     DEFAULT_THEME_ID,
@@ -42,7 +44,7 @@ let activeTab = 'appearance';
 let onExit = null;
 let onConfigReloadFn = null;
 
-const TABS = ['appearance', 'advanced', 'shortcuts'];
+const TABS = ['appearance', 'notes', 'advanced', 'shortcuts'];
 
 const SAVE_MSG_MS = 1600;
 const ERROR_BANNER_SECONDS = 1.5;
@@ -192,6 +194,7 @@ export function init(exitFn) {
     onExit = exitFn;
     screen = document.getElementById('settings-screen');
     shortcutrecorder.init(screen);
+    notesettings.init(screen);
     hydrateDefaults();
 
     // Tab clicks
@@ -782,6 +785,12 @@ export async function reloadFromFile({ announceSuccess = true } = {}) {
         );
         if (shortcutProblem) banner.show(shortcutProblem, 'warning', 6);
 
+        // The note editor's look, if the file's note_* lines changed.
+        notesettings.populate(map);
+        document.dispatchEvent(
+            new CustomEvent('look:note-settings-changed', { detail: noteSettings.parseMap(map) }),
+        );
+
         platform.setAnimationsEnabled(map.animations_enabled !== 'false');
 
         // Background image - apply BEFORE the tint pass: effectiveBlurOpacity
@@ -1031,6 +1040,8 @@ async function loadConfig() {
 
         const map = {};
         for (const entry of cfg.entries) map[entry.key] = entry.value;
+
+        notesettings.populate(map);
 
         // Theme dropdown (custom)
         setThemeDropdown(resolveThemeId(map));

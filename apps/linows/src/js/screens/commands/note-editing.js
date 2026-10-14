@@ -5,6 +5,8 @@
 // The textarea is looked up per call: the screen builds its DOM in init(), after
 // this module has loaded.
 
+import { toggleInline } from './note-format-ops.js';
+
 export function createEditing(getBody) {
     // Replace [start, end) with `text` and put the caret at `caret`. execCommand
     // keeps the browser's own undo stack (Ctrl+Z) intact; setRangeText is the
@@ -33,17 +35,18 @@ export function createEditing(getBody) {
         return [start, end];
     }
 
-    function wrapSelection(mark) {
-        const { selectionStart: s, selectionEnd: e, value } = getBody();
-        const sel = value.slice(s, e);
-        if (sel.startsWith(mark) && sel.endsWith(mark) && sel.length >= mark.length * 2) {
-            const inner = sel.slice(mark.length, sel.length - mark.length);
-            replaceRange(s, e, inner, s + inner.length);
-            getBody().setSelectionRange(s, s + inner.length);
-            return;
-        }
-        replaceRange(s, e, `${mark}${sel}${mark}`, s + mark.length + sel.length);
-        if (sel) getBody().setSelectionRange(s + mark.length, s + mark.length + sel.length);
+    // Runs one of note-format-ops.js on the selection: the op says what to
+    // replace and where the selection goes, this makes the edit (keeping the
+    // browser's undo stack) and puts the selection there.
+    function applyOp(op) {
+        const area = getBody();
+        const result = op(area.value, area.selectionStart, area.selectionEnd);
+        replaceRange(result.from, result.to, result.insert, result.select[1]);
+        area.setSelectionRange(result.select[0], result.select[1]);
+    }
+
+    function wrapSelection(mark, close = mark) {
+        applyOp((text, start, end) => toggleInline(text, start, end, mark, close));
     }
 
     // Enter on a list/quote line starts the next item; Enter on an empty one ends
@@ -104,5 +107,5 @@ export function createEditing(getBody) {
         getBody().setSelectionRange(Math.max(ls, s + delta0), e + total);
     }
 
-    return { replaceRange, lineBounds, wrapSelection, continueList, indentLines };
+    return { replaceRange, lineBounds, wrapSelection, applyOp, continueList, indentLines };
 }

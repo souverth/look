@@ -4,6 +4,18 @@
 // piece of user text is HTML-escaped before any markup is added, so the output
 // is safe to assign to innerHTML.
 
+import { alertCircle, info, lightbulb, messageWarning, triangleAlert } from './icons.js';
+
+// GitHub's five alert kinds: `> [!NOTE]` on the first line of a quote makes it a
+// callout with a coloured edge, an icon and a title.
+const ALERT_KINDS = {
+    note: { label: 'Note', icon: info },
+    tip: { label: 'Tip', icon: lightbulb },
+    important: { label: 'Important', icon: messageWarning },
+    warning: { label: 'Warning', icon: triangleAlert },
+    caution: { label: 'Caution', icon: alertCircle },
+};
+
 export function escapeHtml(s) {
     return String(s).replace(
         /[&<>"']/g,
@@ -28,7 +40,8 @@ function inline(text) {
         .replace(/__([^_]+)__/g, '<strong>$1</strong>')
         .replace(/(^|[^*\w])\*([^*\s][^*]*)\*(?!\w)/g, '$1<em>$2</em>')
         .replace(/(^|[^_\w])_([^_\s][^_]*)_(?!\w)/g, '$1<em>$2</em>')
-        .replace(/~~([^~]+)~~/g, '<del>$1</del>');
+        .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+        .replace(/==([^=]+)==/g, '<mark>$1</mark>');
     return out.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[Number(i)]}</code>`);
 }
 
@@ -140,6 +153,19 @@ export function renderMarkdown(src, offset = 0) {
             const quoteStart = i;
             while (i < lines.length && /^>\s?/.test(lines[i])) {
                 quote.push(lines[i++].replace(/^>\s?/, ''));
+            }
+            const alert = quote[0].match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$/i);
+            if (alert) {
+                const kind = alert[1].toLowerCase();
+                const { label, icon } = ALERT_KINDS[kind];
+                // The body starts one line down, so a task in it still points at
+                // its own source line.
+                const body = renderMarkdown(quote.slice(1).join('\n'), offset + quoteStart + 1);
+                html.push(
+                    `<div class="md-alert md-alert-${kind}"><div class="md-alert-title">${icon}<span>${label}</span></div>` +
+                        `<div class="md-alert-body">${body}</div></div>`,
+                );
+                continue;
             }
             html.push(`<blockquote>${renderMarkdown(quote.join('\n'), offset + quoteStart)}</blockquote>`);
             continue;
