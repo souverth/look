@@ -759,7 +759,7 @@ Note: `Settings Blur` is stored as local app UI state (UserDefaults) and is not 
 
 Every modifier chord below is the default. On macOS, and in the gpui build on Linux and Windows, you can rebind them in `Settings > Shortcuts`: click a key capsule, press the chord you want, then Save Config (or set `shortcut_<group>_<action>` in `~/.look/config`). The keys that structure navigation - `Enter`, `Tab`, `Escape`, the arrows, the `Y`/`N` confirmations - stay fixed, since each means something different in the main bar, AI mode, command mode and a confirmation.
 
-On Linux and Windows the row verbs are rebound in `~/.look/config` (reload with
+In the Tauri backup on Linux and Windows, the row verbs are rebound in `~/.look/config` (reload with
 `Ctrl+Shift+;`): `shortcut_main_copy`, `shortcut_main_pick`,
 `shortcut_main_clear_picks`, `shortcut_main_open_picked`, `shortcut_main_trash`,
 `shortcut_main_reveal`, `shortcut_main_edit`, `shortcut_main_terminal`,
@@ -775,7 +775,7 @@ shortcut_main_edit=ctrl+shift+e
 - A chord is modifiers joined by `+`, then one key: `ctrl`, `alt`, `shift`, `win`, and a letter, digit, punctuation, `enter`, `esc`, `space`, `tab`, an arrow or `f1`..`f20`. It needs a modifier besides Shift (an F-key may stand alone, and `shift+enter` is fine). `cmd` is read as `ctrl`, so a config written on a Mac works as it is
 - Only the ones you rebind need a line. A value Look cannot parse leaves that shortcut on its default and says so in a banner; a chord claimed by two actions is reported too, and the earlier one in the list above wins
 - Letters follow what your keyboard prints, and fall back to the physical key on a layout with no Latin letters. The help screen, the Settings shortcut list, the `Ctrl+K` menu and the hint bar all show the chord you set
-- Settings, reload config, command mode, help, zoom, the `Ctrl+K` menu and `Ctrl+1`..`Ctrl+9` keep their chords on these platforms for now, and there is no recorder in Settings for the others yet
+- Settings, reload config, command mode, help, zoom, the `Ctrl+K` menu and `Ctrl+1`..`Ctrl+9` keep their chords in the Tauri backup for now, and there is no recorder in Settings for the others yet
 
 - `Enter`: open selected result / run command
 - `Tab` / `Shift+Tab`: next/previous result (app list) or command (command mode)
