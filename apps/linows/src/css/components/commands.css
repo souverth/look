@@ -1191,6 +1191,11 @@
     background: var(--selection-fill);
 }
 
+/* The task a main-search hit opened /todo on. */
+.cmd-todo-task-revealed {
+    background: color-mix(in srgb, var(--accent-color) 22%, transparent);
+}
+
 .cmd-todo-checkbox {
     width: 16px;
     height: 16px;

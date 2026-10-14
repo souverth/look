@@ -8,6 +8,7 @@ import {
     folderIcon,
     settingIcon,
     historyLg,
+    notebookLg,
 } from '../icons.js';
 import * as sourceblocks from './sourceblocks.js';
 import { getSettingsIcon as getWindowsSettingsIcon } from '../settings-icons/windows.js';
@@ -108,6 +109,18 @@ function renderEmptyState() {
         <div class="empty-state-title">Recent files &amp; folders</div>
         <div class="empty-state-body">Nothing recent yet</div>
         <div class="empty-state-help">Open files/folders through Look, or download/create some - newest activity shows here. Type <kbd>rc"word</kbd> to filter.</div>
+      </div>`;
+    }
+    // `n"`: either there are no notes at all, or none match what was typed.
+    if (emptyState.mode === 'notes') {
+        return `
+      <div class="empty-state empty-state-rich">
+        <div class="empty-state-icon">${notebookLg}</div>
+        <div class="empty-state-title">Notes</div>
+        <div class="empty-state-body">${
+            emptyState.filtered ? 'No note matches' : 'No notes yet'
+        }</div>
+        <div class="empty-state-help">Save one without opening a panel: type <kbd>:note buy milk #errands</kbd>, then <kbd>Enter</kbd>. Type <kbd>n"word</kbd> to filter, <kbd>n"#tag</kbd> for a tag.</div>
       </div>`;
     }
     // AI two-col mode: the right column hosts web suggestions, which routinely

@@ -14,6 +14,7 @@ import {
     isPrefixSuggestionQuery,
     isCommandSuggestionQuery,
     isPrefixedQuery,
+    isTagQuery,
     parseQuickCapture,
     prefixSuggestionResults,
     commandSuggestionResults,
@@ -319,7 +320,10 @@ export function handleQueryInput(query) {
     // filters; Google-autocomplete rows would be noise.
     const prefixed = isPrefixedQuery(query);
     const wantsWeb =
-        aiEnabled && !prefixed && query.trim().length >= MIN_WEB_SUGGESTION_QUERY_LENGTH;
+        aiEnabled &&
+        !prefixed &&
+        !isTagQuery(query) &&
+        query.trim().length >= MIN_WEB_SUGGESTION_QUERY_LENGTH;
     webInFlight = wantsWeb;
     // URL rows share the engine debounce: both are local round-trips, and the
     // URL leg must not run per keystroke ahead of it (SQLite open per call).

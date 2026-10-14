@@ -11,6 +11,8 @@
 pub enum Platforms {
     All,
     MacOnly,
+    /// Linux and Windows, which share the Tauri shell; macOS has not got it yet.
+    LinuxWindows,
 }
 
 impl Platforms {
@@ -18,6 +20,7 @@ impl Platforms {
         match self {
             Platforms::All => None,
             Platforms::MacOnly => Some("macOS only"),
+            Platforms::LinuxWindows => Some("Linux and Windows only"),
         }
     }
 
@@ -25,6 +28,7 @@ impl Platforms {
         match self {
             Platforms::All => true,
             Platforms::MacOnly => cfg!(target_os = "macos"),
+            Platforms::LinuxWindows => !cfg!(target_os = "macos"),
         }
     }
 }
@@ -62,6 +66,13 @@ pub const MODES: &[Mode] = &[
         prefix: "ci\"",
         platforms: Platforms::All,
         about: "copied images",
+    },
+    Mode {
+        name: "notes",
+        aliases: &["n"],
+        prefix: "n\"",
+        platforms: Platforms::LinuxWindows,
+        about: "your notes, newest first",
     },
     Mode {
         name: "apps",
@@ -255,6 +266,7 @@ pub fn list_json() -> String {
                 "platforms": match mode.platforms {
                     Platforms::All => "all",
                     Platforms::MacOnly => "macos",
+                    Platforms::LinuxWindows => "linux-windows",
                 },
             })
         })
@@ -572,6 +584,18 @@ mod tests {
             resolve("clipboard-image").unwrap().platforms,
             Platforms::All
         );
+    }
+
+    #[test]
+    fn notes_open_the_notes_list_where_the_shell_has_one() {
+        assert_eq!(resolve("n").unwrap().name, "notes");
+        assert_eq!(resolve("notes").unwrap().platforms, Platforms::LinuxWindows);
+        let expected = if cfg!(target_os = "macos") {
+            Launch::UnavailableMode("notes".to_string())
+        } else {
+            shown("n\"trip")
+        };
+        assert_eq!(parse(&["notes", "trip"]), expected);
     }
 
     #[test]

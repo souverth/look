@@ -384,7 +384,11 @@ On Linux and Windows, typing in the home search box also finds your notes and op
 
 - Any query of 2+ characters lists up to 3 notes and 3 unfinished tasks below the best 3 local results. Every word typed has to appear in the note's title, tags or body, in any order; case and accents are ignored
 - `n"` lists only notes, newest first; `n"trip` filters them
-- `Enter` on a note opens it in the `/note` editor; on a task it opens `/todo`. `Ctrl+C` copies the note title or task name
+- `#work` finds notes tagged `work`. A query starting with `#` is a local lookup only: no Google suggestions, no answer card
+- Among notes that match about as well, the ones you open often, and lately, come first. A passing mention in a body never outranks a title match, however often it is opened
+- The preview pane renders the selected note as Markdown
+- `Enter` on a note opens it in the `/note` editor; on a task it opens `/todo` scrolled to that task. `Ctrl+D` on a task marks it done in place, no panel. `Ctrl+C` copies the note title or task name
+- `lookapp notes` (or `lookapp notes trip`) opens straight into `n"`, for binding to a key. `n"` with no notes yet says how to save the first one
 - Tasks shown are the ones still completable: today's, upcoming, and up to 3 days late
 
 ### Quick capture from the search box

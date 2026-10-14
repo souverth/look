@@ -220,6 +220,30 @@ export function handleKey(e) {
     return false;
 }
 
+const REVEAL_MS = 1800;
+let revealTimer = null;
+
+/**
+ * Scrolls to a task and marks it for a moment, for one picked from the main
+ * search. Call after `enter()`. A search filter typed earlier would hide the
+ * row, so it is cleared; unsaved edits are never replaced by a fresh read.
+ */
+export async function revealTask(id) {
+    if (!visible) return;
+    if (!findTask(id)) await load();
+    if (!visible || !findTask(id)) return;
+    searchInput.value = '';
+    renderAll();
+    const row = daysEl.querySelector(`[data-task-row="${CSS.escape(id)}"]`);
+    if (!row) return;
+    row.scrollIntoView({ block: 'center' });
+    row.classList.add('cmd-todo-task-revealed');
+    clearTimeout(revealTimer);
+    revealTimer = setTimeout(() => row.classList.remove('cmd-todo-task-revealed'), REVEAL_MS);
+}
+
+const findTask = (id) => [...tasksByDay.values()].some((list) => list.some((t) => t.id === id));
+
 // --- Quick view (hint bar "Todo X/Y" on the home screen) ---
 
 export function setOnQuickChange(fn) {

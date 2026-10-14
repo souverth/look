@@ -493,7 +493,10 @@ function handleKeyDown(e) {
             if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
                 e.preventDefault();
                 if (isDiscoveryMode()) break;
-                if (search.isProcessMode()) {
+                const memo = classifyResultId(results.getSelected()?.id);
+                if (memo?.kind === 'memo' && memo.target === 'task') {
+                    completeSelectedTask(memo.id);
+                } else if (search.isProcessMode()) {
                     killSelectedProcess();
                 } else if (search.isAnyClipboardMode()) {
                     removeSelectedClip();
@@ -738,6 +741,7 @@ async function openSelected(elevated = false) {
                 enterCommandModeFn();
                 queryInput.value = '';
                 if (classified.target === 'note') await commandMode.openNote(classified.id);
+                else await commandMode.revealTask(classified.id);
                 return;
             }
             break;
@@ -794,6 +798,13 @@ function searchWeb() {
     if (!query) return;
     const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
     openPath(url, 'browser');
+}
+
+// Ctrl+D on a task found by the main search ticks it off, the same path
+// `:done` takes, then re-runs the query so the row goes away.
+async function completeSelectedTask(id) {
+    await quickcapture.runQuick({ action: 'done', payload: id });
+    queryInput.dispatchEvent(new Event('input'));
 }
 
 async function copySelectedPath() {

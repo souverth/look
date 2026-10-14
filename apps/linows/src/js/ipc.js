@@ -377,6 +377,10 @@ export async function notesSearch(query, limit) {
     return invoke('notes_search', { query, limit });
 }
 
+export async function notesRecordOpen(id) {
+    return invoke('notes_record_open', { id });
+}
+
 export async function todoSearch(query, since, limit) {
     return invoke('todo_search', { query, since, limit });
 }

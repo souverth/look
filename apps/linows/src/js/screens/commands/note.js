@@ -10,6 +10,7 @@ import {
     notesDelete,
     notesTagColors,
     notesSetTagColor,
+    notesRecordOpen,
     highlightCode,
 } from '../../ipc.js';
 import {
@@ -543,6 +544,8 @@ function newNote() {
 function openNote(id) {
     const note = notes.find((n) => n.id === id);
     if (!note) return;
+    // Feeds the main search's ranking; a failed count costs nothing visible.
+    notesRecordOpen(id).catch((err) => console.warn('[note] record open failed:', err));
     openEditor({ ...note, tags: [...(note.tags || [])] });
     bodyEl.focus();
     bodyEl.setSelectionRange(bodyEl.value.length, bodyEl.value.length);

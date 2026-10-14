@@ -29,6 +29,7 @@ import {
 } from '../icons.js';
 import * as sourceblocks from './sourceblocks.js';
 import * as banner from './banner.js';
+import { renderMarkdown } from '../markdown.js';
 import {
     classifyResultId,
     WEB_URL_OPEN_SUBTITLE,
@@ -1101,6 +1102,11 @@ function renderCalcPreview(result) {
 // it matched on (or its day), and where Enter takes it. The row's own glyph is
 // drawn large by .preview-memo.
 function renderMemoPreview(result, target) {
+    // A note with a body reads as the note itself: headline, tags, rendered text.
+    if (target === 'note' && result.memoPreview) {
+        renderNotePreview(result);
+        return;
+    }
     const wrap = document.createElement('div');
     wrap.className = 'preview-web-suggestion preview-memo';
 
@@ -1125,8 +1131,43 @@ function renderMemoPreview(result, target) {
 
     const hint = document.createElement('div');
     hint.className = 'preview-web-suggestion-hint';
-    const where = target === 'note' ? 'the note' : '/todo';
-    hint.innerHTML = `Press <kbd>Enter</kbd> to open ${where}`;
+    hint.innerHTML =
+        target === 'note'
+            ? 'Press <kbd>Enter</kbd> to open the note'
+            : 'Press <kbd>Enter</kbd> to open /todo, <kbd>Ctrl+D</kbd> to mark it done';
+    wrap.appendChild(hint);
+
+    panel.appendChild(wrap);
+}
+
+// The note's own text, drawn by the same Markdown renderer and styles /note's
+// Preview mode uses. Task ticks and code highlighting stay in the editor.
+function renderNotePreview(result) {
+    const wrap = document.createElement('div');
+    wrap.className = 'preview-note';
+
+    const head = document.createElement('div');
+    head.className = 'preview-note-head';
+    const title = document.createElement('div');
+    title.className = 'preview-note-title';
+    title.textContent = result.title;
+    head.appendChild(title);
+    if (result.memoTags?.length) {
+        const tags = document.createElement('div');
+        tags.className = 'preview-note-tags';
+        tags.textContent = result.memoTags.map((t) => `#${t}`).join(' ');
+        head.appendChild(tags);
+    }
+    wrap.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'preview-note-body cmd-note-preview';
+    body.innerHTML = renderMarkdown(result.memoPreview);
+    wrap.appendChild(body);
+
+    const hint = document.createElement('div');
+    hint.className = 'preview-web-suggestion-hint preview-note-hint';
+    hint.innerHTML = 'Press <kbd>Enter</kbd> to open the note';
     wrap.appendChild(hint);
 
     panel.appendChild(wrap);

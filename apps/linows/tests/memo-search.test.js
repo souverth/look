@@ -9,6 +9,7 @@ import {
     classifyResultId,
     isSyntheticResultId,
     isPrefixedQuery,
+    isTagQuery,
     prefixSuggestionResults,
     NOTES_PREFIX,
 } from '../src/js/catalog.js';
@@ -49,7 +50,7 @@ test('a task is labelled by its day relative to today', () => {
     assert.equal(taskDayLabel('2026-10-11', today, tomorrow), 'Oct 11, late');
     const hit = { id: 't', name: 'Pay rent', due_date: today, score: 1 };
     const row = taskResult(hit, today, tomorrow);
-    assert.equal(row.subtitle, 'Task  ·  today');
+    assert.equal(row.subtitle, 'Task  ·  today  ·  Ctrl+D done');
 });
 
 test('notes sit below the best local matches, never above them', () => {
@@ -62,6 +63,14 @@ test('notes sit below the best local matches, never above them', () => {
     assert.deepEqual(placeMemoRows(memo, [{ id: 'a' }]).map((r) => r.id), ['a', 'm1', 'm2']);
     assert.deepEqual(placeMemoRows(memo, []).map((r) => r.id), ['m1', 'm2']);
     assert.equal(placeMemoRows([], local), local);
+});
+
+test('a #tag query is a local lookup, never sent to the web', () => {
+    assert.ok(isTagQuery('#dev'));
+    assert.ok(isTagQuery('  #dev work'));
+    assert.ok(!isTagQuery('dev #work'));
+    assert.ok(!isTagQuery(''));
+    assert.ok(!isTagQuery(undefined));
 });
 
 test('n" is a listed prefix and gates web suggestions like the others', () => {

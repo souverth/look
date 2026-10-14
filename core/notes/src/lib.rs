@@ -12,6 +12,7 @@
 use look_matching::{normalize_for_search, text_match_score_normalized};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 
@@ -130,10 +131,17 @@ pub struct NoteHit {
     /// The body line the query was found on, or the body's first line when the
     /// match was in the title or a tag. Empty for a note with no body.
     pub snippet: String,
+    /// The start of the body, up to [`PREVIEW_CHARS`], for the preview pane to
+    /// render as Markdown. A titleless note's first line (its headline) is kept
+    /// out. Empty for a note with no body.
+    pub preview: String,
     pub tags: Vec<String>,
     pub score: i64,
     pub updated_at_unix_s: i64,
 }
+
+/// Characters of body sent along with a hit for the preview pane.
+pub const PREVIEW_CHARS: usize = 1200;
 
 /// A note's headline: its title, else its first non-blank line, else
 /// "Untitled". Same rule as the /note cards.
@@ -171,11 +179,52 @@ fn clip(line: &str) -> String {
     out
 }
 
+/// How often and how lately a note was opened, for [`search_with_opens`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NoteOpens {
+    pub count: i64,
+    pub last_opened_unix_s: i64,
+}
+
+/// Opens counted toward the boost; past this a note is simply "used a lot".
+const OPENS_COUNTED: i64 = 8;
+const BOOST_PER_OPEN: i64 = 40;
+/// Extra for a note opened within the last week, so what you are working on
+/// now beats what you used heavily a season ago.
+const RECENT_OPEN_BOOST: i64 = 180;
+const RECENT_OPEN_WINDOW_S: i64 = 7 * 24 * 60 * 60;
+
+/// At most 500, under the 1,000 between one match tier and the next (a body hit
+/// scores 1,000, a tag word 2,000, a title word 3,000), so use reorders notes
+/// that match about as well and never lifts a passing mention over a title.
+fn open_boost(opens: Option<&NoteOpens>, now_unix_s: i64) -> i64 {
+    let Some(opens) = opens else { return 0 };
+    let recent = if now_unix_s - opens.last_opened_unix_s <= RECENT_OPEN_WINDOW_S {
+        RECENT_OPEN_BOOST
+    } else {
+        0
+    };
+    opens.count.clamp(0, OPENS_COUNTED) * BOOST_PER_OPEN + recent
+}
+
+/// [`search_with_opens`] with no usage history.
+pub fn search(notes: &[Note], query: &str, limit: usize) -> Vec<NoteHit> {
+    search_with_opens(notes, &HashMap::new(), 0, query, limit)
+}
+
 /// Notes matching `query`, best first, at most `limit`. Every word of the query
 /// has to appear in the title, a tag, or the body (case and diacritics folded),
-/// so a short query does not drag in every long note. A blank query returns the
-/// most recently edited notes, which is what an empty `n"` lists.
-pub fn search(notes: &[Note], query: &str, limit: usize) -> Vec<NoteHit> {
+/// so a short query does not drag in every long note; notes opened often or
+/// lately rank first among those that match about as well (see
+/// [`open_boost`]). A blank query returns the most recently edited notes, which
+/// is what an empty `n"` lists.
+pub fn search_with_opens(
+    notes: &[Note],
+    opens: &HashMap<String, NoteOpens>,
+    now_unix_s: i64,
+    query: &str,
+    limit: usize,
+) -> Vec<NoteHit> {
     // `#work` means the tag `work`: tags are stored without the `#` that
     // `:note ... #work` has the user type, so the mark is dropped from each word.
     let query = normalize_for_search(query)
@@ -191,11 +240,12 @@ pub fn search(notes: &[Note], query: &str, limit: usize) -> Vec<NoteHit> {
             let score = if query.is_empty() {
                 0
             } else {
-                score_note(note, &title, &query)?
+                score_note(note, &title, &query)? + open_boost(opens.get(&note.id), now_unix_s)
             };
             Some(NoteHit {
                 id: note.id.clone(),
                 snippet: snippet_for(note, &query),
+                preview: preview_for(note),
                 title,
                 tags: note.tags.clone(),
                 score,
@@ -231,6 +281,20 @@ fn score_note(note: &Note, title: &str, query: &str) -> Option<i64> {
     let everything =
         normalize_for_search(&format!("{title} {} {}", note.tags.join(" "), note.body));
     text_match_score_normalized(query, &everything).map(|s| s * BODY_WEIGHT)
+}
+
+/// The body for the preview pane: from the second non-blank line on when the
+/// first one is the note's headline, whole otherwise, clipped to
+/// [`PREVIEW_CHARS`]. Line breaks and indentation inside the text are kept,
+/// since it is rendered as Markdown.
+fn preview_for(note: &Note) -> String {
+    let body = note.body.trim();
+    let body = if note.title.trim().is_empty() {
+        body.split_once('\n').map_or("", |(_, rest)| rest.trim())
+    } else {
+        body
+    };
+    body.chars().take(PREVIEW_CHARS).collect()
 }
 
 /// The first content line holding a word of `query`, so the row shows why the
@@ -295,6 +359,12 @@ impl NoteStore {
              CREATE TABLE IF NOT EXISTS note_tag_colors (
                  tag TEXT PRIMARY KEY,
                  color INTEGER NOT NULL
+             );
+
+             CREATE TABLE IF NOT EXISTS note_opens (
+                 id TEXT PRIMARY KEY,
+                 count INTEGER NOT NULL,
+                 last_opened_unix_s INTEGER NOT NULL
              );",
         )?;
 
@@ -432,7 +502,43 @@ impl NoteStore {
     pub fn delete(&self, id: &str) -> NoteResult<()> {
         self.conn
             .execute("DELETE FROM notes WHERE id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM note_opens WHERE id = ?1", params![id])?;
         Ok(())
+    }
+
+    /// Counts one opening of a note in the editor, for [`search_with_opens`].
+    pub fn record_open(&self, id: &str, now_unix_s: i64) -> NoteResult<()> {
+        self.conn.execute(
+            "INSERT INTO note_opens (id, count, last_opened_unix_s) VALUES (?1, 1, ?2)
+             ON CONFLICT(id) DO UPDATE SET
+                 count = count + 1,
+                 last_opened_unix_s = excluded.last_opened_unix_s",
+            params![id, now_unix_s],
+        )?;
+        Ok(())
+    }
+
+    /// Every note's open history, keyed by note id.
+    pub fn opens(&self) -> NoteResult<HashMap<String, NoteOpens>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, count, last_opened_unix_s FROM note_opens")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                NoteOpens {
+                    count: row.get(1)?,
+                    last_opened_unix_s: row.get(2)?,
+                },
+            ))
+        })?;
+        let mut out = HashMap::new();
+        for row in rows {
+            let (id, opens) = row?;
+            out.insert(id, opens);
+        }
+        Ok(out)
     }
 }
 
@@ -578,6 +684,64 @@ mod tests {
     }
 
     #[test]
+    fn opens_reorder_equal_matches_but_never_beat_a_better_tier() {
+        let now = 10_000_000;
+        let notes = [
+            note("used", "Plan B", ""),
+            note("fresh", "Plan A", ""),
+            note("body", "Misc", "the plan is here"),
+        ];
+        let store = NoteStore::open_in_memory().unwrap();
+        for _ in 0..50 {
+            store.record_open("used", now).unwrap();
+            store.record_open("body", now).unwrap();
+        }
+        let opens = store.opens().unwrap();
+        assert_eq!(opens["used"].count, 50);
+        let ids = hit_ids_owned(search_with_opens(&notes, &opens, now, "plan", 10));
+        // Both titles start with "plan"; the used one leads. The body mention,
+        // opened just as much, stays below both titles.
+        assert_eq!(ids, ["used", "fresh", "body"]);
+    }
+
+    #[test]
+    fn recent_opens_count_more_than_old_ones() {
+        let week = 7 * 24 * 60 * 60;
+        let now = 100 * week;
+        let mut opens = HashMap::new();
+        opens.insert(
+            "old".to_string(),
+            NoteOpens {
+                count: 3,
+                last_opened_unix_s: now - 10 * week,
+            },
+        );
+        opens.insert(
+            "new".to_string(),
+            NoteOpens {
+                count: 3,
+                last_opened_unix_s: now - 1,
+            },
+        );
+        let notes = [note("old", "Plan", ""), note("new", "Plan", "")];
+        let ids = hit_ids_owned(search_with_opens(&notes, &opens, now, "plan", 10));
+        assert_eq!(ids, ["new", "old"]);
+    }
+
+    #[test]
+    fn deleting_a_note_forgets_its_opens() {
+        let store = NoteStore::open_in_memory().unwrap();
+        store.save(&note("a", "A", "1"), 1).unwrap();
+        store.record_open("a", 5).unwrap();
+        store.delete("a").unwrap();
+        assert!(store.opens().unwrap().is_empty());
+    }
+
+    fn hit_ids_owned(hits: Vec<NoteHit>) -> Vec<String> {
+        hits.into_iter().map(|h| h.id).collect()
+    }
+
+    #[test]
     fn hash_in_the_query_finds_the_tag() {
         let mut n = note("a", "Standup", "notes");
         n.tags = vec!["work".into()];
@@ -628,6 +792,24 @@ mod tests {
         let alone = [note("b", "", "only line")];
         assert_eq!(search(&alone, "only", 10)[0].snippet, "");
         assert_eq!(display_title(&note("c", " ", " ")), "Untitled");
+    }
+
+    #[test]
+    fn preview_keeps_markdown_and_drops_a_headline_line() {
+        let titled = [note("a", "Plan", "# Steps\n- one\n- two")];
+        assert_eq!(
+            search(&titled, "plan", 10)[0].preview,
+            "# Steps\n- one\n- two"
+        );
+        let untitled = [note("b", "", "Call the bank\n- fees\n- card")];
+        assert_eq!(search(&untitled, "bank", 10)[0].preview, "- fees\n- card");
+        let one_line = [note("c", "", "just this")];
+        assert_eq!(search(&one_line, "just", 10)[0].preview, "");
+        let long = [note("d", "T", &"x".repeat(PREVIEW_CHARS + 50))];
+        assert_eq!(
+            search(&long, "t", 10)[0].preview.chars().count(),
+            PREVIEW_CHARS
+        );
     }
 
     #[test]

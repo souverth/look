@@ -84,6 +84,11 @@ export function openNote(id) {
     return note.openById(id);
 }
 
+// Scrolls /todo to one task and marks it, for a task found from the main search.
+export function revealTask(id) {
+    return todo.revealTask(id);
+}
+
 // Pick the Nth command (1-based, in the sidebar's order) as the one to open next,
 // for a Ctrl+1..9 pressed outside command mode. False when there is no such command.
 export function enterByIndex(n) {

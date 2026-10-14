@@ -58,6 +58,8 @@ import {
     webUrlFromResultId,
     classifyResultId,
     isPrefixedQuery,
+    isTagQuery,
+    NOTES_PREFIX,
     parseQuickCapture,
 } from './catalog.js';
 
@@ -556,7 +558,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             previewPanel.hidden = false;
             preview.showClipboardHelp(clipboardEmptyMode());
         }
-        if (isPrefixedQuery(query)) {
+        if (isPrefixedQuery(query) || isTagQuery(query)) {
             aiAnswer.cancel();
             return;
         }
@@ -670,6 +672,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (search.isProcessMode()) {
             setHint(hintMessage, HINT_PROCESS);
             results.setEmptyState({ mode: 'default' });
+        } else if (search.isNotesMode()) {
+            renderMainHint();
+            results.setEmptyState({
+                mode: 'notes',
+                filtered: value.slice(NOTES_PREFIX.length).trim() !== '',
+            });
         } else if (search.isPrefixHintMode() || search.isCommandHintMode()) {
             setHint(
                 hintMessage,
@@ -722,6 +730,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 enterCommandMode();
                 queryInput.value = '';
                 if (classified.target === 'note') commands.openNote(classified.id);
+                else commands.revealTask(classified.id);
                 return;
             case 'quick':
                 quickcapture.runQuick(classified).then((outcome) => {

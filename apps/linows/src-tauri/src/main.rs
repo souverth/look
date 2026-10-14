@@ -918,6 +918,7 @@ fn main() {
             // Quick notes (shared look-notes store)
             notes::notes_list,
             notes::notes_search,
+            notes::notes_record_open,
             notes::notes_save,
             notes::notes_delete,
             notes::notes_tag_colors,

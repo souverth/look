@@ -207,6 +207,12 @@ export function isPrefixedQuery(query) {
     return PREFIX_ENTRIES.some((e) => trimmed.startsWith(e.prefix));
 }
 
+// `#dev` names a note tag in Look, so it is a local lookup: no web answer card,
+// no Google completions (which for a hashtag are noise).
+export function isTagQuery(query) {
+    return (query || '').trimStart().startsWith('#');
+}
+
 export function isCommandSuggestionQuery(query) {
     const trimmed = query.trimStart();
     return trimmed.startsWith(':') && !isInlineCommandWithArgs(trimmed);
@@ -391,6 +397,7 @@ export function noteResult(hit) {
         score: hit.score,
         iconSvg: notebook,
         memoSnippet: hit.snippet,
+        memoPreview: hit.preview || '',
         memoTags: hit.tags || [],
     };
 }
@@ -410,7 +417,7 @@ export function taskResult(hit, todayKey, tomorrowKey) {
         id: `${MEMO_TASK_ID}${hit.id}`,
         kind: 'app',
         title: hit.name,
-        subtitle: `Task  ·  ${day}`,
+        subtitle: `Task  ·  ${day}  ·  Ctrl+D done`,
         path: hit.name,
         score: hit.score,
         iconSvg: listChecks,

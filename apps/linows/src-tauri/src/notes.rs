@@ -27,8 +27,24 @@ pub fn notes_list() -> Result<Vec<Note>, String> {
 /// Notes matching a main-search query (or the newest, for a blank `n"`).
 #[tauri::command]
 pub fn notes_search(query: String, limit: usize) -> Result<Vec<NoteHit>, String> {
-    let notes = open_store()?.list().map_err(|e| e.to_string())?;
-    Ok(look_notes::search(&notes, &query, limit))
+    let store = open_store()?;
+    let notes = store.list().map_err(|e| e.to_string())?;
+    let opens = store.opens().map_err(|e| e.to_string())?;
+    Ok(look_notes::search_with_opens(
+        &notes,
+        &opens,
+        now_unix_s(),
+        &query,
+        limit,
+    ))
+}
+
+/// Counts an opening of the note in the editor, so search can rank by use.
+#[tauri::command]
+pub fn notes_record_open(id: String) -> Result<(), String> {
+    open_store()?
+        .record_open(&id, now_unix_s())
+        .map_err(|e| e.to_string())
 }
 
 /// Returns the stored note, or null when the note was blank and got removed.
