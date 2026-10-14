@@ -10,6 +10,7 @@ import {
     historyLg,
     notebookLg,
     fileTextLg,
+    appWindowLg,
 } from '../icons.js';
 import * as sourceblocks from './sourceblocks.js';
 import { getSettingsIcon as getWindowsSettingsIcon } from '../settings-icons/windows.js';
@@ -122,6 +123,24 @@ function renderEmptyState() {
             emptyState.filtered ? 'No note matches' : 'No notes yet'
         }</div>
         <div class="empty-state-help">Save one without opening a panel: type <kbd>:note buy milk #errands</kbd>, then <kbd>Enter</kbd>. Type <kbd>n"word</kbd> to filter, <kbd>n"#tag</kbd> for a tag.</div>
+      </div>`;
+    }
+    // `w"`: no window matches, or this desktop cannot list them yet.
+    if (emptyState.mode === 'windows') {
+        const body = !emptyState.supported
+            ? 'Not available on this desktop yet'
+            : emptyState.filtered
+              ? 'No window matches'
+              : 'No windows open';
+        const help = emptyState.supported
+            ? 'Type <kbd>w"chrome</kbd> for an app, or a word of a title, such as <kbd>w"gmail</kbd>.'
+            : 'Switching by window title needs a way to list titles, which only Windows gives Look for now. The app strip beside the search box still switches between apps.';
+        return `
+      <div class="empty-state empty-state-rich">
+        <div class="empty-state-icon">${appWindowLg}</div>
+        <div class="empty-state-title">Windows</div>
+        <div class="empty-state-body">${body}</div>
+        <div class="empty-state-help">${help}</div>
       </div>`;
     }
     // `s"`: no snippet at all, or none matching what was typed.

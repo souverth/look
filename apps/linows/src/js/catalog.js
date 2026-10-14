@@ -77,9 +77,11 @@ const QUICK_ID = 'quick:';
 const MEMO_NOTE_ID = 'memonote:';
 const MEMO_TASK_ID = 'memotask:';
 const SNIPPET_ID = 'snippet:';
+const WINDOW_ID = 'win:';
 const DISCOVERY_CHAR = '"';
 export const NOTES_PREFIX = 'n"';
 export const SNIPPETS_PREFIX = 's"';
+export const WINDOWS_PREFIX = 'w"';
 
 // Google-autocomplete row glyph: Lucide `search` (mirrors macOS, which uses
 // SF Symbols "magnifyingglass"). Inlined here rather than imported as a
@@ -112,6 +114,11 @@ const PREFIX_ENTRIES = [
         prefix: SNIPPETS_PREFIX,
         argHint: 'word',
         description: 'Text snippets, pasted into the app you were in',
+    },
+    {
+        prefix: WINDOWS_PREFIX,
+        argHint: 'word',
+        description: 'Open windows, front to back (Windows)',
     },
     { prefix: 't"', argHint: 'word', description: 'Web translate (VI/EN/JA)' },
 ];
@@ -451,6 +458,27 @@ export function snippetResult(hit) {
     };
 }
 
+// A window from `w"`: its title, and the app it belongs to. `id` is the backend's
+// `hwnd:<handle>`; the app's exe gives the row its icon.
+export function windowResult(w, index = 0, total = 1) {
+    const subtitle = [w.app, w.minimized ? 'minimized' : ''].filter(Boolean).join('  ·  ');
+    return {
+        id: `${WINDOW_ID}${w.id}`,
+        kind: 'app',
+        title: w.title,
+        subtitle: subtitle || 'Window',
+        path: w.exe_path || '',
+        // Front to back is the order the backend sent them in.
+        score: total - index,
+        windowApp: w.app || '',
+        windowMinimized: !!w.minimized,
+    };
+}
+
+function windowFromResultId(resultId) {
+    return resultId?.startsWith(WINDOW_ID) ? resultId.slice(WINDOW_ID.length) : null;
+}
+
 // What `s"` shows when the file lists nothing but has something to say: one row
 // per warning, which Enter repeats as a banner (the `quick:none` rows).
 export function snippetsProblemRows(warnings) {
@@ -519,6 +547,9 @@ export function classifyResultId(resultId) {
 
     const snippet = snippetFromResultId(resultId);
     if (snippet != null) return { kind: 'snippet', id: snippet };
+
+    const win = windowFromResultId(resultId);
+    if (win != null) return { kind: 'window', id: win };
 
     return null;
 }

@@ -280,6 +280,7 @@ Don't remember the prefixes? Type a single `"` to open a menu listing every pref
 - `ci"term` -> copied images, newest first
 - `n"term` -> your notes, newest first (optional filter; Linux and Windows). See [Notes and tasks in the main search](#notes-and-tasks-in-the-main-search)
 - `s"term` -> text snippets, pasted into the app you were in (Linux and Windows). See [Snippets](#snippets)
+- `w"term` -> open windows by title, front to back (Windows only). `Enter` switches to that window, `Ctrl+C` copies its title. Every word has to appear in the app name and title together, so `w"chrome gmail` finds the Gmail tab; `w"` alone lists them all
 - `t"text` -> quick translation panel
 - `tw"text` -> dictionary lookup panel
 
@@ -461,6 +462,7 @@ The mode name comes first, and everything after it is the term, verbatim: `looka
 | `clipboard` | `clip`, `cb` | `c"` clipboard history | all |
 | `clipboard-image` | `clipimg`, `ci` | `ci"` copied images | all |
 | `notes` | `n` | `n"` your notes, newest first | Linux, Windows |
+| `windows` | `win`, `window`, `w` | `w"` open windows by title | Windows |
 | `snippets` | `snip`, `s` | `s"` text snippets | Linux, Windows |
 | `apps` | `app` | `a"` applications only | all |
 | `files` | `file` | `f"` files only | all |

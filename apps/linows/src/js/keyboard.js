@@ -43,6 +43,7 @@ import * as layout from './layout.js';
 import * as layoutEditor from './screens/layout-editor.js';
 import * as quickcapture from './components/quickcapture.js';
 import * as snippets from './components/snippets.js';
+import * as windowfinder from './components/windowfinder.js';
 
 // Matches the macOS info banner for the same action.
 const CLIP_BANNER_DURATION = 1.1;
@@ -750,6 +751,13 @@ async function openSelected(elevated = false) {
             // Into the app underneath; the text is on the clipboard either way.
             await snippets.paste(classified.id);
             return;
+        case 'window':
+            // Raises it and hides Look; a window that closed meanwhile says so,
+            // and the list is rebuilt without it.
+            if (!(await windowfinder.switchTo(classified.id))) {
+                queryInput.dispatchEvent(new Event('input'));
+            }
+            return;
         case 'quick': {
             // :note / :todo / :done: do it here, no panel. A note or task added empties
             // the box; ticking one off re-runs the query so the list shrinks.
@@ -816,10 +824,20 @@ async function copySelectedPath() {
     const item = results.getSelected();
     if (!item) return;
 
-    // A snippet copies what it would paste, placeholders filled in.
-    const snippet = classifyResultId(item.id);
-    if (snippet?.kind === 'snippet') {
-        await snippets.copy(snippet.id);
+    // A snippet copies what it would paste, placeholders filled in; a window
+    // copies its title (its `path` is only where the icon comes from).
+    const synthetic = classifyResultId(item.id);
+    if (synthetic?.kind === 'snippet') {
+        await snippets.copy(synthetic.id);
+        return;
+    }
+    if (synthetic?.kind === 'window') {
+        try {
+            await copyToClipboard(item.title);
+            banner.show('Copied to clipboard', 'success', 1.0);
+        } catch {
+            banner.show('Copy failed', 'error', 1.2);
+        }
         return;
     }
 

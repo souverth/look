@@ -11,6 +11,7 @@ import {
     todoSearch as ipcTodoSearch,
     snippetsSearch as ipcSnippetsSearch,
     snippetsInfo as ipcSnippetsInfo,
+    listWindows as ipcListWindows,
 } from './ipc.js';
 import {
     isPrefixSuggestionQuery,
@@ -28,9 +29,11 @@ import {
     taskResult,
     snippetResult,
     snippetsProblemRows,
+    windowResult,
     placeMemoRows,
     NOTES_PREFIX,
     SNIPPETS_PREFIX,
+    WINDOWS_PREFIX,
     processPidLabel,
     WEB_URL_OPEN_SUBTITLE,
     WEB_URL_RECENT_SUBTITLE,
@@ -57,6 +60,7 @@ const MIN_MEMO_QUERY_LENGTH = 2;
 // `n"` lists notes on their own, so it can show many more.
 const NOTES_MODE_LIMIT = 40;
 const SNIPPETS_MODE_LIMIT = 40;
+const WINDOWS_MODE_LIMIT = 40;
 // In step with core/engine modes.rs, which spells the same two prefixes.
 const CLIPBOARD_PREFIX = 'c"';
 const CLIPBOARD_IMAGE_PREFIX = 'ci"';
@@ -72,6 +76,7 @@ let translateMode = false;
 let recentMode = false;
 let notesMode = false;
 let snippetsMode = false;
+let windowsMode = false;
 let processMode = false;
 // Set after a kill (or on mode entry) so the next process search re-enumerates
 // /proc instead of scoring the stale snapshot.
@@ -155,6 +160,10 @@ export function isSnippetsMode() {
     return snippetsMode;
 }
 
+export function isWindowsMode() {
+    return windowsMode;
+}
+
 // Called after a kill so the next process search re-enumerates /proc. Callers
 // dispatch an input event to re-run the current query.
 export function forceProcessRefresh() {
@@ -205,6 +214,7 @@ export function handleQueryInput(query) {
     quickCapture = null;
     notesMode = false;
     snippetsMode = false;
+    windowsMode = false;
     if (query !== lastQueryString) {
         lastWebSuggestions = [];
     }
@@ -292,6 +302,14 @@ export function handleQueryInput(query) {
         const filter = query.slice(NOTES_PREFIX.length);
         const version = queryVersion;
         debounceTimer = setTimeout(() => performNotesSearch(filter, version), DEBOUNCE_MS);
+        return;
+    }
+
+    if (query.startsWith(WINDOWS_PREFIX)) {
+        windowsMode = true;
+        const filter = query.slice(WINDOWS_PREFIX.length);
+        const version = queryVersion;
+        debounceTimer = setTimeout(() => performWindowsSearch(filter, version), DEBOUNCE_MS);
         return;
     }
 
@@ -495,6 +513,20 @@ async function performNotesSearch(filter, version) {
     } catch (err) {
         if (isStale(version)) return;
         console.error('Notes search failed:', err);
+        if (onResultsCallback) onResultsCallback([], query);
+    }
+}
+
+async function performWindowsSearch(filter, version) {
+    const query = `${WINDOWS_PREFIX}${filter}`;
+    try {
+        const found = await ipcListWindows(filter.trim(), WINDOWS_MODE_LIMIT);
+        if (isStale(version)) return;
+        const rows = (found || []).map((w, i, all) => windowResult(w, i, all.length));
+        if (onResultsCallback) onResultsCallback(rows, query);
+    } catch (err) {
+        if (isStale(version)) return;
+        console.error('Window search failed:', err);
         if (onResultsCallback) onResultsCallback([], query);
     }
 }

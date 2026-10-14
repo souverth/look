@@ -25,6 +25,7 @@ import {
     settingIcon,
     globeLg,
     calculatorLg,
+    appWindowLg as appWindowIcon,
     copy as copyIcon,
 } from '../icons.js';
 import * as sourceblocks from './sourceblocks.js';
@@ -85,7 +86,7 @@ export function update(result) {
         ? sourceblocks.rowKey(result)
         : result.kind === 'clipboard' ||
             result.kind === 'action' ||
-            classifyResultId(result.id)?.kind === 'memo'
+            ['memo', 'window'].includes(classifyResultId(result.id)?.kind)
           ? result.id
           : result.path;
     if (currentPath === cacheKey) return;
@@ -153,6 +154,9 @@ export function update(result) {
             return;
         case 'snippet':
             renderSnippetPreview(result, classified.id, cacheKey);
+            return;
+        case 'window':
+            renderWindowPreview(result, cacheKey);
             return;
     }
 
@@ -1141,6 +1145,37 @@ function renderMemoPreview(result, target) {
             : 'Press <kbd>Enter</kbd> to open /todo, <kbd>Ctrl+D</kbd> to mark it done';
     wrap.appendChild(hint);
 
+    panel.appendChild(wrap);
+}
+
+// A window from `w"`: the app's own icon over the title, and what Enter does.
+// Same centred layout as the other synthetic previews.
+function renderWindowPreview(result, cacheKey) {
+    const wrap = document.createElement('div');
+    wrap.className = 'preview-web-suggestion';
+
+    const icon = document.createElement('div');
+    icon.className = 'preview-icon preview-window-icon';
+    icon.innerHTML = appWindowIcon;
+    wrap.appendChild(icon);
+    if (result.path) loadPreviewIcon(icon, 'app', result.path, result.id, cacheKey);
+
+    const title = document.createElement('div');
+    title.className = 'preview-web-suggestion-title';
+    title.textContent = result.title;
+    wrap.appendChild(title);
+
+    const sub = document.createElement('div');
+    sub.className = 'preview-web-suggestion-subtitle';
+    sub.textContent = [result.windowApp, result.windowMinimized ? 'minimized' : '']
+        .filter(Boolean)
+        .join('  ·  ');
+    wrap.appendChild(sub);
+
+    const hint = document.createElement('div');
+    hint.className = 'preview-web-suggestion-hint';
+    hint.innerHTML = 'Press <kbd>Enter</kbd> to switch to this window';
+    wrap.appendChild(hint);
     panel.appendChild(wrap);
 }
 

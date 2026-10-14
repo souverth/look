@@ -909,6 +909,7 @@ fn main() {
             process::process_detail,
             process::process_cpu,
             process::list_running_apps,
+            process::list_windows,
             process::activate_running_app,
             // Todo (shared look-todo store, same table macOS uses)
             todo::todo_list,

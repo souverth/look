@@ -37,6 +37,11 @@
     color: var(--accent-color);
 }
 
+/* A window from w": the app's own icon, larger than a file's. */
+.preview-window-icon {
+    --glyph-box: 64px;
+}
+
 .preview-icon img {
     width: 100%;
     height: 100%;

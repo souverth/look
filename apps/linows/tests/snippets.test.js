@@ -143,6 +143,43 @@ test('s" is a listed prefix that keeps web suggestions away', () => {
     assert.ok(prefixSuggestionResults('"snippet').some((r) => r.title.startsWith('s"')));
 });
 
+test('a window row names its app and says when it is minimized', async () => {
+    const { windowResult, WINDOWS_PREFIX } = await import('../src/js/catalog.js');
+    const row = windowResult(
+        { id: 'hwnd:4242', title: 'Inbox - Gmail', app: 'Google Chrome', exe_path: 'C:\\c.exe', minimized: true },
+        0,
+        3,
+    );
+    assert.equal(row.title, 'Inbox - Gmail');
+    assert.equal(row.subtitle, 'Google Chrome  ·  minimized');
+    assert.equal(row.path, 'C:\\c.exe', 'the exe is where the row icon comes from');
+    assert.deepEqual(classifyResultId(row.id), { kind: 'window', id: 'hwnd:4242' });
+    assert.ok(isSyntheticResultId(row.id));
+    assert.ok(isPrefixedQuery(`${WINDOWS_PREFIX}chrome`));
+
+    // A UWP window has no separate app name; the title says it all.
+    const uwp = windowResult({ id: 'hwnd:7', title: 'Settings', app: '', exe_path: null, minimized: false }, 1, 3);
+    assert.equal(uwp.subtitle, 'Window');
+    assert.equal(uwp.path, '');
+    assert.ok(row.score > uwp.score, 'front to back is the order they arrived in');
+});
+
+test('switching reports a window that closed in the meantime', async () => {
+    reset();
+    answers.activate_running_app = () => true;
+    const finder = await import('../src/js/components/windowfinder.js');
+    assert.equal(await finder.switchTo('hwnd:1'), true);
+    const [, args] = calls.find(([cmd]) => cmd === 'activate_running_app');
+    assert.deepEqual(args, { pid: 0, desktopId: 'hwnd:1', exec: null });
+
+    answers.activate_running_app = () => false;
+    assert.equal(await finder.switchTo('hwnd:1'), false);
+    answers.activate_running_app = () => {
+        throw new Error('backend down');
+    };
+    assert.equal(await finder.switchTo('hwnd:1'), false);
+});
+
 test('a broken file shows its warnings as rows that repeat them when picked', () => {
     const rows = snippetsProblemRows(['[snippets.a] has no `text`']);
     assert.equal(rows.length, 1);

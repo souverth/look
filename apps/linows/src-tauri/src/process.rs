@@ -13,6 +13,70 @@ pub struct RunningApp {
     pub exec: Option<String>,
 }
 
+/// One top-level window for the `w"` finder. `id` is what `activate_running_app`
+/// takes as `desktop_id` (`hwnd:<handle>`), so picking a row raises exactly this
+/// window and not just some window of its app.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct WindowInfo {
+    pub id: String,
+    pub title: String,
+    /// The app's name, or empty when the title already is it (a UWP window).
+    pub app: String,
+    /// Where its icon comes from.
+    pub exe_path: Option<String>,
+    pub minimized: bool,
+}
+
+/// What a title or app name scores when it starts with the query.
+const WINDOW_PREFIX_SCORE: i64 = 2_000;
+
+/// The windows matching `query`, best first, at most `limit`. Every word typed
+/// has to appear in the app name and title together, so `chrome gmail` finds the
+/// Gmail tab of Chrome. A title or app name that starts with the query ranks
+/// above one that merely holds it, and ties keep the order they came in, which
+/// is front to back. A blank query lists them all in that order.
+pub fn rank_windows(windows: Vec<WindowInfo>, query: &str, limit: usize) -> Vec<WindowInfo> {
+    let query = look_matching::normalize_for_search(query.trim());
+    let mut scored: Vec<(i64, WindowInfo)> = windows
+        .into_iter()
+        .filter_map(|w| {
+            if query.is_empty() {
+                return Some((0, w));
+            }
+            let title = look_matching::normalize_for_search(&w.title);
+            let app = look_matching::normalize_for_search(&w.app);
+            let prefix = (title.starts_with(&query) || app.starts_with(&query))
+                .then_some(WINDOW_PREFIX_SCORE);
+            let together =
+                look_matching::text_match_score_normalized(&query, &format!("{app} {title}"));
+            prefix.max(together).map(|score| (score, w))
+        })
+        .collect();
+    scored.sort_by_key(|(score, _)| std::cmp::Reverse(*score));
+    scored.into_iter().take(limit).map(|(_, w)| w).collect()
+}
+
+/// Every window you could switch to, narrowed by `query`. Windows only so far:
+/// the Linux compositors each expose window titles differently (or not at all),
+/// so there is nothing to list yet and the finder says so.
+#[tauri::command(async)]
+pub fn list_windows(query: String, limit: usize) -> Vec<WindowInfo> {
+    #[cfg(target_os = "windows")]
+    {
+        rank_windows(
+            crate::platform::windows::process::list_windows(),
+            &query,
+            limit,
+        )
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (query, limit);
+        Vec::new()
+    }
+}
+
 /// One row in the `ps"` finder: a raw process, not desktop-matched like
 /// `RunningApp`. Kept minimal so enumeration stays cheap; richer fields are
 /// fetched per-selection via `process_detail`.
@@ -458,6 +522,82 @@ mod tests {
             icon_source: None,
             ports: ports.to_vec(),
         }
+    }
+
+    fn window(n: u32, app: &str, title: &str) -> WindowInfo {
+        WindowInfo {
+            id: format!("hwnd:{n}"),
+            title: title.to_string(),
+            app: app.to_string(),
+            exe_path: None,
+            minimized: false,
+        }
+    }
+
+    fn ids(windows: &[WindowInfo]) -> Vec<&str> {
+        windows.iter().map(|w| w.id.as_str()).collect()
+    }
+
+    fn sample_windows() -> Vec<WindowInfo> {
+        vec![
+            window(
+                1,
+                "Visual Studio Code",
+                "main.rs - rust project - Visual Studio Code",
+            ),
+            window(2, "Google Chrome", "Inbox (3) - Gmail - Google Chrome"),
+            window(3, "Google Chrome", "Rust docs - Google Chrome"),
+            window(4, "", "Settings"),
+        ]
+    }
+
+    #[test]
+    fn a_blank_query_lists_windows_front_to_back() {
+        let all = rank_windows(sample_windows(), "  ", 10);
+        assert_eq!(ids(&all), ["hwnd:1", "hwnd:2", "hwnd:3", "hwnd:4"]);
+        assert_eq!(
+            ids(&rank_windows(sample_windows(), "", 2)),
+            ["hwnd:1", "hwnd:2"]
+        );
+    }
+
+    #[test]
+    fn words_may_come_from_the_app_and_the_title_together() {
+        let found = rank_windows(sample_windows(), "chrome gmail", 10);
+        assert_eq!(
+            ids(&found),
+            ["hwnd:2"],
+            "the Gmail tab, not every Chrome window"
+        );
+        assert_eq!(
+            ids(&rank_windows(sample_windows(), "gmail chrome", 10)),
+            ["hwnd:2"]
+        );
+        assert!(rank_windows(sample_windows(), "firefox", 10).is_empty());
+    }
+
+    #[test]
+    fn a_name_that_starts_with_the_query_beats_one_that_holds_it() {
+        // "rust" starts window 3's title and is only inside window 1's.
+        let found = rank_windows(sample_windows(), "rust", 10);
+        assert_eq!(ids(&found), ["hwnd:3", "hwnd:1"]);
+        // "settings" matches a UWP window by title alone.
+        assert_eq!(
+            ids(&rank_windows(sample_windows(), "SETTINGS", 10)),
+            ["hwnd:4"]
+        );
+    }
+
+    #[test]
+    fn equal_matches_keep_their_front_to_back_order() {
+        let found = rank_windows(sample_windows(), "chrome", 10);
+        assert_eq!(ids(&found), ["hwnd:2", "hwnd:3"]);
+    }
+
+    #[test]
+    fn accents_fold_in_window_titles() {
+        let windows = vec![window(9, "Notepad", "Họp nhóm - Notepad")];
+        assert_eq!(ids(&rank_windows(windows, "hop nhom", 10)), ["hwnd:9"]);
     }
 
     fn score(row: &ProcRow, query: &str) -> Option<i64> {

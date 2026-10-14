@@ -13,6 +13,7 @@ import * as agentsCmd from './screens/commands/agents.js';
 import * as layoutEditor from './screens/layout-editor.js';
 import * as quickcapture from './components/quickcapture.js';
 import * as snippets from './components/snippets.js';
+import * as windowfinder from './components/windowfinder.js';
 import { listChecks } from './icons.js';
 import * as settings from './screens/settings.js';
 import { mountUpdateWidget } from './screens/update_widget.js';
@@ -62,6 +63,7 @@ import {
     isTagQuery,
     NOTES_PREFIX,
     SNIPPETS_PREFIX,
+    WINDOWS_PREFIX,
     parseQuickCapture,
 } from './catalog.js';
 
@@ -680,6 +682,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 mode: 'notes',
                 filtered: value.slice(NOTES_PREFIX.length).trim() !== '',
             });
+        } else if (search.isWindowsMode()) {
+            renderMainHint();
+            results.setEmptyState({
+                mode: 'windows',
+                filtered: value.slice(WINDOWS_PREFIX.length).trim() !== '',
+                supported: platform.isWindows(),
+            });
         } else if (search.isSnippetsMode()) {
             renderMainHint();
             results.setEmptyState({
@@ -742,6 +751,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             case 'snippet':
                 snippets.paste(classified.id);
+                return;
+            case 'window':
+                windowfinder.switchTo(classified.id).then((raised) => {
+                    if (!raised) queryInput.dispatchEvent(new Event('input'));
+                });
                 return;
             case 'quick':
                 quickcapture.runQuick(classified).then((outcome) => {

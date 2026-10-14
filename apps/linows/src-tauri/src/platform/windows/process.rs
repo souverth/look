@@ -5,7 +5,7 @@
 //! is bypassed for any process that owns a visible window, so UWP apps like
 //! Windows Terminal still show up.
 
-use crate::process::{ProcDetail, ProcRow, RunningApp};
+use crate::process::{ProcDetail, ProcRow, RunningApp, WindowInfo};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Mutex;
@@ -14,6 +14,7 @@ use windows::Wdk::System::Threading::{NtQueryInformationProcess, ProcessCommandL
 use windows::Win32::Foundation::{
     CloseHandle, FILETIME, HANDLE, HWND, LPARAM, MAX_PATH, TRUE, UNICODE_STRING,
 };
+use windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
 use windows::Win32::NetworkManagement::IpHelper::{
     GetExtendedTcpTable, MIB_TCP_STATE_LISTEN, MIB_TCP6ROW_OWNER_PID, MIB_TCPROW_OWNER_PID,
     TCP_TABLE_OWNER_PID_LISTENER,
@@ -34,7 +35,7 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GW_OWNER, GWL_EXSTYLE, GetForegroundWindow, GetShellWindow, GetWindow,
-    GetWindowLongW, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
+    GetWindowLongW, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsIconic,
     IsWindowVisible, WS_EX_TOOLWINDOW,
 };
 use windows::core::{BOOL, PWSTR};
@@ -575,6 +576,9 @@ unsafe extern "system" fn switchable_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
     if hwnd == ctx.shell || !unsafe { IsWindowVisible(hwnd).as_bool() } {
         return TRUE;
     }
+    if is_ghost_window(hwnd) {
+        return TRUE;
+    }
     // Owned windows are dialogs/popups, not the app's main frame.
     if let Ok(owner) = unsafe { GetWindow(hwnd, GW_OWNER) }
         && !owner.0.is_null()
@@ -608,6 +612,63 @@ unsafe extern "system" fn switchable_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
     }
     ctx.out.push((hwnd.0 as isize, pid, title));
     TRUE
+}
+
+/// `DWM_CLOAKED_APP`: the app hid the window itself. A suspended UWP app leaves
+/// such a window behind ("Microsoft Text Input Application"), visible to
+/// `IsWindowVisible` and absent from Alt+Tab. A window on another virtual
+/// desktop is cloaked by the shell instead (`DWM_CLOAKED_SHELL`) and stays
+/// listed: switching to it switches desktop.
+const DWM_CLOAKED_APP: u32 = 1;
+
+fn is_ghost_window(hwnd: HWND) -> bool {
+    let mut cloaked = 0u32;
+    let read = unsafe {
+        DwmGetWindowAttribute(
+            hwnd,
+            DWMWA_CLOAKED,
+            &mut cloaked as *mut u32 as *mut core::ffi::c_void,
+            std::mem::size_of::<u32>() as u32,
+        )
+    };
+    read.is_ok() && cloaked & DWM_CLOAKED_APP != 0
+}
+
+/// Every switchable window, front to back, one entry each: what the `w"`
+/// finder lists. Unlike `list_gui` it keeps an app's several windows apart,
+/// since which one you want is the point.
+pub(crate) fn list_windows() -> Vec<WindowInfo> {
+    let current_pid = unsafe { GetCurrentProcessId() };
+    enumerate_switchable_windows()
+        .into_iter()
+        .filter(|(_, pid, _)| *pid != 0 && *pid != 4 && *pid != current_pid)
+        .filter_map(|(hwnd_raw, pid, title)| {
+            let exe_path = resolve_full_path(pid).unwrap_or_default();
+            let basename = Path::new(&exe_path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            let is_frame_host = basename.eq_ignore_ascii_case("applicationframehost.exe");
+            if !is_frame_host && is_system_noise(&basename) {
+                return None;
+            }
+            // A UWP window's title already is the app's name ("Settings").
+            let app = if is_frame_host {
+                String::new()
+            } else {
+                resolve_display_name(&basename, &exe_path, &title)
+            };
+            let minimized = unsafe { IsIconic(HWND(hwnd_raw as *mut core::ffi::c_void)).as_bool() };
+            Some(WindowInfo {
+                id: format!("hwnd:{hwnd_raw}"),
+                title,
+                app,
+                exe_path: (!exe_path.is_empty()).then_some(exe_path),
+                minimized,
+            })
+        })
+        .collect()
 }
 
 // --- filtering / naming ---

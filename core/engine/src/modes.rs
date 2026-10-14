@@ -13,6 +13,8 @@ pub enum Platforms {
     MacOnly,
     /// Linux and Windows, which share the Tauri shell; macOS has not got it yet.
     LinuxWindows,
+    /// Needs something only Windows exposes, such as every window's title.
+    WindowsOnly,
 }
 
 impl Platforms {
@@ -21,6 +23,7 @@ impl Platforms {
             Platforms::All => None,
             Platforms::MacOnly => Some("macOS only"),
             Platforms::LinuxWindows => Some("Linux and Windows only"),
+            Platforms::WindowsOnly => Some("Windows only"),
         }
     }
 
@@ -29,6 +32,7 @@ impl Platforms {
             Platforms::All => true,
             Platforms::MacOnly => cfg!(target_os = "macos"),
             Platforms::LinuxWindows => !cfg!(target_os = "macos"),
+            Platforms::WindowsOnly => cfg!(target_os = "windows"),
         }
     }
 }
@@ -73,6 +77,13 @@ pub const MODES: &[Mode] = &[
         prefix: "n\"",
         platforms: Platforms::LinuxWindows,
         about: "your notes, newest first",
+    },
+    Mode {
+        name: "windows",
+        aliases: &["win", "window", "w"],
+        prefix: "w\"",
+        platforms: Platforms::WindowsOnly,
+        about: "open windows, front to back",
     },
     Mode {
         name: "snippets",
@@ -274,6 +285,7 @@ pub fn list_json() -> String {
                     Platforms::All => "all",
                     Platforms::MacOnly => "macos",
                     Platforms::LinuxWindows => "linux-windows",
+                    Platforms::WindowsOnly => "windows",
                 },
             })
         })
@@ -603,6 +615,18 @@ mod tests {
             shown("n\"trip")
         };
         assert_eq!(parse(&["notes", "trip"]), expected);
+    }
+
+    #[test]
+    fn windows_open_the_window_finder_only_where_titles_can_be_listed() {
+        assert_eq!(resolve("win").unwrap().name, "windows");
+        assert_eq!(resolve("w").unwrap().name, "windows");
+        let expected = if cfg!(target_os = "windows") {
+            shown("w\"chrome")
+        } else {
+            Launch::UnavailableMode("windows".to_string())
+        };
+        assert_eq!(parse(&["windows", "chrome"]), expected);
     }
 
     #[test]

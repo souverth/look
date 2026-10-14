@@ -377,6 +377,11 @@ export async function notesSearch(query, limit) {
     return invoke('notes_search', { query, limit });
 }
 
+// Windows only; empty elsewhere. `{ id, title, app, exe_path, minimized }`, front to back.
+export async function listWindows(query, limit) {
+    return invoke('list_windows', { query, limit });
+}
+
 export async function snippetsSearch(query, limit) {
     return invoke('snippets_search', { query, limit });
 }
