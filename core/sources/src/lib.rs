@@ -10,6 +10,7 @@
 mod collect;
 mod def;
 mod load;
+pub mod lookbook;
 mod rows;
 mod run;
 mod tools;

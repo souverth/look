@@ -6,6 +6,17 @@ No plugin to install, no API to learn. One directory, one file format, four keys
 
 **In a hurry?** [lookbook](https://github.com/kunkka19xx/lookbook) is a collection of ready-made sources: git branches, SSH hosts, docker containers, project folders. Copy one in, reload, done. Come back here when you want to change it.
 
+On Linux and Windows `lookapp` does the copying for you:
+
+```sh
+lookapp sources list                  # what lookbook has
+lookapp sources show git              # the files `add git` would write, in full
+lookapp sources add git               # prints them, installs nothing
+lookapp sources add git --yes         # installs them into ~/.look/sources/
+```
+
+A source is shell commands Look will run, so `add` shows you the files and writes nothing until you repeat it with `--yes`. Each file is read by the same parser Look loads them with first, and is refused if it does not parse, if a block of the same id is already in your sources (ids are unique across the folder), or if a file of that name is there; `--force` replaces a file of the same name, and still refuses a clash with a different one. The files are fetched with `curl` straight from the lookbook repository and nowhere else. Then reload Look with `Ctrl+Shift+;`. To remove one, delete its files from `~/.look/sources/`. On Windows the output appears in the terminal you ran it from.
+
 > **Needs Look v0.6.12 or newer.** Earlier builds do not read `~/.look/sources/`, so nothing in this guide applies to them. 0.6.12 is not released yet: build from `main` ([DEVELOPMENT.md](../DEVELOPMENT.md)) to use sources today.
 
 > **Platform note.** Sources work identically on macOS, Linux, and Windows: same directory, same format, same parser. Only two things differ. Shortcuts are written here with macOS modifiers, so read `Cmd` as `Ctrl` on Linux and Windows. And the example commands are macOS ones, so `open -a Slack` becomes whatever launches Slack on your system, and `open {path}` becomes `xdg-open {path}` on Linux or `start "" {path}` on Windows. Steps run through `cmd` on Windows and a POSIX shell everywhere else, and placeholders are escaped for whichever shell will actually read them.

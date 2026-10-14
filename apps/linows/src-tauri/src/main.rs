@@ -28,6 +28,7 @@ mod qactions;
 mod shell;
 mod snippets;
 mod sources;
+mod sources_cli;
 mod state;
 mod sysinfo;
 mod todo;
@@ -672,6 +673,10 @@ fn main() {
         modes::Launch::ListModes => {
             print!("{}", modes::list_text());
             return;
+        }
+        modes::Launch::Sources(args) => {
+            sources_cli::attach_parent_console();
+            std::process::exit(sources_cli::run(args));
         }
         modes::Launch::UnknownMode(name) => {
             eprintln!("lookapp: unknown mode \"{name}\"\n\n{}", modes::list_text());

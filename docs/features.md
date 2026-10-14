@@ -140,6 +140,7 @@ This document tracks what `look` supports today and what is planned next.
 - `aliases`, `bias`, `icon`, and `enabled` per block; unknown keys reported, never fatal
 - `run` rows are refreshed on reload (`Cmd+Shift+;`) and cached in `~/.look/cache/rows/`, so a failed command keeps the last good rows and their ranking
 - shared `core/sources` engine on macOS, Linux, and Windows. See [`docs/user-sources.md`](user-sources.md), and [lookbook](https://github.com/kunkka19xx/lookbook) for ready-made sources to copy
+- `lookapp sources list | show <name> | add <name> [--yes] [--force]` (Linux, Windows) installs a lookbook source into `~/.look/sources/` for you: it fetches the folder with `curl`, parses every file with the loader's own parser, refuses an existing file or block id, prints the files in full, and writes nothing until `--yes`. All or nothing: a failed write takes back the files before it
 
 ### Settings and runtime config
 

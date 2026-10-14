@@ -41,6 +41,11 @@ pub(crate) fn look_modes_parse_json_impl(argv_json: *const c_char) -> *mut c_cha
         modes::Launch::UnavailableMode(name) => {
             serde_json::json!({ "kind": "unavailable_mode", "name": name })
         }
+        // `lookapp sources` is implemented by the Tauri shell only; macOS says so
+        // the way it says any mode it lacks.
+        modes::Launch::Sources(_) => {
+            serde_json::json!({ "kind": "unavailable_mode", "name": modes::SOURCES_COMMAND })
+        }
     };
     allocate(value.to_string())
 }

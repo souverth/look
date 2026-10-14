@@ -212,6 +212,10 @@ pub const MODES: &[Mode] = &[
 pub const RELOAD_CONFIG_COMMAND: &str = "reload-config";
 const RELOAD_CONFIG_FLAG: &str = "--reload-config";
 const RELOAD_CONFIG_ABOUT: &str = "re-read the config in the running Look, no window";
+/// Not a mode either: `lookapp sources list|show|add`, which installs the
+/// ready-made sources of lookbook into `~/.look/sources/`.
+pub const SOURCES_COMMAND: &str = "sources";
+const SOURCES_ABOUT: &str = "list, show or install ready-made sources (Linux, Windows)";
 const COMMANDS_HEADING: &str = "commands:";
 
 /// The single resolution point: an unmatched name is where a future fallback
@@ -265,8 +269,8 @@ pub fn list_text() -> String {
         ));
     }
     out.push_str(&format!(
-        "\n{COMMANDS_HEADING}\n{:<width$}  {RELOAD_CONFIG_ABOUT}\n",
-        RELOAD_CONFIG_COMMAND
+        "\n{COMMANDS_HEADING}\n{:<width$}  {RELOAD_CONFIG_ABOUT}\n{:<width$}  {SOURCES_ABOUT}\n",
+        RELOAD_CONFIG_COMMAND, SOURCES_COMMAND
     ));
     out
 }
@@ -306,6 +310,10 @@ pub enum Launch {
     ListModes,
     ReloadConfig,
     Toggle,
+    /// `lookapp sources ...`: list, show or install ready-made sources. The
+    /// arguments after `sources`, for the shell that implements it; a command, not
+    /// a mode, so it opens no window.
+    Sources(Vec<String>),
     /// Named a mode and got it wrong. An error because they were specific,
     /// unlike a bare word that just means "open".
     UnknownMode(String),
@@ -329,6 +337,12 @@ where
         && (first.eq_ignore_ascii_case(RELOAD_CONFIG_COMMAND) || first == RELOAD_CONFIG_FLAG)
     {
         return Launch::ReloadConfig;
+    }
+
+    if let Some(first) = args.first()
+        && first.eq_ignore_ascii_case(SOURCES_COMMAND)
+    {
+        return Launch::Sources(args[1..].to_vec());
     }
 
     // Before any flag parsing, so the rest is the term verbatim:
@@ -639,6 +653,23 @@ mod tests {
             shown("s\"sig")
         };
         assert_eq!(parse(&["snippets", "sig"]), expected);
+    }
+
+    #[test]
+    fn sources_is_a_command_that_keeps_its_arguments_verbatim() {
+        assert_eq!(parse(&["sources"]), Launch::Sources(vec![]));
+        assert_eq!(
+            parse(&["sources", "add", "git", "--yes"]),
+            Launch::Sources(vec!["add".into(), "git".into(), "--yes".into()])
+        );
+        assert_eq!(
+            parse(&["SOURCES", "list"]),
+            Launch::Sources(vec!["list".into()])
+        );
+        assert!(resolve(SOURCES_COMMAND).is_none(), "a command, not a mode");
+        assert!(list_text().contains(SOURCES_COMMAND));
+        // Anything else that merely mentions the word is untouched.
+        assert_eq!(parse(&["--query", "sources"]), shown("sources"));
     }
 
     #[test]
