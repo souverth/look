@@ -8,6 +8,9 @@
 use serde::{Deserialize, Serialize};
 use std::f64::consts;
 
+mod convert;
+pub use convert::eval_conversion;
+
 /// Factorials above this overflow f64.
 const MAX_FACTORIAL: u64 = 170;
 
@@ -42,8 +45,12 @@ enum Aliases {
     Standalone,
 }
 
-/// Evaluate an expression into its display and clipboard forms.
+/// Evaluate an expression into its display and clipboard forms. A unit
+/// conversion (`10km to mi`) answers too, so the `/calc` panel takes one.
 pub fn eval(expr: &str) -> Result<Calculation, String> {
+    if let Some(conversion) = eval_conversion(expr) {
+        return Ok(conversion);
+    }
     let value = eval_value(expr)?;
     Ok(Calculation {
         display: format_display(value),
@@ -56,6 +63,9 @@ pub fn eval(expr: &str) -> Result<Calculation, String> {
 /// enough to run on every keystroke without a debounce.
 pub fn eval_query(query: &str) -> Option<Calculation> {
     let expr = normalize(query);
+    if let Some(conversion) = eval_conversion(expr) {
+        return Some(conversion);
+    }
     is_math(expr).then(|| eval(expr).ok())?
 }
 

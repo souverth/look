@@ -19,6 +19,7 @@ This document tracks what `look` supports today and what is planned next.
 - path-fragment friendly matching (slash-biased queries)
 - URL-like queries (no prefix): typing a URL offers an **Open in browser** row (structural URLs rank first, a bare `host.tld` after local results); opened URLs return as frecency-ranked **Recently opened** rows
 - arithmetic queries (no prefix): typing an expression (`2+2`, `sqrt(16)`, `200*15%`) pins a **Calculator** row above every other result; shape decides whether something counts as math, not spacing, so a date, a resolution, or a ratio (`20-05-2026`, `1920x1080`, `16:9`) is left alone. `Enter` or a click copies the value and hides the launcher; clipboard history shows the worked expression (`2+2 = 4`) but still pastes just the value. Shared `core/calc` engine on macOS, Linux, and Windows
+- unit conversion in the same row (and in `/calc`), offline: `10km to mi`, `100 f to c`, `2 hours to min`, `1 gib to mb`. A number, a connector (`to`, `in`, `as`, `->`) and two units of one kind (length, mass, volume, area, speed, time, data size, temperature) - anything else is left to the search. Answers keep seven significant digits and copy with their unit. Currency stays with the web answer card; time zones are not covered
 - open with `Enter`, reveal in Finder with `Cmd+F`
 - copy selected file/folder path/content handle with `Cmd+C`
 - multi-pick files/folders with `Cmd+P` (toggle); picked set is mirrored to the system pasteboard for paste anywhere. `Cmd+Shift+P` clears the set

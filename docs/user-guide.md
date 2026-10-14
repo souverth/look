@@ -335,6 +335,14 @@ Built-in commands:
 - `1920x1080` -> `2,073,600` (`x` as an alias for multiply, honored even glued to digits inside `/calc`)
 - `1,500 + 1` -> `1,501` (comma-grouped input round-trips)
 
+Unit conversion works the same way, in the search box and in `/calc`, offline: a number, a unit, `to` / `in` / `as` / `->`, a unit.
+
+- `10km to mi` -> `6.213712 mi`, `70 kg in lb` -> `154.3236 lb`, `2*5 km to m` -> `10,000 m`
+- `100 f to c` -> `37.77778 °C` (temperatures: `c`, `f`, `k`)
+- `1 gib to mb` -> `1,073.742 MB`. Capital `B` is bytes and lowercase `b` is bits; `Mb` is a megabit, `MB` and `mb` are megabytes
+- Length, mass, volume (US gallons and cups), area, speed, time up to weeks, data size and temperature. The two units must measure the same thing, so `5 kg to m` shows nothing. `Enter` copies the answer with its unit
+- Money is answered by the web card (`100 usd to vnd`, needs AI answers on) because rates change. Time zones are not supported yet
+
 `speed` quick reference:
 
 - The test starts when the panel opens, unless the last reading is under a minute old. `R` runs a fresh one, `Escape` leaves
