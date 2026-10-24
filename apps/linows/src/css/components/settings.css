@@ -649,12 +649,20 @@ html:not([data-os="linux"]) .settings-linux-only {
     line-height: 1.5;
 }
 
+/* The Theme row sits above its save row; give both room to breathe. */
+.settings-section-header:has(+ .theme-actions) {
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    padding-bottom: 6px;
+}
+
 .theme-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 8px;
-    margin-bottom: 8px;
+    gap: 8px 12px;
+    margin-top: 10px;
+    margin-bottom: 12px;
 }
 
 .theme-actions .settings-text-input {
