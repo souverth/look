@@ -104,7 +104,7 @@ const NOTICE_ERROR: f32 = 1.6;
 pub(crate) const NOTICE_WARNING: f32 = 5.0;
 
 const PLACEHOLDER: &str = "--";
-const TEMP_PLACEHOLDER: &str = "--Â°";
+const TEMP_PLACEHOLDER: &str = "--°";
 const RAIN_PLACEHOLDER: &str = "--%";
 const IDLE_TITLE: &str = "Nothing playing";
 const ALL_CLEAR: &str = "All clear";
@@ -1847,7 +1847,7 @@ mod tests {
         assert_eq!(mnemonic_range("Shut Down", 'd'), Some(5..6));
         assert_eq!(mnemonic_range("Wi-Fi", 'x'), None);
         // A multi-byte title still yields a byte range.
-        assert_eq!(mnemonic_range("Ãnh sÃ¡ng", 's'), Some(5..6));
+        assert_eq!(mnemonic_range("Ánh sáng", 's'), Some(5..6));
     }
 
     #[test]
