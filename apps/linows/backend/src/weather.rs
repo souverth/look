@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 const IP_GEOLOCATION_URL: &str = "https://ipwho.is/";
 const OPEN_METEO_URL: &str = "https://api.open-meteo.com/v1/forecast";
+const GEOCODING_URL: &str = "https://geocoding-api.open-meteo.com/v1/search";
 
 /// Skip the network when the cached reading is younger than this.
 const WEATHER_MAX_AGE: Duration = Duration::from_secs(30 * 60);
@@ -45,6 +46,8 @@ pub struct WeatherSnapshot {
 struct Coordinates {
     latitude: f64,
     longitude: f64,
+    /// The `weather_location` these were resolved for; `None` means the IP lookup.
+    place: Option<String>,
     fetched_at: Instant,
 }
 
@@ -56,6 +59,7 @@ struct CachedWeather {
     low: f64,
     rain_chance: Option<i64>,
     is_fahrenheit: bool,
+    place: Option<String>,
     fetched_at: Instant,
 }
 
@@ -85,26 +89,54 @@ fn current() -> Option<WeatherSnapshot> {
     }
 }
 
-/// The cached reading, but only when it was captured in the unit the current
-/// locale wants. After a region change the old value is in the wrong unit, so
-/// it is discarded to force a refetch rather than shown as a bare degree.
+/// The cached reading, but only when it was captured in the unit and for the
+/// place the settings want now. After a region or setting change the old value
+/// is stale, so it is discarded to force a refetch rather than shown as is.
 fn usable_cached() -> Option<CachedWeather> {
+    let place = configured_place();
     WEATHER_CACHE
         .lock()
         .unwrap()
         .clone()
-        .filter(|c| c.is_fahrenheit == uses_fahrenheit())
+        .filter(|c| c.is_fahrenheit == uses_fahrenheit() && c.place == place)
+}
+
+// --- Settings ---------------------------------------------------------------
+
+/// A `key=value` line from `~/.look/config`. The file is small and read only
+/// when the cache is consulted, so a change applies without a restart.
+fn config_value(key: &str) -> Option<String> {
+    let text = std::fs::read_to_string(crate::config::config_file_path()).ok()?;
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.starts_with('#'))
+        .filter_map(|line| line.split_once('='))
+        .find(|(name, _)| name.trim() == key)
+        .map(|(_, value)| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+/// `weather_location`: a place name to use instead of the IP lookup.
+fn configured_place() -> Option<String> {
+    config_value("weather_location")
 }
 
 // --- Location ---------------------------------------------------------------
 
 fn coordinates() -> Option<Coordinates> {
+    let place = configured_place();
     if let Some(cached) = LOCATION_CACHE.lock().unwrap().clone()
         && cached.fetched_at.elapsed() < LOCATION_MAX_AGE
+        && cached.place == place
     {
         return Some(cached);
     }
-    let fresh = fetch_coordinates()?;
+    // A named place that cannot be found falls back to the IP lookup, so the
+    // tile still shows something rather than going blank.
+    let fresh = place
+        .as_deref()
+        .and_then(geocode)
+        .or_else(fetch_coordinates)?;
     *LOCATION_CACHE.lock().unwrap() = Some(fresh.clone());
     Some(fresh)
 }
@@ -116,11 +148,28 @@ fn fetch_coordinates() -> Option<Coordinates> {
         Some(Coordinates {
             latitude: body.get("latitude")?.as_f64()?,
             longitude: body.get("longitude")?.as_f64()?,
+            place: None,
             fetched_at: Instant::now(),
         })
     } else {
         None
     }
+}
+
+/// Coordinates for a named place, from Open-Meteo's keyless geocoder.
+fn geocode(place: &str) -> Option<Coordinates> {
+    let url = format!(
+        "{GEOCODING_URL}?name={}&count=1",
+        look_answers::http::encode(place)
+    );
+    let body = look_answers::http::get_json(&url, REQUEST_TIMEOUT_SECS)?;
+    let hit = body.get("results")?.as_array()?.first()?;
+    Some(Coordinates {
+        latitude: hit.get("latitude")?.as_f64()?,
+        longitude: hit.get("longitude")?.as_f64()?,
+        place: Some(place.to_string()),
+        fetched_at: Instant::now(),
+    })
 }
 
 // --- Weather ----------------------------------------------------------------
@@ -150,6 +199,7 @@ fn fetch_weather(coordinates: &Coordinates) -> Option<CachedWeather> {
             .and_then(|a| a.first())
             .and_then(|v| v.as_i64()),
         is_fahrenheit: fahrenheit,
+        place: coordinates.place.clone(),
         fetched_at: Instant::now(),
     })
 }
@@ -159,10 +209,22 @@ fn first_f64(daily: &serde_json::Value, key: &str) -> Option<f64> {
     daily.get(key)?.as_array()?.first()?.as_f64()
 }
 
+/// `weather_unit` (`c` or `f`) wins; otherwise the region decides.
+fn uses_fahrenheit() -> bool {
+    match config_value("weather_unit")
+        .map(|v| v.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("f" | "fahrenheit") => true,
+        Some("c" | "celsius") => false,
+        _ => region_uses_fahrenheit(),
+    }
+}
+
 /// Fahrenheit for US-style locales, Celsius everywhere else. Mirrors the macOS
 /// `Locale.measurementSystem == .us` check, read from the standard locale env.
 #[cfg(not(target_os = "windows"))]
-fn uses_fahrenheit() -> bool {
+fn region_uses_fahrenheit() -> bool {
     ["LC_MEASUREMENT", "LC_ALL", "LANG"]
         .iter()
         .find_map(|key| std::env::var(key).ok().filter(|v| !v.is_empty()))
@@ -173,7 +235,7 @@ fn uses_fahrenheit() -> bool {
 /// region (not the display-format locale, which is en-US even for someone in a
 /// metric country and would wrongly force Fahrenheit).
 #[cfg(target_os = "windows")]
-fn uses_fahrenheit() -> bool {
+fn region_uses_fahrenheit() -> bool {
     use windows::Win32::Globalization::GetUserDefaultGeoName;
     // ISO 3166 two-letter region, e.g. "US", "JP". len counts the trailing NUL.
     let mut buf = [0u16; 16];
@@ -192,7 +254,8 @@ fn uses_fahrenheit() -> bool {
 fn snapshot(reading: &CachedWeather) -> WeatherSnapshot {
     let (symbol, condition) = condition(reading.code);
     WeatherSnapshot {
-        temperature: format_temp(reading.temperature),
+        // The main figure names its unit; the high and low beside it stay short.
+        temperature: format!("{}{}", format_temp(reading.temperature), if reading.is_fahrenheit { "F" } else { "C" }),
         symbol: symbol.to_string(),
         condition: condition.to_string(),
         high: format_temp(reading.high),
