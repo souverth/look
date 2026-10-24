@@ -502,6 +502,15 @@
  * always had. */
 .cmd-note-body-wrap .cmd-note-preview {
     font-size: calc(var(--ed-size) + 1px);
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: text;
+    min-height: 0;
+}
+
+.cmd-note-body-wrap .cmd-note-preview .md-details > summary {
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 /* In the split view the two panes are exactly half each. (Flex-basis 0 would
@@ -515,6 +524,20 @@
 
 .cmd-note-body-wrap[data-view='split'] .cmd-note-preview {
     padding: 14px 18px 20px;
+    overflow-anchor: none;
+}
+
+.cmd-note-body-wrap[data-view='split'] .cmd-note-preview::before,
+.cmd-note-body-wrap[data-view='split'] .cmd-note-preview::after {
+    content: '';
+    display: block;
+    pointer-events: none;
+}
+.cmd-note-body-wrap[data-view='split'] .cmd-note-preview::before {
+    height: var(--preview-align-top, 0px);
+}
+.cmd-note-body-wrap[data-view='split'] .cmd-note-preview::after {
+    height: var(--preview-align-room, 0px);
 }
 
 .cmd-note-body-wrap[data-view='edit'] .cmd-note-preview[hidden],

@@ -320,28 +320,33 @@ export function findCommentBlocks(lines) {
 
 let renderDepth = 0;
 
-export function renderMarkdown(src, offset = 0) {
+export function renderMarkdown(src, offset = 0, options = {}) {
     // Quotes, alerts and folds render their insides through here too; only the
     // outermost call starts the image count over.
     if (renderDepth === 0) pictureCount = 0;
     renderDepth++;
     try {
-        return renderBlocks(src, offset);
+        return renderBlocks(src, offset, options);
     } finally {
         renderDepth--;
     }
 }
 
-function renderBlocks(src, offset) {
+function renderBlocks(src, offset, options) {
     const lines = String(src).replace(/\r\n?/g, '\n').split('\n');
     // Where a comment over several lines starts, and the line it ends on.
     const commentEnds = new Map(findCommentBlocks(lines).map((b) => [b.start, b.end]));
     const html = [];
     let i = 0;
     let para = [];
+    let paraStart = 0;
+    const at = (line) => options.sourceLines ? ` data-source-line="${offset + line}"` : '';
+    const push = (markup, line) => html.push(options.sourceLines
+        ? markup.replace(/^<([a-z][a-z0-9]*)/, `<$1${at(line)}`) : markup);
 
     const flushPara = () => {
-        if (para.length) html.push(`<p>${para.map(inline).join('<br>')}</p>`);
+        if (para.length) html.push(`<p>${para.map((line, n) => options.sourceLines
+            ? `<span${at(paraStart + n)}>${inline(line)}</span>` : inline(line)).join('<br>')}</p>`);
         para = [];
     };
 
@@ -351,11 +356,14 @@ function renderBlocks(src, offset) {
         const fence = line.match(/^```([^`]*)$/);
         if (fence) {
             flushPara();
+            const codeStart = i;
             const code = [];
             i++;
             while (i < lines.length && !/^```\s*$/.test(lines[i])) code.push(lines[i++]);
             i++; // closing fence (or EOF)
-            html.push(codeBlock(code.join('\n'), parseFenceInfo(fence[1])));
+            let block = codeBlock(code.join('\n'), parseFenceInfo(fence[1]));
+            if (options.sourceLines) block = block.replace('<code ', `<code${at(codeStart + 1)} data-source-code-lines="${code.length}" `);
+            push(block, codeStart);
             continue;
         }
 
@@ -380,8 +388,8 @@ function renderBlocks(src, offset) {
                 inner = inner.slice(1);
             }
             html.push(
-                `<details class="md-details"${open ? ' open' : ''}><summary>${inline(summary)}</summary>` +
-                    `<div class="md-details-body">${renderMarkdown(inner.join('\n'), offset + i + 1)}</div></details>`,
+                `<details${at(i)} class="md-details"${open ? ' open' : ''}><summary>${inline(summary)}</summary>` +
+                    `<div class="md-details-body">${renderMarkdown(inner.join('\n'), offset + i + 1 + (sm ? 1 : 0), options)}</div></details>`,
             );
             i = j + 1;
             continue;
@@ -415,10 +423,19 @@ function renderBlocks(src, offset) {
             splitRow(lines[i + 1]).every((c) => /^:?-+:?$/.test(c))
         ) {
             flushPara();
+            const tableStart = i;
             const rows = [lines[i], lines[i + 1]];
             i += 2;
             while (i < lines.length && TABLE_ROW.test(lines[i])) rows.push(lines[i++]);
-            html.push(tableHtml(rows));
+            let table = tableHtml(rows);
+            if (options.sourceLines) {
+                let row = -1;
+                table = table.replace(/<tr>/g, () => {
+                    row++;
+                    return `<tr${at(tableStart + (row === 0 ? 0 : row + 1))}>`;
+                });
+            }
+            push(table, tableStart);
             continue;
         }
 
@@ -426,14 +443,14 @@ function renderBlocks(src, offset) {
         if (heading) {
             flushPara();
             const n = heading[1].length;
-            html.push(`<h${n}>${inline(heading[2])}</h${n}>`);
+            push(`<h${n}>${inline(heading[2])}</h${n}>`, i);
             i++;
             continue;
         }
 
         if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) {
             flushPara();
-            html.push('<hr>');
+            push('<hr>', i);
             i++;
             continue;
         }
@@ -451,14 +468,14 @@ function renderBlocks(src, offset) {
                 const { label, icon } = ALERT_KINDS[kind];
                 // The body starts one line down, so a task in it still points at
                 // its own source line.
-                const body = renderMarkdown(quote.slice(1).join('\n'), offset + quoteStart + 1);
+                const body = renderMarkdown(quote.slice(1).join('\n'), offset + quoteStart + 1, options);
                 html.push(
-                    `<div class="md-alert md-alert-${kind}"><div class="md-alert-title">${icon}<span>${label}</span></div>` +
+                    `<div${at(quoteStart)} class="md-alert md-alert-${kind}"><div class="md-alert-title">${icon}<span>${label}</span></div>` +
                         `<div class="md-alert-body">${body}</div></div>`,
                 );
                 continue;
             }
-            html.push(`<blockquote>${renderMarkdown(quote.join('\n'), offset + quoteStart)}</blockquote>`);
+            push(`<blockquote>${renderMarkdown(quote.join('\n'), offset + quoteStart, options)}</blockquote>`, quoteStart);
             continue;
         }
 
@@ -483,7 +500,7 @@ function renderBlocks(src, offset) {
                     : inline(m[3]);
                 const cls = `md-d${depth}${task ? ' md-task' : ''}${done ? ' md-done' : ''}`;
                 items.push(
-                    `<li class="${cls}"${task ? ` data-line="${offset + i}"` : ''} data-n="${ordinal(depth, counts[depth])}">${body}</li>`,
+                    `<li${at(i)} class="${cls}"${task ? ` data-line="${offset + i}"` : ''} data-n="${ordinal(depth, counts[depth])}">${body}</li>`,
                 );
                 i++;
             }
@@ -492,6 +509,7 @@ function renderBlocks(src, offset) {
             continue;
         }
 
+        if (!para.length) paraStart = i;
         para.push(line);
         i++;
     }

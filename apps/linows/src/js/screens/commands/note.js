@@ -42,6 +42,7 @@ import { TAG_HUES, tagPicks, tagIndex, swatchStyle, tagStyle } from './note-tag-
 import { highlightCodeBlocks, copyCode } from './note-code.js';
 import { createEditing } from './note-editing.js';
 import { createEditorView } from './note-editor-view.js';
+import { alignPreview } from './note-preview-sync.js';
 import { tableEnter, tableTab, tableMove } from './note-table.js';
 import { moveLines, duplicateLines, deleteLines, openLine, joinLines, toggleComment, toggleBlockComment, shiftLevel, setHeading } from './note-lines.js';
 import { tagContext, filterTags, tagInsert, closeOnGreater } from './note-tags.js';
@@ -357,6 +358,7 @@ export function init() {
     // A range selected shows the toolbar; the mouse and the keys both make one.
     for (const type of ['mouseup', 'keyup', 'select']) {
         bodyEl.addEventListener(type, updateBubble);
+        bodyEl.addEventListener(type, () => requestAnimationFrame(syncPreviewScroll));
     }
     suggestEl.addEventListener('mousedown', (e) => {
         // mousedown, not click: the click would blur the textarea first.
@@ -366,6 +368,9 @@ export function init() {
         applySuggestion(suggestItems[Number(row.dataset.i)]);
     });
 
+    previewEl.addEventListener('load', syncPreviewScroll, true);
+    previewEl.addEventListener('toggle', () => requestAnimationFrame(syncPreviewScroll), true);
+    if (typeof ResizeObserver === 'function') new ResizeObserver(() => requestAnimationFrame(syncPreviewScroll)).observe(previewEl);
     load();
     // Pictures no note mentions any more are cleared out a little after start-up, once
     // the notes have loaded and the launcher is idle.
@@ -1003,6 +1008,11 @@ function setMode(next) {
     });
     hideSuggest();
     hideBubble();
+    if (next !== 'split') {
+        previewTopSpace = 0;
+        previewEl.style.removeProperty('--preview-align-top');
+        previewEl.style.removeProperty('--preview-align-room');
+    }
     paneEl.hidden = next === 'preview';
     previewEl.hidden = next === 'edit';
     if (next !== 'edit') renderPreview();
@@ -1047,35 +1057,18 @@ function schedulePreview() {
     }, PREVIEW_DELAY_MS);
 }
 
-// Scrolls the preview to the same fraction of its length as the editor, so the
-// two stay roughly abreast without knowing which line is which.
-// The preview glides to its place rather than jumping: each frame covers a share
-// of the distance left, so a fast scroll in the editor is followed smoothly and
-// a re-render that changes the height does not snap the view.
-let previewGoal = 0;
-let previewGlide = 0;
-
+// Align the visible source line, rather than a percentage of two different heights.
+let previewTopSpace = 0;
 function syncPreviewScroll() {
     if (mode !== 'split') return;
-    const room = bodyEl.scrollHeight - bodyEl.clientHeight;
-    const ratio = room > 0 ? bodyEl.scrollTop / room : 0;
-    previewGoal = ratio * Math.max(0, previewEl.scrollHeight - previewEl.clientHeight);
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches || Math.abs(previewGoal - previewEl.scrollTop) < 2) {
-        previewEl.scrollTop = previewGoal;
-        return;
-    }
-    if (previewGlide) return;
-    const step = () => {
-        const gap = previewGoal - previewEl.scrollTop;
-        if (mode !== 'split' || Math.abs(gap) < 0.5) {
-            previewEl.scrollTop = previewGoal;
-            previewGlide = 0;
-            return;
-        }
-        previewEl.scrollTop += gap * 0.3;
-        previewGlide = requestAnimationFrame(step);
-    };
-    previewGlide = requestAnimationFrame(step);
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed && previewEl.contains(selection.anchorNode)) return;
+    const line = caretLineIndex();
+    const point = view.previewAnchor(line);
+    const fallback = point ? null : caretPosition(offsetOfLine(bodyEl.value, line));
+    const anchor = point ?? { line, top: bodyEl.getBoundingClientRect().top + fallback.top };
+    if (!anchor) return;
+    previewTopSpace = alignPreview(previewEl, anchor, previewTopSpace);
 }
 
 // Flips `[ ]` / `[x]` on one source line (also inside a quote) and re-renders
@@ -1108,7 +1101,7 @@ function toggleTask(lineNo) {
 const drawnFrom = new WeakMap();
 
 function renderPreview() {
-    const html = renderMarkdown(bodyEl.value) || '<p class="md-empty">Nothing to preview yet.</p>';
+    const html = renderMarkdown(bodyEl.value, 0, { sourceLines: true }) || '<p class="md-empty">Nothing to preview yet.</p>';
     const next = document.createElement('template');
     next.innerHTML = html;
     const fresh = [...next.content.children];

@@ -534,5 +534,19 @@ export function createEditorView({ stack, textarea, overlay, gutter }) {
         /** What the textarea shows (the note without the folded lines), and where a note offset is in it. */
         displayText: () => (folding() ? map.display : display()),
         toDisplayOffset: toScreen,
+        /** Source row to align in Split: caret if visible, otherwise the top visible row. */
+        previewAnchor(line) {
+            if (overlay.hidden) return null;
+            let index = map.visible.findIndex((row) => row.line >= line);
+            if (index < 0) index = map.visible.length - 1;
+            const bounds = textarea.getBoundingClientRect();
+            let rect = overlay.children[index]?.getBoundingClientRect();
+            if (!rect) return null;
+            if (rect.top < bounds.top || rect.top >= bounds.bottom) {
+                index = [...overlay.children].findIndex((row) => row.getBoundingClientRect().bottom > bounds.top);
+                rect = overlay.children[index]?.getBoundingClientRect();
+            }
+            return rect ? { line: map.visible[index].line, top: rect.top } : null;
+        },
     };
 }
