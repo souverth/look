@@ -68,7 +68,7 @@ The flake exports a Home Manager module for declarative user configuration. Add 
 ```nix
 # flake.nix
 {
-  inputs.look.url = "github:kunkka19xx/look?dir=apps/linows";
+  inputs.look.url = "github:kunkka19xx/look";
 
   outputs = { nixpkgs, home-manager, ... }@inputs: {
     homeConfigurations."me" = home-manager.lib.homeManagerConfiguration {
@@ -117,7 +117,7 @@ nixConfig = {
 
 Nix asks once whether to trust those settings, or pass `--accept-flake-config`. On NixOS the system-wide equivalent is `programs.lookapp.cachix = true` from `nixosModules.default`. Elsewhere, `cachix use look` or `/etc/nix/nix.conf`. Without one of these, Home Manager will build Look from source.
 
-`theme` accepts `catppuccin`, `tokyo-night`, `rose-pine`, `gruvbox`, `dracula`, `kanagawa` (the default), `kindle`, `liquid` and `custom`. Colours are derived from the preset at startup, so the module only writes `ui_theme`, plus the opacity values for `kindle` and `liquid` because those two own them. Use `custom` to drive every `ui_*` value from `settings` instead.
+`theme` accepts `catppuccin`, `tokyo-night`, `rose-pine`, `gruvbox`, `dracula`, `kanagawa` (the default), `kindle`, `liquid` and `custom`. Colours are derived from the preset at startup, so the module only writes `ui_theme`, plus the opacity values for `kindle` and `liquid` because those two own them. Use `custom` to drive every `ui_*` value from `settings` instead. The same names work on macOS: that build spells two of them differently (`tokyoNight`, `rosePine`) and tints `liquid` more lightly, and the module writes whichever spelling and values the installed app understands.
 
 `settings` keys map directly to `~/.look/config` keys and override values derived from `theme`. Lists are written as comma-separated values, except `ignored_patterns_*` and `alias_*`, which Look parses as pipe-separated. `aliases` is the same thing with the prefix filled in, so declaring `aliases.note` and `settings.alias_note` together is an error.
 
@@ -164,7 +164,7 @@ scripts\windows\with-vcvars.bat cargo clippy --manifest-path apps\linows\Cargo.t
 **Installer:** `packaging/windows/look.nsi`, built by `release-windows.yml` with the NSIS on the runner:
 
 ```cmd
-makensis /DVERSION=0.7.2 /DBINARY=apps\linows\target\release\lookapp.exe packaging\windows\look.nsi
+makensis /DVERSION=0.7.3 /DBINARY=apps\linows\target\release\lookapp.exe packaging\windows\look.nsi
 ```
 
 Output `Look_<version>_x64-setup.exe`, per user, silent with `/S`. The MSVC C runtime is static-linked via the workspace-root `.cargo/config.toml`, so it runs on a clean Windows 10/11 install without the VC++ redistributable.
@@ -214,6 +214,7 @@ If FUSE is missing, run with `--appimage-extract-and-run`, or install it (Fedora
 - **Monorepo**: The linows app depends on `core/` crates via path. The full repo checkout is needed to build.
 - **Version**: a tagged release carries the tag (`LOOK_VERSION` at build time). Dev and Nix builds carry `[workspace.package] version` from `apps/linows/Cargo.toml`, so bump it with each release.
 - **NixOS specifics**: the runtime libraries are added to the binary's rpath and the host tools to its PATH by the flake.
+- **One git dependency**: `gpui_ce_wgpu` is patched to a fork (`[patch.crates-io]` in `Cargo.toml`), so a build fetches it from GitHub rather than crates.io. See `gpui/README.md` for why it exists and what to re-pin when it moves.
 
 ---
 
@@ -248,10 +249,10 @@ yay -S look-bin
 
 ```bash
 # Run directly
-nix run 'github:kunkka19xx/look?dir=apps/linows'
+nix run 'github:kunkka19xx/look'
 
 # Install to profile
-nix profile install 'github:kunkka19xx/look?dir=apps/linows'
+nix profile install 'github:kunkka19xx/look'
 
 # Build locally
 cd apps/linows
@@ -264,7 +265,7 @@ nix build .#default
 ```nix
 # flake.nix
 {
-  inputs.look.url = "github:kunkka19xx/look?dir=apps/linows";
+  inputs.look.url = "github:kunkka19xx/look";
 
   outputs = { nixpkgs, look, ... }: {
     nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
@@ -307,14 +308,45 @@ sudo nixos-rebuild switch --flake /path/to/your/flake#hostname
 
 ```nix
 look = {
-  url = "github:kunkka19xx/look?dir=apps/linows";
+  url = "github:kunkka19xx/look";
   inputs.nixpkgs.follows = "nixpkgs";
 };
 ```
 
 Look then builds locally instead of coming from Cachix.
 
-> **Note:** For user-level declarative installation and configuration, use the Home Manager module described above. The NixOS module is intended for system-level configuration. Contributions to add Look to [nixpkgs](https://github.com/NixOS/nixpkgs) are welcome.
+> **Note:** For user-level declarative installation and configuration, use the Home Manager module described above. The NixOS module is intended for system-level configuration. Look is also in [nixpkgs](https://github.com/NixOS/nixpkgs) as `lookapp`, Linux only, and that package builds the Tauri shell rather than the gpui one.
+
+### macOS (flake)
+
+**Status:** Available now, Apple Silicon only.
+
+```bash
+nix profile install 'github:kunkka19xx/look'
+```
+
+The flake sits at the repository root because every Nix output does, but this package is not the `linows` build: it installs the macOS app from `apps/macos`. That one is an Xcode/Swift target and xcodebuild needs Xcode, which is not in nixpkgs, so there is no source build to offer. The derivation takes the signed and notarized `Look.app` from GitHub Releases instead, the same bundle `brew install --cask look` ships. Keeping Apple's signature is the point rather than a shortcut: macOS keys the Accessibility and Automation grants to it, so a locally re-signed bundle would drop every granted permission on each rebuild, silently, with the switches in System Settings still showing as on.
+
+It installs as `Applications/Look.app` plus a `bin/lookapp` symlink to the bundle executable, the CLI layout `scripts/install-look.sh` already uses. Started through the symlink the app hands off to the bundle, so `lookapp clipboard` and `lookapp --toggle` work from a profile install.
+
+Declarative with [nix-darwin](https://github.com/nix-darwin/nix-darwin):
+
+```nix
+# flake.nix
+inputs.look.url = "github:kunkka19xx/look";
+
+# in your darwinSystem modules
+look.darwinModules.default
+{ programs.lookapp.enable = true; }
+```
+
+nix-darwin links the bundle into `/Applications/Nix Apps`, which is what gets Look into Spotlight and into the Accessibility list in System Settings. The [Home Manager module](#home-manager) works unchanged as well, and its `targets.darwin.linkApps` puts the bundle in `~/Applications/Home Manager Apps`.
+
+Three things this does not cover:
+
+- **Intel Macs.** Releases publish one asset per architecture, and the release workflow now builds an `x86_64` zip beside the arm64 one. The flake still leaves `x86_64-darwin` out until `nix/package-darwin.nix` carries that asset's hash; `scripts/nix-bump-darwin.sh` exits 3 when a release ships an architecture the file does not package yet, which is the cue to add the entry.
+- **The binary cache.** `programs.lookapp.cachix` defaults to off on macOS: the package is a fixed-output fetch of the release zip, which every substituter already serves by hash.
+- **A dev shell.** `nix develop` stays Linux-only; the macOS app builds through Xcode (see the repo-root `Makefile`).
 
 ### AppImage (universal)
 

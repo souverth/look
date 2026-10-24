@@ -38,6 +38,9 @@ pub const BIAS_FILE: i64 = -20;
 /// A user declared this row by hand and named it, so a match on that name is
 /// deliberate in a way a file path match is not. Sits with apps, not below them.
 pub const BIAS_ACTION: i64 = 200;
+/// Score for the row the typed line explicitly named, as in `newnote <title>`.
+/// Above every ranked row, because nothing it competes with was named at all.
+pub const PIN_ARG_ROW: i64 = i64::MAX / 2;
 /// On an empty query the launchpad already covers routines, so bundles sit
 /// between apps and folders rather than leading the browse list.
 pub const BROWSE_BOOST_ACTION: i64 = 300;
@@ -565,6 +568,17 @@ clipboard_history_limit=10\n\
 # How long the main query survives while Look is hidden, in seconds. 0 clears\n\
 # it on every hide; a negative value keeps it indefinitely.\n\
 query_retention_seconds=5\n\
+\n\
+# Target languages for the t\" translation panel, comma-separated BCP-47 codes,\n\
+# shown in this order, at most 3. Unknown or duplicate codes are dropped and\n\
+# extras past the third; an empty list falls back to vi,en,ja.\n\
+translate_languages=vi,en,ja\n\
+\n\
+# The hint line along the bottom and the author link. false hides both.\n\
+hints_enabled=true\n\
+\n\
+# Search bar placeholder. Empty shows none.\n\
+search_placeholder=Type whatever you want\n\
 \n\
 {launcher_hotkey_section}\
 # Preferred tools. Name the tool, not a command: Look knows how to drive it,\n\
@@ -1177,6 +1191,13 @@ mod tests {
     #[test]
     fn default_config_contents_include_lazy_indexing_enabled() {
         assert!(default_config_contents().contains("lazy_indexing_enabled=true"));
+    }
+
+    /// The trailing blank line is part of the assertion: without it the comment
+    /// for the next key reads as part of this one.
+    #[test]
+    fn default_config_contents_include_translate_languages() {
+        assert!(default_config_contents().contains("\ntranslate_languages=vi,en,ja\n\n"));
     }
 
     fn config_from(contents: &str, label: &str) -> RuntimeConfig {

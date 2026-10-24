@@ -10,7 +10,7 @@ use look_sources::ParentRow;
 use serde::Serialize;
 use std::os::raw::c_char;
 
-use crate::state::{cstr_to_string, json_cstring_or_null, mark_index_dirty};
+use crate::state::{cstr_to_string, home_dir, json_cstring_or_null, mark_index_dirty};
 
 /// `{id, name, steps, file, then}` for the block a candidate id belongs to, or
 /// the JSON literal `null` when it is not a block row or no longer exists.
@@ -19,11 +19,21 @@ pub(crate) fn look_source_block_json_impl(
     row_id: *const c_char,
     row_title: *const c_char,
     row_path: *const c_char,
+    query: *const c_char,
     ancestors_json: *const c_char,
 ) -> *mut c_char {
     let candidate_id = cstr_to_string(candidate_id);
-    let row = row_context(row_id, row_title, row_path, "", ancestors_json);
+    // The steps shown here are the steps that will run, so a block taking
+    // `{arg}` must be previewed with the argument Enter would use.
+    let query = cstr_to_string(query);
+    let row = row_context(row_id, row_title, row_path, &query, ancestors_json);
     json(look_engine::sources::block_detail(&candidate_id, &row))
+}
+
+/// Everything declared and everything that could not be, for the Extend
+/// screen. Reads both source directories, so call it when that screen opens.
+pub(crate) fn look_installed_json_impl() -> *mut c_char {
+    json(home_dir().map(|home| look_engine::sources::inventory(&home)))
 }
 
 /// Every declared block as `{id, name, icon}`. The shell caches this once per
@@ -94,10 +104,12 @@ pub(crate) fn look_source_preview_json_impl(
     row_id: *const c_char,
     row_title: *const c_char,
     row_path: *const c_char,
+    query: *const c_char,
     ancestors_json: *const c_char,
 ) -> *mut c_char {
     let candidate_id = cstr_to_string(candidate_id);
-    let row = row_context(row_id, row_title, row_path, "", ancestors_json);
+    let query = cstr_to_string(query);
+    let row = row_context(row_id, row_title, row_path, &query, ancestors_json);
     json(look_engine::sources::preview(&candidate_id, &row))
 }
 
@@ -144,14 +156,6 @@ pub(crate) fn look_config_path_impl(dev: bool) -> *mut c_char {
     };
     let resolved = look_engine::config_path::resolve_home_variant(&home, dev);
     json_cstring_or_null(Some(resolved.path.to_string_lossy().into_owned()))
-}
-
-fn home_dir() -> Option<std::path::PathBuf> {
-    std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .map(std::path::PathBuf::from)
 }
 
 #[cfg(test)]

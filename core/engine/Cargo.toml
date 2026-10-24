@@ -6,6 +6,11 @@ license.workspace = true
 authors.workspace = true
 version = "0.1.0"
 
+# Declared rather than left in `src/bin/`, which `.gitignore` drops.
+[[bin]]
+name = "refcon"
+path = "src/refcon.rs"
+
 [dependencies]
 look-indexing = { path = "../indexing" }
 look-matching = { path = "../matching" }
@@ -18,7 +23,7 @@ ignore = "0.4"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.9"
+toml = "1.1"
 unicode-normalization = "0.1"
 globset = "0.4.18"
 

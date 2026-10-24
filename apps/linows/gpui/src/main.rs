@@ -1,6 +1,9 @@
 //! linows drawn by gpui-ce. The backend (`linows_backend`) does the work;
 //! this binary owns the window, the hotkey, and the control socket.
 
+// A GUI subsystem binary, or Windows opens a console beside the launcher.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod actions;
 mod answers;
 mod banner;
@@ -55,6 +58,7 @@ use gpui::{
     PlatformInput, Point, QuitMode, ScrollDelta, ScrollWheelEvent, TouchPhase, WindowBounds,
     WindowOptions, point, px, size,
 };
+use linows_backend::crash;
 use linows_backend::health::HealthIssue;
 #[cfg(target_os = "linux")]
 use linows_backend::host::ClipForm;
@@ -63,7 +67,6 @@ use linows_backend::look_engine::modes as engine_modes;
 use linows_backend::platform::IconCache;
 use linows_backend::query_retention;
 use linows_backend::state::AppState;
-use linows_backend::{crash, launch_query};
 
 use launcher::{Launcher, Retained};
 
@@ -75,6 +78,8 @@ pub enum Command {
     Hide,
     /// `lookapp reload-config` from a second process.
     ReloadConfig,
+    /// `lookapp <mode>`: open on that mode's query, whatever was left up.
+    Launch(String),
     Query(String),
     /// Dev control: a keystroke handed to the launcher, so a probe can reach
     /// what a key reaches without synthesizing one at the compositor.
@@ -97,6 +102,8 @@ pub enum Command {
     Quit,
 }
 
+/// The control socket's prefix for a `lookapp <mode>` query.
+const LAUNCH_COMMAND: &str = "launch ";
 /// How long the backend waits for the main loop's clipboard answer before it
 /// shells out instead.
 #[cfg(target_os = "linux")]
@@ -202,6 +209,13 @@ fn serve_commands(tx: async_channel::Sender<Command>, summon: &str) -> std::io::
                 if stream.read_to_string(&mut text).is_err() {
                     continue;
                 }
+                // Untrimmed: a mode's prefix can end in a meaningful space.
+                if let Some(query) = text.strip_prefix(LAUNCH_COMMAND) {
+                    if tx.send_blocking(Command::Launch(query.to_owned())).is_err() {
+                        break;
+                    }
+                    continue;
+                }
                 let command = match text.trim() {
                     "toggle" => Command::Toggle,
                     "show" => Command::Show,
@@ -266,10 +280,8 @@ fn open(shell: &Shell, cx: &mut App) {
     if shown(cx) {
         return;
     }
-    // What a summon does on every shell: the config may have changed, and so
-    // may the files.
-    theme::load();
-    bindings::load();
+    // The config is read at start and on reload, never here, as on macOS;
+    // the files may have changed since the last summon.
     fonts::ensure_family(cx, &theme::get().font_family);
     host::probe_opaque();
     state().request_index_refresh();
@@ -498,6 +510,23 @@ fn mouse(cx: &mut App, path: &[Point<Pixels>]) {
 
 fn apply(command: Command, cx: &mut App) {
     match command {
+        Command::Launch(text) => {
+            let shell = cx.global::<Shell>().clone();
+            if shown(cx) {
+                hide(cx);
+            }
+            // Only the AI switch survives; the requested mode replaces any
+            // kept query or command screen.
+            {
+                let mut retained = shell.retained.lock().unwrap_or_else(|p| p.into_inner());
+                *retained = Retained {
+                    ai_enabled: retained.ai_enabled,
+                    ..Default::default()
+                };
+            }
+            open(&shell, cx);
+            with_launcher(cx, |launcher, cx| launcher.set_query(&text, cx));
+        }
         Command::Query(text) => with_launcher(cx, |launcher, cx| launcher.set_query(&text, cx)),
         Command::Key(keystroke) => {
             with_launcher(cx, |launcher, cx| launcher.press_key(keystroke.clone(), cx))
@@ -506,12 +535,15 @@ fn apply(command: Command, cx: &mut App) {
         Command::Drag(from, to) => mouse(cx, &[from, to]),
         Command::Wheel(at, lines) => wheel(cx, at, lines),
         Command::Refresh => with_launcher(cx, |launcher, cx| launcher.refresh(cx)),
-        Command::ReloadConfig if !cx.windows().is_empty() => {
+        // Shown, not merely a window: Windows keeps a parked one while hidden.
+        Command::ReloadConfig if shown(cx) => {
             with_launcher(cx, |launcher, cx| launcher.reload_config(cx))
         }
-        // Hidden: no window to carry the banner, so the engine part alone;
-        // the next open reads the theme and the bindings again anyway.
+        // Hidden: no window to carry the banner; the theme and the bindings
+        // load now for the next open, the engine off the UI thread.
         Command::ReloadConfig => {
+            theme::load();
+            bindings::load();
             cx.spawn(async move |cx| {
                 cx.background_executor()
                     .spawn(async {
@@ -562,6 +594,8 @@ fn apply(command: Command, cx: &mut App) {
 }
 
 fn main() {
+    host::tune_heap();
+    host::attach_console();
     crash::install_panic_hook();
 
     if std::env::args().any(|a| a == "--version" || a == "-V") {
@@ -597,10 +631,10 @@ fn main() {
         _ => {}
     }
     // What a second launch hands the running one over the control socket.
-    let summon = if launch == engine_modes::Launch::ReloadConfig {
-        engine_modes::RELOAD_CONFIG_COMMAND
-    } else {
-        "toggle"
+    let summon = match &launch {
+        engine_modes::Launch::ReloadConfig => engine_modes::RELOAD_CONFIG_COMMAND.to_owned(),
+        engine_modes::Launch::Query { text } => format!("{LAUNCH_COMMAND}{text}"),
+        _ => "toggle".to_owned(),
     };
 
     #[cfg(debug_assertions)]
@@ -617,9 +651,11 @@ fn main() {
     linows_backend::host::install(Box::new(shell.clone()));
     // Before the index and the clipboard start: a second launch only hands
     // its summon over and exits.
-    match serve_commands(shell.tx.clone(), summon) {
+    match serve_commands(shell.tx.clone(), &summon) {
         Err(err) if err.kind() == std::io::ErrorKind::AddrInUse => {
-            eprintln!("lookapp: already running, sent {summon}");
+            // The kind only: a launch's text is the user's own input.
+            let kind = summon.split(' ').next().unwrap_or_default();
+            eprintln!("lookapp: already running, sent {kind}");
             return;
         }
         Err(err) => eprintln!("control socket: {err}"),
@@ -637,6 +673,7 @@ fn main() {
         }
         return;
     }
+    host::detach_console();
     state().start_bootstrap();
     // The histories `c"` and `ci"` list: loaded from disk now, then kept by
     // the poll thread.
@@ -656,6 +693,8 @@ fn main() {
     }
 
     motion::set_desktop_reduces(linows_backend::platform::reduce_motion());
+    // The one read until the user reloads.
+    theme::load();
     gpui_platform::application()
         .with_assets(glyphs::Assets)
         .run(move |cx: &mut App| {
@@ -677,8 +716,10 @@ fn main() {
                 );
             }
             if !start_hidden {
-                launch_query::park_launch(&launch);
-                open(&shell, cx);
+                match launch {
+                    engine_modes::Launch::Query { text } => apply(Command::Launch(text), cx),
+                    _ => open(&shell, cx),
+                }
             }
         });
 }

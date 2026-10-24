@@ -303,8 +303,11 @@ Clipboard mode (`c"`):
 
 Translation mode (`t"`/`tw"`):
 
-- supports EN/VI/JA result sections,
-- translation uses network requests.
+- shows one result section per target language, default VI/EN/JA and configurable via `translate_languages` (see File-only settings below), up to three,
+- translation uses network requests,
+- Google Translate answers first. When it throttles your address, MyMemory steps in: free, but capped at about 5,000 characters per day per IP address, shared across every configured language. A 500-character paste with three targets spends 1,500 of that budget, and once it is spent the sections report a rate-limit message until both services accept requests again. Repeating a query in the same session costs nothing, the result is kept.
+- a text longer than about 1,600 characters is more than the MyMemory fallback will take, because one query of that size would spend most of the day's budget. Google still translates it; if Google is throttling you, the sections ask for a shorter selection instead.
+- the **Open in Browser** link opens the web translator for the first language in `translate_languages` (Vietnamese with the default `vi,en,ja`).
 
 ## Command mode
 
@@ -579,9 +582,9 @@ Liquid is the one preset that changes how surfaces are drawn rather than only wh
 - `Blur Opacity` is disabled while Liquid Glass is the blur style, because glass has no blur to thin. Your value is kept and returns when you switch back.
 - The glass follows `Blur Style`, not the theme name, so you can pick `Settings > Appearance > Blur Style > Liquid Glass` on any theme to get the glass surface with that theme's palette. Going the other way, selecting Liquid and then a different blur style keeps Liquid's palette _and_ its rounder corners, and swaps only the material for the classic blur.
 
-On Linux and Windows, Liquid is clear glass rather than frosted: the same palette, the same rounder corners, plus a bright rim along the top edge. Refraction is not available to a web frontend at all - CSS can only blur what the page itself drew, and the desktop behind the window is drawn by the system, not the page.
+On Linux and Windows, Liquid is clear glass rather than frosted: the same palette, the same rounder corners, plus a bright rim along the top edge. Refraction is the compositor's to provide, and no Linux or Windows compositor offers it to a window, so the glass stays clear. Frost is a separate ask, below.
 
-Blur behind the window is the compositor's to grant, and Look asks for it wherever the ask exists: KDE Plasma 6.7+, Hyprland 0.56+ and niri through the `ext-background-effect-v1` protocol, older Plasma through KDE's own, and KWin on X11 through a window property. The switch is `Settings > Advanced > Rendering > Blur behind window` (`ui_compositor_blur`), and it is there on every Linux desktop. It starts on under KWin, where the frost is what it says on the tin, and off everywhere else: taking the request and drawing it well are two different things, so the rest is opt-in until you have looked at it on your own setup. On a desktop that ignores the request the switch does nothing either way.
+Blur behind the window is the compositor's to grant, and Look asks for it wherever the ask exists: KDE Plasma 6.7+, Hyprland 0.56+ and niri through the `ext-background-effect-v1` protocol, older Plasma through KDE's own, and KWin on X11 through a window property. The switch is `Settings > Advanced > Rendering > Blur behind window` (`ui_compositor_blur`), and it is there on every Linux desktop. It starts on in a Plasma session, where the frost is what it says on the tin, and off everywhere else: taking the request and drawing it well are two different things, so the rest is opt-in until you have looked at it on your own setup. On a desktop that ignores the request the switch does nothing either way.
 
 With the frost on, `Blur Opacity` starts thinning the tint so more of it shows through. The compositor blurs all of that area or none of it, so thinning reveals more frost, never a sharp desktop; turning the switch off is what gives you a sharp view through. How strong the frost is belongs to the compositor too
 
@@ -601,7 +604,7 @@ window-rule {
 }
 ```
 
-Then turn `Blur behind window` on. The layer rule is the one that applies when `gtk-layer-shell` is installed and the window rule when it is not, so keeping both covers either. Leave `blur` out of the block: Look already asks over the protocol, and niri's own `blur true` follows `geometry-corner-radius` instead of Look's shape, which frosts the gaps between the floating panes. Dropping xray costs GPU time, since the blur is then sampled every frame rather than once.
+Then turn `Blur behind window` on. Look is a layer-shell surface on niri, so the layer rule is the one that applies; the window rule covers a session where it opened as a plain window, so keeping both covers either. Leave `blur` out of the block: Look already asks over the protocol, and niri's own `blur true` follows `geometry-corner-radius` instead of Look's shape, which frosts the gaps between the floating panes. Dropping xray costs GPU time, since the blur is then sampled every frame rather than once.
 
 Where there is no frost at all (GNOME 50 and earlier, plain sway, X11 without KWin) Look stays clear glass and `Blur Opacity` applies only when you have set a background image. Driving blur from your own compositor config still works; Look's request is additional, not exclusive.
 
@@ -646,6 +649,7 @@ Lazy indexing behavior:
 - settings-only blur multiplier (`Settings Blur`) for readability when settings is open
 - translation privacy and backend log level
 - launch at login
+- the **Shortcuts** tab: every rebindable chord listed by topic with a search box, a recorder on each key capsule, `Reset` per row and `Reset all`, and a notice when two live chords collide. The launcher toggle records here too on macOS and Windows. See [Keyboard shortcuts](#keyboard-shortcuts-quick-reference)
 
 Runtime config file:
 
@@ -659,7 +663,7 @@ NixOS / Home Manager users can manage the same file declaratively through the fl
 
 ```nix
 # flake.nix
-inputs.look.url = "github:kunkka19xx/look?dir=apps/linows";
+inputs.look.url = "github:kunkka19xx/look";
 
 homeConfigurations."me" = home-manager.lib.homeManagerConfiguration {
   inherit pkgs;
@@ -704,7 +708,10 @@ These keys have no control in the Settings screens. Edit `~/.look/config` direct
 - `launcher_hotkey` (global shortcut that shows and hides Look; modifiers `cmd`/`win`, `ctrl`, `alt`/`option`, `shift` plus one key: a letter, digit, `space`, `enter`, `tab`, `esc`, `f1`-`f20`, or a symbol like `` ` ``. Examples: `ctrl+space`, `alt+shift+space`, `f13`. Default `cmd+space` on macOS, `alt+space` on Windows and Linux. `none` stops Look registering any key, so you can bind `lookapp --toggle` in your desktop or a tool like skhd/AutoHotkey instead; Linux accepts only `none` and applies it on restart. An invalid value falls back to the default and the reload banner says why)
 - `shortcut_<group>_<action>` (macOS, and the gpui build on Linux and Windows; an in-app shortcut, same grammar as `launcher_hotkey` plus Shift-only chords on keys that type nothing, like `shift+enter`. The name follows the row in `Settings > Shortcuts`: `shortcut_main_copy`, `shortcut_view_reload_config`. Several chords for one action are separated by `|`. Only rebound shortcuts appear in the file; a chord Look cannot parse is ignored and the shortcut keeps its default)
 - `query_retention_seconds` (how long the main query survives while Look is hidden, in seconds; the first open past it returns to the empty home screen; default 5, `0` clears on every hide, and any negative value keeps the query indefinitely)
+- `translate_languages` (comma-separated language codes for the `t"` translation panel, shown in this order; default `vi,en,ja`. At most three: each one is a separate request and they share the MyMemory daily budget, so anything past the third is dropped. The built-in set is `ar`, `bn`, `de`, `en`, `es`, `fa`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pl`, `pt`, `pt-br`, `ru`, `sv`, `th`, `tr`, `uk`, `vi`, `zh`, `zh-cn`, `zh-tw`. A code outside it is a typo or an unsupported language, so it is dropped from both the labels and the result sections; an empty or all-invalid list falls back to the default)
 - `text_editor`, `code_editor`, `terminal`, `file_manager` (the tools `Cmd+E` / `Cmd+T` / `Cmd+F` act through, see [Preferred tools](#preferred-tools); undeclared means the system default)
+- `hints_enabled` (macOS, and the gpui build on Linux and Windows; the hint line along the bottom of the launcher, with its Todo tally, and the author link. Default `true`; `false` hides all of them on every screen)
+- `search_placeholder` (macOS, and the gpui build on Linux and Windows; the text in the empty search field, shown exactly as written. The config file ships with `search_placeholder=Type whatever you want`; leave the value empty to show no placeholder. As with every value, a ` #` starts a comment)
 
 - `ignored_patterns_<group>` uses gitignore-style path glob syntax: `*`, `**`, `?`, `[abc]`
   - macOS/Linux normally use `/` paths like `~/Library/...` or `/home/name/...`
@@ -835,6 +842,11 @@ shortcut_main_edit=ctrl+shift+e
 - this is usually a focus-handoff timing issue; hide the launcher (`Escape`) and open it again
 - if it reproduces consistently, please file an issue with your macOS version
 
+**Linux - Look shows up in the taskbar or Alt+Tab, or a fullscreen window covers it.**
+
+- on a compositor with `wlr-layer-shell` (KDE Plasma, sway, niri, Hyprland) Look is an overlay surface: above fullscreen windows, out of the taskbar and Alt+Tab, no package needed
+- GNOME has no layer shell, so there Look is an ordinary window that GNOME places and lists while it is open; it disappears when Look hides
+
 **High CPU or slow first launch.**
 
 - the initial index scan is a one-time cost on first run; subsequent launches use the cached SQLite index
@@ -850,10 +862,10 @@ shortcut_main_edit=ctrl+shift+e
 - translation requires network; check connectivity and retry
 - corporate proxies and VPNs can block the translation endpoint
 
-**Linux only - ghost slider trails or overlapping popovers in Settings.**
+**Linux, Tauri backup shell only (`lookapp-tauri`) - ghost slider trails or overlapping popovers in Settings.**
 
-- not one distro's problem: reported on Arch, Ubuntu and inside VMs, while identical webkit builds elsewhere are unaffected, so it is a stack interaction we can't auto-detect
-- open **Settings > Advanced > Rendering** and flip one toggle:
+- a WebKitGTK stack interaction reported on Arch, Ubuntu and inside VMs. The shipping `lookapp` draws with gpui and has no WebKitGTK in the process, so it is not affected and ignores the two keys below
+- in the backup shell, open **Settings > Advanced > Rendering** and flip one toggle:
   - **Disable GPU compositing** (`disable_gpu_compositing`) - keeps blur, fixes the ghost. Requires restart.
   - **Disable blur effect** (`disable_blur_effect`) - drops blur, keeps tint. Takes effect immediately.
 - both default off, and both are Linux-only. Configs written before the rename use `arch_disable_gpu` / `arch_disable_blur`, which are still read

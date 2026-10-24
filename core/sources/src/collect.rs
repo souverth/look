@@ -15,6 +15,7 @@ use crate::run::{RowContext, expand_path};
 /// (a root pointed at the home directory, a runaway script), and the honest
 /// answer is a capped list plus a visible truncation, not a frozen launcher.
 pub const MAX_ROWS_PER_SOURCE: usize = 2_000;
+const MAX_LIST_FILE_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Collected {
@@ -72,7 +73,9 @@ pub fn collect(block: &Block, home: &Path) -> Result<Collected, CollectError> {
             collect_folders(&roots, *depth, *only, include, exclude)
         }
         Producer::File { path, format } => collect_list(&expand_home(path, home), *format),
-        Producer::Run { .. } => Err(CollectError::NeedsRunner),
+        // Both need something to run them. A connector's rows arrive on frames
+        // rather than from a walk, and only the engine holds the process.
+        Producer::Run { .. } | Producer::Connect { .. } => Err(CollectError::NeedsRunner),
     }
 }
 
@@ -101,7 +104,9 @@ pub fn collect_for_row(
         Producer::File { path, format } => {
             collect_list(&expand_home(&expand_path(path, row), home), *format)
         }
-        Producer::Bundle { .. } | Producer::Run { .. } => collect(block, home),
+        Producer::Bundle { .. } | Producer::Run { .. } | Producer::Connect { .. } => {
+            collect(block, home)
+        }
     }
 }
 
@@ -229,8 +234,20 @@ fn sort_rows(rows: &mut [SourceRow]) {
 }
 
 fn collect_list(file: &Path, format: RowFormat) -> Result<Collected, CollectError> {
-    let contents =
-        fs::read(file).map_err(|err| CollectError::Io(format!("{}: {err}", file.display())))?;
+    let io = |err: std::io::Error| CollectError::Io(format!("{}: {err}", file.display()));
+    let mut contents = Vec::new();
+    std::io::Read::read_to_end(
+        &mut std::io::Read::take(fs::File::open(file).map_err(io)?, MAX_LIST_FILE_BYTES + 1),
+        &mut contents,
+    )
+    .map_err(io)?;
+    if contents.len() as u64 > MAX_LIST_FILE_BYTES {
+        return Err(CollectError::Io(format!(
+            "{}: larger than {} MB",
+            file.display(),
+            MAX_LIST_FILE_BYTES / (1024 * 1024)
+        )));
+    }
     let text = String::from_utf8_lossy(&contents);
 
     let (rows, truncated) = parse_rows(&text, MAX_ROWS_PER_SOURCE, format)

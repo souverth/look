@@ -1,0 +1,39 @@
+import Foundation
+import Combine
+
+final class AppUIState: ObservableObject {
+    // Shared instance so AppDelegate (which now owns the launcher NSWindow and
+    // hosts ContentView) and the App scene's `.commands` operate on the same
+    // state. See AppDelegate.makeLauncherWindow().
+    static let shared = AppUIState()
+
+    @Published var showsThemeSettings = false
+
+    // Remembered command id of the last command-mode panel the user
+    // visited *during this launch*. Re-entering command mode (Cmd+/)
+    // resumes there instead of jumping back to /calc. Intentionally
+    // not persisted - each fresh launch should start at /calc.
+    @Published var lastCommandID: String?
+
+    // Set by LauncherView while the empty-query bar rests alone at gap 0. The
+    // bar is then the only surface, and its curve clamps to half its height,
+    // so WindowConfigurator stops rounding the taller window over it.
+    @Published var squaresWindowCorners = false
+}
+
+extension Notification.Name {
+    static let lookReloadConfigRequested = Notification.Name("look.reloadConfigRequested")
+    /// Everything a reload does has happened, connectors included, so a screen
+    /// showing what is declared can re-read it. Distinct from the request
+    /// above: an observer of that one races the reload it asked for.
+    static let lookConfigReloaded = Notification.Name("look.configReloaded")
+    static let lookRefocusInputRequested = Notification.Name("look.refocusInputRequested")
+    /// A row's `then` targets finished loading off the main actor, so the panel
+    /// that showed none can build its action list now.
+    static let lookSourceTargetsLoaded = Notification.Name("look.sourceTargetsLoaded")
+    static let lookFocusSettingsInputRequested = Notification.Name("look.focusSettingsInputRequested")
+    static let lookToggleWindowRequested = Notification.Name("look.toggleWindowRequested")
+    static let lookToggleSettingsRequested = Notification.Name("look.toggleSettingsRequested")
+    static let lookActivateLauncherRequested = Notification.Name("look.activateLauncherRequested")
+    static let lookHideLauncherRequested = Notification.Name("look.hideLauncherRequested")
+}

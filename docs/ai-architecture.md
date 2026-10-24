@@ -10,7 +10,7 @@ Scope: the shared Rust brain and the spine every producer converges on. The macO
 
 The brain is Rust. The shell owns only what is platform-bound: the UI, the system stores, and execution.
 
-> **macOS is the only AI shell.** linows (the Tauri shell) has no AI surface and none is being built. It appears below only to show where a second shell _would_ attach, because that seam is what forces the data-only boundary - not as in-flight work, and not something to build for speculatively.
+> **macOS is the only `core/ai` shell.** linows (the gpui shell) does carry the shared `core/answers` surface, web answers and search suggestions, through `linows_backend::answers`. What it has no surface for is `core/ai`, the on-device model, and none is being built. It appears below only to show where a second `core/ai` shell _would_ attach, because that seam is what forces the data-only boundary - not as in-flight work, and not something to build for speculatively.
 >
 > This is "not planned", not "refused". If you run Linux or Windows and want it, open an issue; demand is what would move it. But go in knowing two things that no amount of shell work fixes: the planner assumes a local model answering in about a second, which leans on Apple Silicon's unified memory more than it looks - the same model on a machine without a capable GPU or enough RAM may be too slow to type against; and there is no unified system calendar to write to on Linux, while Windows' `AppointmentStore` is heavily restricted. Chat and file recall would port cleanly. Calendar acting might never reach parity.
 
@@ -18,7 +18,7 @@ The brain is Rust. The shell owns only what is platform-bound: the UI, the syste
 flowchart TB
     subgraph shells["shells - platform-bound"]
         SW["macOS - Swift/SwiftUI<br/>panel, EventKit, providers, executor"]
-        TA["linows - Tauri/JS<br/>no AI surface · not being built"]
+        TA["linows - gpui<br/>core/answers: web answers + suggestions<br/>no core/ai surface · not being built"]
     end
 
     subgraph bound["boundary - JSON in, JSON out, no closures"]
@@ -35,7 +35,7 @@ flowchart TB
     end
 
     SW --> FFI --> core
-    TA -. "hypothetical: Tauri commands" .-> core
+    TA -. "hypothetical: backend calls" .-> core
 
     classDef unbuilt stroke-dasharray:5 5,opacity:0.55
     class TA unbuilt
@@ -66,7 +66,7 @@ misc       look_ai_markdown_segments_json, look_ai_textop_json,
 
 Ollama health probing stayed Swift-side (`OllamaProvider.probe` + `OllamaHealthCache`): it is a plain `GET /api/tags` plus a cache, and the shell already needs the availability type for its UI. If a second shell ever existed it would want its own equivalent rather than this FFI - which is the reason not to promote it now.
 
-**Build gotcha, and it fails silently.** The static library reaches the link step through `-Wl,-force_load,.../RustBuild/liblook_ffi.a` in `OTHER_LDFLAGS`, and Xcode does not treat a path inside a linker flag as a tracked build input. Adding an FFI symbol fails loudly (undefined `_look_ai_*` at link time), but changing existing Rust behaviour does not: cargo rebuilds the `.a`, nothing triggers a relink, and the app keeps running the previous brain. Delete `apps/macos/LauncherApp/RustBuild/liblook_ffi.a` (or `touch` any Swift file) before rebuilding. Verify with `strings <DerivedData>/.../Look.debug.dylib | grep <a-string-you-added>` - the **dylib**, not the `Look` shim, holds the code in Debug. The real fix, not done: make the `.a` a tracked input, which changes link behaviour for everyone and so deserves its own change.
+**Build gotcha, and it fails silently.** The static library reaches the link step through `-Wl,-force_load,.../RustBuild/liblook_ffi.a` in `OTHER_LDFLAGS`, and Xcode does not treat a path inside a linker flag as a tracked build input. Adding an FFI symbol fails loudly (undefined `_look_ai_*` at link time), but changing existing Rust behaviour does not: cargo rebuilds the `.a`, nothing triggers a relink, and the app keeps running the previous brain. Delete `apps/macos/RustBuild/liblook_ffi.a` (or `touch` any Swift file) before rebuilding. Verify with `strings <DerivedData>/.../Look.debug.dylib | grep <a-string-you-added>` - the **dylib**, not the `Look` shim, holds the code in Debug. The real fix, not done: make the `.a` a tracked input, which changes link behaviour for everyone and so deserves its own change.
 
 ## 2. The doctrine: three tiers, one typed output
 

@@ -7,13 +7,11 @@ Guide for building Look locally and contributing to the project.
 ```text
 .
 ├── apps/
-│   ├── macos/
-│   │   └── LauncherApp/          # Swift macOS app (Xcode project)
+│   ├── macos/                    # Swift macOS app (Xcode project)
 │   └── linows/                   # gpui app, Linux + Windows
 │       ├── gpui/                 #   The shell: window, screens, keys (lookapp)
 │       ├── backend/              #   Everything that is not drawing (shared)
-│       ├── src-tauri/, src/      #   The Tauri shell, kept as the backup
-│       └── flake.nix             #   NixOS dev shell
+│       └── src-tauri/, src/      #   The Tauri shell, kept as the backup
 ├── core/                         # Shared Rust, consumed by every shell
 │   ├── ai/                       # Routing, planning, lexicon
 │   ├── answers/                  # Platform-agnostic "web answer" features
@@ -33,9 +31,15 @@ Guide for building Look locally and contributing to the project.
 │   └── ffi/                      # Rust FFI bridge (consumed by macOS/Windows native apps)
 ├── tools/
 │   └── perf/                     # Watcher / refresh benchmarks (separate crate, never bundled)
+├── packaging/
+│   ├── nix/                      # Package, NixOS, nix-darwin and Home Manager modules
+│   ├── linux/                    # Desktop entry shared by deb, AppImage and Nix
+│   ├── aur/                      # PKGBUILD for look-bin
+│   └── windows/                  # NSIS installer script
 ├── docs/                         # User guide, architecture, design decisions
 ├── scripts/                      # Build, release, install scripts
-└── assets/                       # Icons, screenshots, demo GIF
+├── assets/                       # Icons, screenshots, demo GIF
+└── flake.nix                     # Nix entry point: packages, modules, the Linux dev shell
 ```
 
 ## Prerequisites
@@ -107,7 +111,7 @@ make core-build-x86_64   # core workspace for x86_64-apple-darwin (release)
 make ffi-build-x86_64    # ffi crate for x86_64-apple-darwin (release)
 ```
 
-**The Rust FFI phase.** `apps/macos/LauncherApp/build-rust-ffi.sh` builds the ffi crate for whatever `$ARCHS` Xcode is building and leaves the result at `RustBuild/liblook_ffi.a`. When `$ARCHS` is a single arch and it matches your host, which is every Debug dev loop, it builds without `--target` and keeps `bridge/ffi/target/<profile>` as its only cargo cache, so an Apple Silicon dev loop needs no cross target installed and no second cache. Anything else builds per slice with `--target` and `lipo`s them, which is what an Xcode GUI build against "Any Mac" asks for.
+**The Rust FFI phase.** `apps/macos/build-rust-ffi.sh` builds the ffi crate for whatever `$ARCHS` Xcode is building and leaves the result at `RustBuild/liblook_ffi.a`. When `$ARCHS` is a single arch and it matches your host, which is every Debug dev loop, it builds without `--target` and keeps `bridge/ffi/target/<profile>` as its only cargo cache, so an Apple Silicon dev loop needs no cross target installed and no second cache. Anything else builds per slice with `--target` and `lipo`s them, which is what an Xcode GUI build against "Any Mac" asks for.
 
 A failed cross slice is fatal. Only a host-arch Debug build falls back to reusing the previous `liblook_ffi.a`, and it says so:
 
@@ -118,7 +122,7 @@ warning: Rust build skipped; using existing RustBuild/liblook_ffi.a
 If you see that during an `xcodebuild` run, find the real cargo error by running the phase standalone:
 
 ```bash
-cd apps/macos/LauncherApp && CONFIGURATION=Debug PROJECT_DIR="$PWD" ./build-rust-ffi.sh
+cd apps/macos && CONFIGURATION=Debug PROJECT_DIR="$PWD" ./build-rust-ffi.sh
 ```
 
 **Release builds are stripped.** Release sets `STRIP_INSTALLED_PRODUCT` with `STRIP_STYLE = all`, which takes the binary from 28.1 MB to 14.4 MB because `__LINKEDIT` alone was 14.7 MB of local and debug symbols from the Rust staticlib. `DEBUG_INFORMATION_FORMAT` is `dwarf-with-dsym`, so the dSYM in DerivedData is what symbolicates a crash report. Debug builds are not stripped, and `make symbols` inspects the Debug build, so it keeps working. Stripping invalidates a code signature, so Xcode strips before it signs and the release workflow re-signs afterwards.
@@ -213,7 +217,15 @@ ARCHS=x86_64 ./scripts/build-release.sh 1.0.0   # Intel
 
 The Homebrew cask lives in [homebrew/cask](https://github.com/Homebrew/homebrew-cask/blob/main/Casks/l/look.rb). BrewTestBot bumps it automatically after a GitHub release; if it misses one, run `brew bump-cask-pr --version <version> look`. Other changes (artifact names, minimum macOS, zap paths) need a regular pull request editing the cask.
 
-The cask currently has a single `url` and `sha256` pointing at the arm64 asset, so Intel users who run `brew install --cask look` get an arm64 build that cannot launch. Serving them needs `on_arm` and `on_intel` stanzas, which is a manual cask pull request; BrewTestBot's auto-bump keeps working afterwards.
+The cask serves both architectures through an `arch intel: "-x86_64"` stanza: one `url` interpolates `#{arch}` into the asset name, and `sha256` takes an `arm:` and an `intel:` value (the hashes are in `Look-<version>-manifest.txt` and `Look-<version>-manifest-x86_64.txt`). Keep the Intel asset name in step with that suffix, or the cask breaks for Intel users. BrewTestBot's auto-bump updates both hashes.
+
+The Nix package for macOS pins that same asset by hash, so it needs the same bump. `update-nix-darwin.yml` does it for you: it waits for the macOS release workflow to finish, rewrites the version and hash, and opens a PR that the `build-darwin` check verifies before merge. To do it by hand, or to backfill an older release:
+
+```bash
+./scripts/nix-bump-darwin.sh 1.0.0
+```
+
+That rewrites `version` and every packaged architecture's hash in one pass, because a bumped version with a stale hash fails the build while a stale version with a fresh hash silently keeps Nix users on the old release. It exits 3 when a release carries an asset for an architecture the file does not package yet, which is the signal to add an `x86_64-darwin` entry to `sources`. The Linux Nix package builds from the tree rather than a release asset, so it needs nothing at release time.
 
 Signing and notarization:
 
@@ -231,6 +243,8 @@ Signing/notarization walkthrough: [docs/apple-developer-release-guide.md](docs/a
   ```bash
   cargo test --workspace --manifest-path core/Cargo.toml
   cargo test --manifest-path bridge/ffi/Cargo.toml
+  # if a Cargo.lock changed (needs `cargo install cargo-audit`):
+  make audit
   # if touching linows:
   cargo clippy --workspace --all-targets --manifest-path apps/linows/Cargo.toml -- -D warnings
   cargo fmt --all --manifest-path apps/linows/Cargo.toml -- --check

@@ -103,6 +103,30 @@ pub fn trim_heap() {
     }
 }
 
+/// A terminal is always the parent's to begin with.
+pub fn attach_console() {}
+
+pub fn detach_console() {}
+
+/// Caps glibc at two arenas and sends allocations over 1 MB straight to mmap,
+/// so a decoded screenshot or icon batch goes back to the kernel when freed
+/// instead of staying in a per-thread arena. Call before any thread starts.
+pub fn tune_heap() {
+    #[cfg(target_env = "gnu")]
+    {
+        const M_MMAP_THRESHOLD: std::ffi::c_int = -3;
+        const M_ARENA_MAX: std::ffi::c_int = -8;
+        unsafe extern "C" {
+            fn mallopt(param: std::ffi::c_int, value: std::ffi::c_int) -> std::ffi::c_int;
+        }
+        // SAFETY: plain glibc calls with no pointers, made before other threads.
+        unsafe {
+            mallopt(M_MMAP_THRESHOLD, 1024 * 1024);
+            mallopt(M_ARENA_MAX, 2);
+        }
+    }
+}
+
 /// Logical height of the screen the launcher opens on. gpui has no primary
 /// display on Wayland and rounds fractional scales, so xdg-output comes first.
 pub fn screen_height(cx: &App) -> Option<f32> {

@@ -52,8 +52,8 @@ listed on Linux because each compositor exposes them differently, or not at all.
 - copy selected file/folder path/content handle with `Cmd+C`
 - multi-pick files/folders with `Cmd+P` (toggle); picked set is mirrored to the system pasteboard for paste anywhere. `Cmd+Shift+P` clears the set
 - move selected file/folder (or all picked items) to the Trash with `Cmd+D` - recoverable, no confirmation (macOS only for now)
-- pinned **Trash** quick folder (type `trash`): `Enter` opens it in Finder, its preview shows the item count, and `Cmd+D` empties it via Finder (confirmed, since it's permanent)
-- preview pane: text/image file previews, plus folder previews listing the immediate children (folders first, capped at 30, click to open)
+- pinned **Trash** quick folder (type `trash`): `Enter` opens it in Finder, its preview shows the item count with an icon that reads empty or full to match (macOS), and `Cmd+D` empties it via Finder (confirmed, since it's permanent)
+- preview pane: text/image file previews, markdown drawn as headings, lists and fenced code rather than shown as source, plus folder previews listing the immediate children (folders first, capped at 30, click to open)
 - hide the selected app from Look with `Cmd+Shift+H` / `Ctrl+Shift+H` so it stops appearing in results
 - run the selected app as administrator with `Ctrl+Shift+Enter` (Windows only, triggers a UAC prompt)
 - process search with `ps"` prefix: `Enter` measures the selected process's CPU on demand, `Cmd+D` / `Ctrl+D` kills it, `Cmd+C` / `Ctrl+C` copies its PID. Rows show `Port:` for any listening port, and typing a port number matches the process that holds it. Typing scores a cached snapshot, so the process table is walked only on entering the mode and after a kill
@@ -75,7 +75,7 @@ listed on Linux because each compositor exposes them differently, or not at all.
 - **search suggestions**: Google autocomplete rows appear under the results for plain text queries (2+ chars); `Enter` on one runs a web search, as does `Cmd+Enter` on the query
 - **model interpretation** *(macOS)*: when a natural-language query finds nothing locally, the model turns the phrasing into a *structured* file query (type, time, place) and re-searches - never a rewritten query string, never overriding results already on screen. Results say when they were interpreted, or when the search had to be relaxed to find near-misses
 - **personal answers**: schedule questions ("what's on my calendar this week?") answer from your calendar itself - deterministic, instant, and never sent to a web source
-- **platform note**: the web answer card and Google suggestions run on macOS, Linux, and Windows (the latter two via the Tauri `apps/linows/` app), sharing the `look-answers` core engine. The on-device LLM (query rewrite + the Apple Intelligence answer fallback) is **macOS-only** - there is no on-device model on Linux/Windows. The `ai_enabled` key is shared so the same toggle gates web answers on Linux/Windows and both web + on-device features on macOS
+- **platform note**: the web answer card and Google suggestions run on macOS, Linux, and Windows (the latter two via the gpui `apps/linows/` app), sharing the `look-answers` core engine. The on-device LLM (query rewrite + the Apple Intelligence answer fallback) is **macOS-only** - there is no on-device model on Linux/Windows. The `ai_enabled` key is shared so the same toggle gates web answers on Linux/Windows and both web + on-device features on macOS
 - network note: while AI is on, the answer card's web sources and the Google suggestions send the typed query to those services; the on-device model itself makes no network calls. All of it is off when `ai_enabled = false`
 
 ### AI actions and chat (macOS)
@@ -136,6 +136,7 @@ listed on Linux because each compositor exposes them differently, or not at all.
 - Battery, Weather and the L slot are read-only
 - data widgets (Linux, Windows; not in the default strip, add them in the editor or the drawing): `agents` (quota per window, `5h` and `Week`, with reset times and a LIVE/LOCAL source badge), `todo`, `pomo` (Focus), `speed`, `notes`, `clock`, `system`. Each draws itself for the cells it is given: one cell shows the headline, a wide row adds a summary line, a tall tile adds a list. They are `TileRole::Widget` in `core/qactions` and are filled by the shell
 - `Settings > Appearance > Super Actions > Customize...` opens a visual editor for `super-actions.toml` (Linux, Windows): drag tiles on the grid, drag one off the grid to remove it, resize by the corner or with `Shift`+arrows, add built-in tiles and widgets from the tray, define tiles of your own with a live `Test` for their `value` command, and see the launcher's own warnings as you edit. Saving rewrites only `layout` and `[tiles.*]`, keeps the file's comments, and leaves the previous file in `super-actions.toml.bak`
+- with a background image set, each tile shows the slice of it behind its own area under a frosted overlay, so the bar and the strip read as one picture (macOS)
 - toggled on/off via `Settings > Appearance > Super Actions`. Persisted as `super_actions_enabled` in `~/.look/config`. Off by default; turn it on here to show the strip
 - off hides the strip and disables its mnemonics
 
@@ -156,17 +157,21 @@ listed on Linux because each compositor exposes them differently, or not at all.
 - your own rows from TOML files in `~/.look/sources/`, indexed and ranked alongside apps and files, with their own usage history
 - as many `.toml` files as you like in that directory, merged into one set of blocks (ids unique across all of them, `then` resolves across files); `LOOK_SOURCES_DIR` repoints the directory for dotfiles kept elsewhere
 - commands are shell text run by the user's login shell (`$SHELL -lc` on Unix, `cmd /D /S /C` on Windows), so a block can call the user's own script in any language; non-POSIX shells (fish, nu) fall back to `/bin/sh` rather than failing per-command
-- four block kinds, one producer key each: `do` (one row that performs steps), `dir` (children of one or more directories), `file` (lines of a text file), `run` (lines a command prints)
+- five block kinds, one producer key each: `do` (one row that performs steps), `dir` (children of one or more directories), `file` (lines of a text file), `run` (lines a command prints), `connect` (a program Look keeps running, which sends rows whenever it likes so they change without a reload)
 - `dir` rows stay real files and folders, so preview, reveal, copy, and the file verbs keep working on them
 - per-block verbs (`open`, `edit`, `terminal`, `reveal`) overriding the global preferred tools for that block's rows only
 - `then` targets reached with `Cmd+K` / `Ctrl+K`: a target that performs steps is an action, a target that produces rows is a drill-down (levels stack 5 deep, `Esc` walks back)
 - `applies` on a `do` block makes it an action on rows it did not produce: `"files"` / `"dirs"` / `"paths"` / `"apps"`, or `{ ext = [...] }` / `{ match = [...] }`, so a verb joins the `Cmd+K` menu of every matching row the index already found. Appended after the built-in verbs, capped at 10 per row, ordered by `bias`
 - placeholders in every declared command (`{id}`, `{title}`, `{path}`, `{dir}`, `{query}`, `{parent.*}`), shell-escaped on substitution, plus `LOOK_ID` / `LOOK_TITLE` / `LOOK_PATH` in the environment
+- `{arg}` in a producer makes the block one you type into: `newnote Meeting with Bob` runs it with `Meeting with Bob` as the argument, the row leads the results and shows what it will use. The opening word is the block's name or an alias
+- `:url` on any placeholder (`{path:url}`) percent-encodes the value for a command that builds a URL, since shell quoting protects the shell and not the query string: a file called `Notes & ideas (draft).md` would otherwise end the URL early. An encoded value is the one thing not shell-quoted, because the encoding already left nothing a shell reads as punctuation, so the URL can be written inside quotes as it must be
 - `confirm` question before a destructive block acts; `preview` command whose output fills the right panel for the selected row
+- `Enter` on a block that lists goes into it and the list filters as you type; `scope = true` also lets its name narrow a search from the main list (`obsnote inv`)
 - row wire formats: tab-separated lines (`id<TAB>title<TAB>subtitle`) or `format = "json"` for per-row `path` and `icon`
 - an executable dropped in the sources directory is a `run` block with everything inferred, no declaration needed
 - `aliases`, `bias`, `icon`, and `enabled` per block; unknown keys reported, never fatal
 - `run` rows are refreshed on reload (`Cmd+Shift+;`) and cached in `~/.look/cache/rows/`, so a failed command keeps the last good rows and their ranking
+- a second directory, `~/.look/connectors/`, read with the same schema, for manifests an app installs rather than ones you write. A manifest's blocks are namespaced by its file name (`[notes]` in `myapp.toml` is `myapp.notes`), so an app cannot collide with your own blocks and uninstalling it is one file. `LOOK_CONNECTORS_DIR` repoints it
 - shared `core/sources` engine on macOS, Linux, and Windows. See [`docs/user-sources.md`](user-sources.md), and [lookbook](https://github.com/kunkka19xx/lookbook) for ready-made sources to copy
 - `lookapp sources list | show <name> | add <name> [--yes] [--force]` (Linux, Windows) installs a lookbook source into `~/.look/sources/` for you: it fetches the folder with `curl`, parses every file with the loader's own parser, refuses an existing file or block id, prints the files in full, and writes nothing until `--yes`. All or nothing: a failed write takes back the files before it
 
@@ -186,6 +191,7 @@ listed on Linux because each compositor exposes them differently, or not at all.
 - in-app config reset (`Settings > Advanced > Create Fresh Config`) with confirmation popup
 - semantic color system with auto-derived text colors in Custom mode
 - animations switch (`Settings > Appearance > Animations`, `animations_enabled`): off shows every change instantly on all three shells; on, the OS reduce-motion preference still applies (except on Windows, where that flag tracks the performance preset)
+- a quieter launcher (macOS, and the gpui build on Linux and Windows): `hints_enabled=false` drops the hint line and the author link, and `search_placeholder` is the empty search field's text, exactly as written, so an empty value shows none
 - indexing, UI, privacy/logging, launch-at-login controls
 - immediate validation feedback for invalid settings input
 - advanced extra scan directory controls (`file_scan_extra_roots`) with overlap/risky-root validation
@@ -196,7 +202,7 @@ listed on Linux because each compositor exposes them differently, or not at all.
 - startup/index refresh pipeline for apps/files/settings
 - dirty-aware incremental indexing via file-system events (`Cmd+Space` refresh-on-dirty)
 - usage-event feedback loop for ranking updates
-- Rust core + FFI bridge to Swift app shell
+- Rust core: a C FFI bridge to the Swift shell on macOS, a direct crate dependency for the gpui shell on Linux and Windows
 
 ## In progress / near-term
 

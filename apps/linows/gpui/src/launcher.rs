@@ -18,6 +18,8 @@ use gpui::{
 };
 use linows_backend::health::HealthIssue;
 use linows_backend::host::LauncherWindow;
+use linows_backend::look_answers::TranslateLanguage;
+use linows_backend::qactions;
 use linows_backend::search as engine;
 use linows_backend::{
     clipboard, config, files, launch, paste, process, sources, tools, translate, trash, weburl,
@@ -37,6 +39,7 @@ use crate::confirm::{Confirm, OnYes};
 use crate::glyphs;
 use crate::help::Help;
 use crate::icons::{IconRequest, IconStore};
+use crate::imagecache::PreviewImages;
 use crate::launchpad::{self, Launchpad, Notice, Tone};
 use crate::levels::{self, Levels};
 use crate::modes::Mode;
@@ -53,7 +56,6 @@ use crate::theme::{self, Theme};
 use crate::update::Update;
 use crate::{Shell, fonts, health, state as app_state};
 
-const PLACEHOLDER: &str = "Type whatever you want";
 /// The answer card is the answer: no row is picked, so Enter has no target.
 static HINT_ANSWER: Hint = Hint::new(&[
     Piece::Key("Down", "Pick a row"),
@@ -64,9 +66,12 @@ static HINT_EMPTY: Hint = Hint::new(&[
     Piece::Id(shortcuts::WEB_SEARCH, "Search the web"),
 ]);
 const WEB_SEARCH_URL: &str = "https://www.google.com/search?q=";
-const TRANSLATE_URL: &str = "https://translate.google.com/?sl=auto&tl=en&text=";
+/// The browser translation page; the target language and the text follow, the
+/// target being the first configured language, as in the webview.
+const TRANSLATE_URL: &str = "https://translate.google.com/?sl=auto&tl=";
 /// How long a keystroke waits for the next before the query runs; the
 /// webview uses the same.
+const COPY_FAILED: &str = "Copy failed";
 const DEBOUNCE: Duration = Duration::from_millis(70);
 /// A row's picture, or the glyph that stands in for it.
 const EMPTY_STATE_H: f32 = 200.0;
@@ -79,13 +84,18 @@ const NO_RESULTS: &str = "No results";
 const TRANSLATE_PADDING_Y: f32 = 10.0;
 const TRANSLATE_SECTION_PADDING_Y: f32 = 8.0;
 const TRANSLATE_ICON: f32 = 44.0;
+/// The Open in Browser control under the sections, as the macOS button: a
+/// filled pill with the globe, the label, and the arrow at the far end.
+const TRANSLATE_FOOTER_PADDING_X: f32 = 12.0;
+const TRANSLATE_FOOTER_PADDING_Y: f32 = 8.0;
+const TRANSLATE_FOOTER_GAP: f32 = 8.0;
+const TRANSLATE_FOOTER_ICON: f32 = 14.0;
+const TRANSLATE_FOOTER_ARROW: f32 = 11.0;
 const TRANSLATE_BADGE: &str = "WEB";
 const TRANSLATE_PLACEHOLDER: &str = "Press Enter to translate";
 const TRANSLATING: &str = "Translating\u{2026}";
 const TRANSLATE_FAILED: &str = "Translation failed";
 const OPEN_IN_BROWSER: &str = "Open in Browser";
-/// The three targets, in the panel's order.
-const LANGUAGES: [(&str, &str); 3] = [("vi", "TIẾNG VIỆT"), ("en", "ENGLISH"), ("ja", "日本語")];
 const CLIP_DELETED: &str = "Clipboard item deleted";
 const CLIP_IMAGE_DELETED: &str = "Image removed from history";
 static HINT_LEVEL: Hint = Hint::new(&[
@@ -126,6 +136,7 @@ const FRESH_CONFIG_ASK: &str = "Create a fresh config?";
 /// Low bits of a text shift key hold the row index; the change count sits above.
 const SHIFT_ROW_BITS: usize = 20;
 const ROW_ICON: f32 = 22.0;
+const ROW_IMAGES: usize = 64;
 /// The declared tile's inset around the icon, the ring included.
 const DECLARED_PAD: f32 = 1.0;
 const FRESH_CONFIG_DONE: &str = "Config reset to defaults";
@@ -136,6 +147,8 @@ const USAGE_EXECUTE: &str = "execute";
 /// One translation request and what has come back for each language.
 struct Translation {
     text: String,
+    /// The configured targets, in order, read once when the request starts.
+    languages: Vec<TranslateLanguage>,
     /// None while in flight.
     sections: Vec<Option<Result<String, String>>>,
 }
@@ -175,6 +188,7 @@ pub struct Launcher {
     pub(crate) shell: Shell,
     input: Entity<SearchInput>,
     icons: Entity<IconStore>,
+    row_images: Entity<PreviewImages>,
     preview: Entity<Preview>,
     launchpad: Entity<Launchpad>,
     pub(crate) banner: Banner,
@@ -268,13 +282,14 @@ impl Launcher {
         let input = input_for(cx);
         cx.subscribe(&input, |this, _, _: &Changed, cx| this.search(cx))
             .detach();
-        let icons = cx.new(IconStore::new);
+        let scale = window.scale_factor();
+        let icons = cx.new(|_| IconStore::new(scale));
         cx.observe(&icons, |_, _, cx| cx.notify()).detach();
         let preview = cx.new(|cx| Preview::new(shell.clone(), icons.clone(), cx));
         cx.observe(&preview, |_, _, cx| cx.notify()).detach();
         cx.subscribe(&preview, |this, _, notice: &Notice, cx| {
             this.banner
-                .show(notice.text.clone(), notice.tone, notice.seconds, cx)
+                .show_message(notice.message(), notice.seconds, cx)
         })
         .detach();
         cx.subscribe(&preview, |this, _, _: &ClipDeleted, cx| {
@@ -290,17 +305,25 @@ impl Launcher {
         cx.observe(&launchpad, |_, _, cx| cx.notify()).detach();
         cx.subscribe(&launchpad, |this, _, notice: &Notice, cx| {
             this.banner
-                .show(notice.text.clone(), notice.tone, notice.seconds, cx)
+                .show_message(notice.message(), notice.seconds, cx)
         })
         .detach();
         let focus_handle = input.read(cx).focus_handle.clone();
         window.focus(&focus_handle, cx);
+        // The compositor answers whether it frosts only once a window is
+        // attached, and the tint depends on it: resolve again, from the
+        // config already loaded, when the answer moved.
+        let could_frost = blur::can_frost();
         blur::attach_window(window);
+        if blur::can_frost() != could_frost {
+            theme::install(Theme::from_config());
+        }
 
         let mut this = Self {
             shell,
             input,
             icons,
+            row_images: cx.new(|cx| PreviewImages::with_capacity(ROW_IMAGES, cx)),
             preview,
             launchpad,
             banner: Banner::default(),
@@ -356,11 +379,9 @@ impl Launcher {
             cx,
             || {
                 blocks::refresh();
-                config::get_config()
-                    .entries
-                    .into_iter()
-                    .find(|e| e.key == answers::AI_KEY)
-                    .is_none_or(|e| e.value != "false")
+                theme::entries()
+                    .get(answers::AI_KEY)
+                    .is_none_or(|v| v != "false")
             },
             |this, ai_enabled, _| this.ai.enabled = ai_enabled,
         );
@@ -384,6 +405,7 @@ impl Launcher {
                     self.commands.active_index(),
                     self.commands.input().read(cx).text().to_string(),
                 )),
+                ai_enabled: self.ai.enabled,
                 ..Default::default()
             }
         } else {
@@ -437,6 +459,7 @@ impl Launcher {
             .set_sticky(health::notice(&issues).map(|text| Message {
                 text,
                 tone: Tone::Warning,
+                copy: None,
             }));
         self.health = issues;
         cx.notify();
@@ -1020,11 +1043,12 @@ impl Launcher {
         cx.notify();
     }
 
-    /// Esc discards what was not saved: the file is the theme again.
+    /// Esc discards what was not saved: the config as last loaded is the
+    /// theme again.
     fn close_settings(&mut self, cx: &mut Context<Self>) {
         self.settings.leave();
         self.settings_open = false;
-        theme::load();
+        theme::install(Theme::from_config());
         self.set_query("", cx);
         cx.notify();
     }
@@ -1039,17 +1063,32 @@ impl Launcher {
             self.settings.reload(cx);
         }
         self.running.refresh(cx);
+        // The drawing is read here too: it is the file most likely to be
+        // mid-edit when the chord is pressed, and a broken one falls back to
+        // the default, so the banner is the only sign anything happened.
         bg::fetch(
             cx,
-            || engine::reload_config(app_state(), || {}),
-            |this, _, cx| {
+            || {
+                engine::reload_config(app_state(), || {});
+                qactions::launchpad_layout()
+            },
+            |this, layout, cx| {
                 crate::hotkey::set_active(true);
-                this.banner.show(
-                    settings::RELOADED.to_string(),
-                    Tone::Info,
-                    settings::RELOADED_SECS,
-                    cx,
-                );
+                let warning = this
+                    .launchpad
+                    .update(cx, |launchpad, cx| launchpad.reloaded(layout, cx));
+                match warning {
+                    Some(message) => {
+                        this.banner
+                            .show_message(message, launchpad::NOTICE_WARNING, cx)
+                    }
+                    None => this.banner.show(
+                        settings::RELOADED.to_string(),
+                        Tone::Info,
+                        settings::RELOADED_SECS,
+                        cx,
+                    ),
+                }
             },
         );
         cx.notify();
@@ -1113,6 +1152,8 @@ impl Launcher {
         self.confirm = None;
         self.translation = None;
         self.command_mode = true;
+        self.launchpad
+            .update(cx, |launchpad, cx| launchpad.set_shown(false, cx));
         self.commands.enter(index, prefill, cx);
         // The screen has its own field; the query that opened it is spent, so
         // the next summon lands on home, as both references do.
@@ -1324,6 +1365,13 @@ impl Launcher {
             _ if row.path.is_empty() => return true,
             _ => (row.path.clone(), "Copied to clipboard".to_string()),
         };
+        self.copy_text(text, done, cx);
+        true
+    }
+
+    /// `text` to the clipboard off the UI thread, then `done` or the failure
+    /// as a toast.
+    pub(crate) fn copy_text(&mut self, text: String, done: String, cx: &mut Context<Self>) {
         bg::fetch(
             cx,
             move || clipboard::copy_to_clipboard(&text),
@@ -1331,10 +1379,9 @@ impl Launcher {
                 Ok(()) => this.banner.show(done, Tone::Success, banner::SHORT, cx),
                 Err(_) => this
                     .banner
-                    .show("Copy failed".into(), Tone::Error, banner::MEDIUM, cx),
+                    .show(COPY_FAILED.into(), Tone::Error, banner::MEDIUM, cx),
             },
         );
-        true
     }
 
     fn paste(&mut self, cx: &mut Context<Self>) -> bool {
@@ -1501,7 +1548,8 @@ impl Launcher {
         true
     }
 
-    /// `t"` Enter: the three translations, each landing as it answers.
+    /// `t"` Enter: one translation per configured language, each landing as it
+    /// answers.
     fn translate(&mut self, cx: &mut Context<Self>) {
         let query = self.input.read(cx).text().to_string();
         let (_, term) = Mode::of(&query);
@@ -1509,11 +1557,20 @@ impl Launcher {
         if text.is_empty() {
             return;
         }
+        let languages = config::translate_languages();
+        let codes: Vec<&'static str> = languages.iter().map(|lang| lang.code).collect();
+        // The parser falls back to its defaults, so this holds unless the table
+        // itself is empty. Guarding here is what lets the footer read the first
+        // entry rather than carry a target of its own.
+        if codes.is_empty() {
+            return;
+        }
         self.translation = Some(Translation {
             text: text.clone(),
-            sections: vec![None; LANGUAGES.len()],
+            languages,
+            sections: vec![None; codes.len()],
         });
-        for (i, (code, _)) in LANGUAGES.iter().enumerate() {
+        for (i, code) in codes.into_iter().enumerate() {
             let text = text.clone();
             let wanted = text.clone();
             bg::fetch(
@@ -2038,20 +2095,18 @@ impl Launcher {
         cx: &mut Context<Self>,
     ) -> Div {
         let radius = th.tile_radius();
-        let bar_radius = th.bar_radius();
         let frosted = th.frosted();
-        let banner = self.banner.render(th, false, cx).map(|banner| {
+        let banner = self.banner.render(th, cx).map(|banner| {
             div()
                 .mx(px(theme::CONTENT_PADDING))
                 .mt(px(theme::CONTENT_PADDING))
                 .flex()
-                .on_children_prepainted(move |cards, _, _| mark_cards(&cards, bar_radius))
                 .child(banner)
         });
         // The focused field (the panel's box, or a row's open field) is where
         // the keys dispatch from, so this root must track that handle.
         let focus_handle = self.focus_target(cx);
-        let footer = hint.is_some() || trailing.is_some();
+        let footer = th.hints && (hint.is_some() || trailing.is_some());
         let trailing = trailing.unwrap_or_else(|| copyright(th, cx).into_any_element());
         let seq = self.confirm_seq;
         let confirm = self
@@ -2122,7 +2177,11 @@ impl Launcher {
         let fade = blur::surfaces_fade(th.frosted());
         let bar_h = theme::TOP_ROW_HEIGHT + 2.0 * theme::INPUT_PADDING_Y;
         let crumbs = self.levels.breadcrumb();
-        let placeholder = if crumbs.is_empty() { PLACEHOLDER } else { "" };
+        let placeholder = if crumbs.is_empty() {
+            th.placeholder.clone()
+        } else {
+            SharedString::default()
+        };
         // The strip steps aside for the translate panel and the compact layout.
         let strip = (th.split() && self.mode != Mode::Translate)
             .then(|| self.running.render(&self.icons, th, cx))
@@ -2161,7 +2220,7 @@ impl Launcher {
             .child(search_field(self.input.clone(), placeholder))
             .children((!th.split()).then(|| self.picked.badge(th)).flatten())
             .children(strip)
-            .when(!th.split(), |el| {
+            .when(!th.split() && th.hints, |el| {
                 el.child(copyright(th, cx).flex_shrink_0())
             });
 
@@ -2341,6 +2400,7 @@ impl Launcher {
                             kind: row.icon_kind().to_string(),
                             path: row.path.clone(),
                             id: Some(row.id.clone()),
+                            size: ROW_ICON,
                         },
                         cx,
                     )
@@ -2352,6 +2412,7 @@ impl Launcher {
             }
             Icon::Glyph(glyph) => glyph_icon(glyph, th),
             Icon::File(path) => img(path.clone())
+                .image_cache(&self.row_images)
                 .size(px(ROW_ICON))
                 .rounded(px(th.chip_radius() / 1.5))
                 .object_fit(gpui::ObjectFit::Cover)
@@ -2616,7 +2677,7 @@ impl Launcher {
                     card.children(list)
                 }
             })
-            .when(!seated && th.split(), |card| {
+            .when(!seated && th.split() && th.hints, |card| {
                 card.child(self.footer(hint.clone(), th, cx))
             })
             // Leaving the launchpad, the card rises in: once per switch, never
@@ -2696,7 +2757,9 @@ impl Launcher {
             .flex()
             .flex_col()
             .child(row)
-            .when(th.split(), |el| el.child(self.hint_bar(hint, th, cx)))
+            .when(th.split() && th.hints, |el| {
+                el.child(self.hint_bar(hint, th, cx))
+            })
     }
 
     /// The classic full-width hint bar: the hint (and the Todo tally) left,
@@ -2755,7 +2818,7 @@ impl Launcher {
                             .text_color(th.accent)
                             .child(TRANSLATE_BADGE),
                     );
-                let sections = LANGUAGES.iter().enumerate().map(|(i, (_, label))| {
+                let sections = translation.languages.iter().enumerate().map(|(i, lang)| {
                     let (text, colour, copy) = match &translation.sections[i] {
                         None => (TRANSLATING.to_string(), th.text_muted, None),
                         Some(Ok(text)) => (text.clone(), th.text, Some(text.clone())),
@@ -2786,7 +2849,7 @@ impl Launcher {
                                         .text_size(px(th.font_size - 2.0))
                                         .font_weight(FontWeight::BOLD)
                                         .text_color(th.text_secondary)
-                                        .child(*label),
+                                        .child(lang.label.to_uppercase()),
                                 )
                                 .when_some(copy, |el, text| {
                                     el.child(
@@ -2805,7 +2868,7 @@ impl Launcher {
                                                     |this, outcome, cx| {
                                                         let (msg, tone) = match outcome {
                                                             Ok(()) => ("Copied", Tone::Success),
-                                                            Err(_) => ("Copy failed", Tone::Error),
+                                                            Err(_) => (COPY_FAILED, Tone::Error),
                                                         };
                                                         this.banner.show(
                                                             msg.into(),
@@ -2827,41 +2890,58 @@ impl Launcher {
                         )
                         .child(div().text_color(colour).child(text))
                 });
-                let url = format!("{TRANSLATE_URL}{}", url_encode(&translation.text));
+                let target = translation.languages[0].code;
+                let url = format!(
+                    "{TRANSLATE_URL}{target}&text={}",
+                    url_encode(&translation.text)
+                );
                 let footer = div()
                     .id("translate-open")
                     .mt(px(TRANSLATE_PADDING_Y))
-                    .py(px(TRANSLATE_SECTION_PADDING_Y))
+                    .px(px(TRANSLATE_FOOTER_PADDING_X))
+                    .py(px(TRANSLATE_FOOTER_PADDING_Y))
+                    .rounded(px(th.control_radius()))
+                    .bg(th.control_fill)
                     .flex()
                     .items_center()
-                    .gap(px(theme::SEARCH_GAP))
+                    .gap(px(TRANSLATE_FOOTER_GAP))
                     .text_size(px(th.font_size - 1.0))
-                    .text_color(th.text_secondary)
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(th.accent)
                     .cursor_pointer()
-                    .hover(|s| s.text_color(th.accent))
+                    .hover(|s| s.bg(th.tile_face()))
                     .on_click(cx.listener(move |this, _, _, _| this.open_url(&url)))
                     .child(
                         svg()
-                            .path(glyphs::LINK)
-                            .size(px(theme::SEARCH_ICON))
+                            .path(glyphs::GLOBE)
+                            .size(px(TRANSLATE_FOOTER_ICON))
                             .text_color(th.accent),
                     )
                     .child(div().flex_1().child(OPEN_IN_BROWSER))
                     .child(
                         svg()
-                            .path(glyphs::EXTERNAL_LINK)
-                            .size(px(theme::SEARCH_ICON))
-                            .text_color(th.text_muted),
+                            .path(glyphs::ARROW_UP_RIGHT)
+                            .size(px(TRANSLATE_FOOTER_ARROW))
+                            .text_color(th.accent),
                     );
+                // The sections scroll on their own; the footer stays put under
+                // them, as on macOS.
                 div()
-                    .id("translate")
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
                     .flex()
                     .flex_col()
-                    .child(source)
-                    .children(sections)
+                    .child(
+                        div()
+                            .id("translate")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .flex()
+                            .flex_col()
+                            .child(source)
+                            .children(sections),
+                    )
                     .child(footer)
                     .into_any_element()
             }
@@ -2888,11 +2968,13 @@ impl Launcher {
                     .flex()
                     .flex_col()
                     .child(body)
-                    .child(
-                        muted_text(Mode::Translate.hint(), th)
-                            .pt(px(theme::HINT_INSET))
-                            .pb(px(theme::HINT_INSET_BOTTOM)),
-                    ),
+                    .when(th.hints, |el| {
+                        el.child(
+                            muted_text(Mode::Translate.hint(), th)
+                                .pt(px(theme::HINT_INSET))
+                                .pb(px(theme::HINT_INSET_BOTTOM)),
+                        )
+                    }),
             )
     }
 }
@@ -2910,6 +2992,9 @@ impl Render for Launcher {
         let th = theme::get();
         let frame = th.frame_size();
         crate::host::fit(window, frame, cx);
+        // A Wayland window reports 1.0 until its surface enters an output.
+        let scale = window.scale_factor();
+        self.icons.update(cx, |icons, _| icons.set_scale(scale));
         let content = self.content(th, window, cx);
         div().size_full().flex().justify_center().child(
             div()
@@ -2974,7 +3059,6 @@ impl Launcher {
             (false, _, Mode::Translate) => self.translate_panel(seated, &th, cx).into_any_element(),
             (false, _, _) => self.results(seated, &th, cx).into_any_element(),
         };
-        let bar_radius = th.bar_radius();
         // A toast floats over the body just under the bar, so neither the
         // bar nor the rows move; the sticky notice stays until dismissed, so
         // it takes a place in the flow between them instead.
@@ -2984,11 +3068,12 @@ impl Launcher {
         } else {
             theme::ROW_INSET
         };
-        let banner = self.banner.render(&th, toast, cx).map(|banner| {
-            div()
-                .on_children_prepainted(move |cards, _, _| mark_cards(&cards, bar_radius))
-                .child(banner)
-        });
+        // Takes the row's width, or the card sizes to its text and a long
+        // notice runs off the edge with its Dismiss button.
+        let banner = self
+            .banner
+            .render(&th, cx)
+            .map(|banner| div().flex_1().min_w_0().child(banner));
         let (toast_card, sticky_card) = match banner {
             Some(card) if toast => {
                 let top = theme::CONTENT_PADDING
@@ -3102,7 +3187,7 @@ fn home_lists() -> bool {
 /// (`superactions.applyEnabled`), the classic panel has no launchpad and lists
 /// the index instead; the config value is left alone, so it comes back by
 /// itself under a compositor.
-fn launchpad_shown(th: &Theme) -> bool {
+pub(crate) fn launchpad_shown(th: &Theme) -> bool {
     th.shows_launchpad() && !classic()
 }
 
@@ -3316,10 +3401,14 @@ impl Launcher {
         bg::fetch(
             cx,
             move || bgimage::load(key),
-            |this, result, _| {
+            |this, result, cx| {
                 let key = this.backdrop_loading.take();
                 match result {
-                    Ok(backdrop) => bgimage::store(backdrop),
+                    Ok(backdrop) => {
+                        if let Some(old) = bgimage::store(backdrop) {
+                            cx.drop_image(old, None);
+                        }
+                    }
                     Err(err) => {
                         eprintln!("background image: {err}");
                         this.backdrop_failed = key;

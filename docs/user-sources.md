@@ -24,7 +24,7 @@ A source is shell commands Look will run, so `add` shows you the files and write
 - [Start here](#start-here)
 - [How a file is organised](#how-a-file-is-organised)
 - [As many files as you like](#as-many-files-as-you-like)
-- [The four kinds of block](#the-four-kinds-of-block)
+- [The five kinds of block](#the-five-kinds-of-block)
 - [Key reference](#key-reference)
 - [Placeholders](#placeholders)
 - [What Enter does](#what-enter-does-verbs)
@@ -121,7 +121,30 @@ Two things are shared across all of them:
 
 Keeping your sources in a dotfiles repo works the way you would expect: point `LOOK_SOURCES_DIR` at the directory in the repo, or symlink `~/.look/sources` to it. Look reads through symlinks.
 
-## The four kinds of block
+## Where blocks come from
+
+Two directories, same schema, different author:
+
+| Directory | Written by | Block ids |
+| --- | --- | --- |
+| `~/.look/sources/` | you | exactly what you call them |
+| `~/.look/connectors/` | an app, when it installs | namespaced by the manifest's file name |
+
+Everything in this document applies to both. The second one exists so an app can
+install its own rows without asking you to write TOML, and without being able to
+collide with what you wrote: `[notes]` in `myapp.toml` is the block
+`myapp.notes`, so it is a different block from your own `[notes]`. Inside the
+manifest, `then` still names its blocks plainly.
+
+A dot cannot appear in a bare id anyway, since `[myapp.notes]` is a nested table
+in TOML rather than a name, so colliding with a manifest takes deliberate
+quoting. If one does collide, yours is the one that loads and the manifest's is
+reported.
+
+Uninstalling an app is then one file, and `LOOK_CONNECTORS_DIR` repoints the
+directory the way `LOOK_SOURCES_DIR` repoints yours.
+
+## The five kinds of block
 
 | Producer | What it makes                         | Use it for                                             |
 | -------- | ------------------------------------- | ------------------------------------------------------ |
@@ -129,6 +152,7 @@ Keeping your sources in a dotfiles repo works the way you would expect: point `L
 | `dir`    | one row per child of a directory      | projects, notes, screenshots, anything already on disk |
 | `file`   | one row per line of a text file       | a list you maintain by hand: SSH hosts, bookmarks      |
 | `run`    | one row per line a command prints     | anything that changes: branches, containers, tickets   |
+| `connect` | rows from a program that keeps running | an app showing its own records, updated without a reload |
 
 Declaring two of them in one block is an error. Pick one and the block is unambiguous.
 
@@ -218,6 +242,7 @@ If the command fails, times out, or prints nothing, **the rows it produced last 
 | `icon`                            | string            | none         | Emoji, SF Symbol name, or an image path                                                                    |
 | `enabled`                         | bool              | `true`       | `false` keeps the file but stops loading the block                                                         |
 | `preview`                         | string            | none         | Command run for the selected row, in that row's folder; its output fills the right panel. Fixed 5s timeout |
+| `scope`                           | bool              | `false`      | The block's words narrow a search to its own rows: `obsnote inv`. See [Searching inside one block](#searching-inside-one-block) |
 | `confirm`                         | string            | none         | Yes/no question asked before the block does anything                                                       |
 | `then`                            | list of block ids | none         | Other blocks a picked row can reach                                                                        |
 | `open` `edit` `terminal` `reveal` | string            | none         | See [What Enter does](#what-enter-does-verbs)                                                              |
@@ -236,6 +261,7 @@ If the command fails, times out, or prints nothing, **the rows it produced last 
 | `exclude` | list of globs              | `dir`         | Drop entry names matching one of these                                                                            |
 | `file`    | string                     | `file`        | Path to the list                                                                                                  |
 | `run`     | string                     | `run`         | The command line                                                                                                  |
+| `connect` | string                     | `connect`     | A program Look keeps running. See [`connect`](#connect---rows-from-a-program-that-stays-running)                  |
 | `cwd`     | string                     | `run`         | Working directory. Default: [the filesystem root](#where-a-command-runs)                                          |
 | `timeout` | duration string            | `run`         | `30s`, `5m`, `1h`, `2d`. Default 5s, capped at 30s                                                                |
 | `format`  | `lines` \| `json`          | `file`, `run` | Default `lines`                                                                                                   |
@@ -243,6 +269,122 @@ If the command fails, times out, or prints nothing, **the rows it produced last 
 A leading `~` in any path key (`dir`, `dirs`, `file`, `cwd`, `icon`, and a JSON row's `path`) is your home directory, on every platform: Look resolves those itself. A `~` anywhere else in the value is left alone, because it is a legal character in a filename. Inside a **command** it is your shell's job instead, which matters on Windows: see [Point a block at your own script](#point-a-block-at-your-own-script).
 
 Keys Look does not recognise are reported and ignored, never fatal: a file written for a newer version still loads on an older one.
+
+### `connect` - rows from a program that stays running
+
+> Shipping an app that installs its own connector? The full contract, limits
+> and a worked example are in [Integrating your app](integrating.md).
+
+Where `run` asks a command for rows and waits, `connect` starts a program once
+and leaves it running. It sends rows whenever it likes, and they appear without
+a reload.
+
+```toml
+[records]
+name    = "Records"
+icon    = "🗂️"
+connect = "~/.local/bin/myapp-connector"
+```
+
+The program speaks one JSON object per line on stdout. Look opens with a hello
+and then listens:
+
+```json
+{"op":"hello","v":1,"look":"0.7.5"}
+```
+```json
+{"op":"ready","capabilities":["rows","preview"]}
+{"op":"rows","block":"myapp.records","rows":[{"id":"r1","title":"Invoice 204"}]}
+{"op":"error","message":"could not reach the server"}
+```
+
+- a `rows` frame nobody asked for is a **push**: that is how rows change without
+  a reload, and it costs nothing extra
+- an `op` Look does not know is ignored, never fatal, so a program written for a
+  later version still works with this one
+- rows use the same fields a JSON row from a `run` block uses: `id`, and
+  optionally `title`, `subtitle`, `path`, `icon`
+- a program may only send rows for blocks in **its own manifest**. One app
+  cannot rewrite another's rows
+- nothing blocks on it. Slow, silent or dead, it simply has no new rows and the
+  last ones it sent are still there
+- if it exits, the last rows stay and it is started again the next time the
+  launcher opens
+- a frame over 1 MB is a protocol breach rather than a big message: that program
+  is dropped, and restarted the same way
+
+#### Filling the panel
+
+Select one of its rows and Look asks the program what to show:
+
+```json
+{"op":"preview","block":"myapp.records","id":"r1","req":7}
+```
+
+Answer with the text, what it is, and the `req` you were given:
+
+```json
+{"op":"preview","block":"myapp.records","id":"r1","req":7,"content_type":"markdown","text":"# Invoice 204\n\nDue **3 Nov**."}
+```
+
+- `content_type` is `text` or `markdown`. Leave it out and it is `text`, which
+  is what a program written before this field existed meant
+- a type Look does not know reads as `text`: showing the source beats blanking
+  the panel
+- the panel waits about 400ms. A later answer is not shown, so answer from
+  memory rather than going to the network
+- **echo `req` back.** It is how Look tells your answer from the one before
+  it, so a reply that arrives after its 400ms is not mistaken for the answer
+  to the next look at the same row. An answer without it is dropped, and Look
+  says so on stderr
+- a program may only answer for blocks in its own manifest, the same rule rows
+  are held to
+- declaring a `preview` command in the block overrides this: the command runs
+  instead and nothing is asked over the connection
+
+**The cost is mostly yours, not Look's.** Keeping one running costs Look about
+130 KB and a thread. The program itself is the real figure: a small compiled one
+is a fraction of a megabyte, a Python one is 10 to 15 MB before it does
+anything. Push when your data changes rather than on a timer, because every push
+makes Look re-read the declared sources, which it rate-limits but cannot make
+free. A program that sends the same rows again costs nothing at all, so there is
+no need to track what you last sent.
+
+## Searching inside one block
+
+A block that makes rows can be searched on its own. Two ways, and neither needs
+anything declared for the first one:
+
+**Press Enter on the block's row.** You go into it, the list shows only its
+rows, and what you type filters them. `Esc` comes back. Every block that lists
+(`dir`, `file`, `run`, `connect`) works this way.
+
+**Or name it at the start of a line**, which a block has to opt into:
+
+```toml
+[obsnote]
+name    = "Obsidian"
+aliases = ["obsnote"]
+scope   = true
+dir     = "~/Documents/my-vault"
+```
+
+Now `obsnote invoice` lists only this block's rows matching `invoice`. Any
+single-word `name` or alias opens it; a name with a space in it cannot, since
+only the first word is matched.
+
+- it is **opt-in on purpose**: the word is reserved as the first word of a
+  line, so a block aliased `new` would otherwise swallow every search starting
+  with "new "
+- `obsnote` with nothing after it is not a scope, it is the block's own row
+- a `do` block cannot declare it and Look says so, since it makes no rows to
+  narrow
+- a block that takes `{arg}` keeps that meaning: the word feeds its command
+  rather than filtering
+
+Neither is needed just to find a row. A block whose producer names no
+placeholder is already in the main index, so the rows it makes are findable by
+typing their own names.
 
 ## Placeholders
 
@@ -255,17 +397,62 @@ Every command a block declares expands against the selected row: `do` steps, the
 | `{path}`                                                      | The row's filesystem path, when it has one                                              |
 | `{dir}`                                                       | The row itself when it is a folder, its parent folder when it is a file                 |
 | `{query}`                                                     | What you had typed when you picked the row                                              |
+| `{arg}`                                                       | The rest of the line, after the word that named the block. See [Typing into a block](#typing-into-a-block-arg) |
 | `{parent.id}` `{parent.title}` `{parent.path}` `{parent.dir}` | The same, for the row above. Repeat `parent.` to go further out: `{parent.parent.path}` |
+| `{path:url}`, and `:url` on any of the above                  | The same value, percent-encoded for use inside a URL                                    |
 
-Three rules worth internalising:
+Four rules worth internalising:
 
 - **Never quote a placeholder yourself.** Every value is shell-escaped on substitution. `open {path}` handles a folder called `My Project` correctly, and a row titled `; rm -rf ~` is inert. Writing `open "{path}"` gives you a doubly quoted path that will not resolve.
-- **A block whose producer mentions a placeholder is not a top-level row.** `do = ["make -C {path} deploy"]` only means something against a selected project, so Look keeps it out of the main index and reaches it only through another block's [`then`](#chaining-blocks-with-then). A block with no placeholder (`do = ["open -a Slack"]`) is a row you can type for directly. The producer is the `do` / `dir` / `file` / `run` line **and its `cwd`**, since `run = "npm test"` with `cwd = "{path}"` is the same block as `run = "npm --prefix {path} test"`. The verbs and `preview` do not count: those already act on a row this block produced.
+- **A block whose producer mentions a placeholder is not a top-level row** (except `{arg}`, which is the line itself: see below)**.** `do = ["make -C {path} deploy"]` only means something against a selected project, so Look keeps it out of the main index and reaches it only through another block's [`then`](#chaining-blocks-with-then). A block with no placeholder (`do = ["open -a Slack"]`) is a row you can type for directly. The producer is the `do` / `dir` / `file` / `run` line **and its `cwd`**, since `run = "npm test"` with `cwd = "{path}"` is the same block as `run = "npm --prefix {path} test"`. The verbs and `preview` do not count: those already act on a row this block produced.
 - **A producer counts one level differently from a command.** When you drill into a block, the row you came from _is_ the row while its rows are being produced, so its `dir` / `file` / `run` line says `{path}`. The commands that then act on a row it produced (`open`, `preview`, the verbs, a `then` target's steps) act on the produced row, so _there_ the row you came from is `{parent.path}`. The [`then` example below](#chaining-blocks-with-then) shows both in one block.
+
+- **A value that lands inside a URL needs `:url`.** Quoting protects the shell and does nothing for the URL, so a note called `Notes & ideas (draft).md` ends the query string early and the app opens the wrong thing, or nothing. `:url` percent-encodes the value first:
+
+  ```toml
+  do = ["open \"obsidian://open?path={path:url}\""]
+  ```
+
+  Both forms of one placeholder can appear in the same command, since they mean different things: `{path}` for the filesystem and the shell, `{path:url}` for a URL. The encoding covers everything outside the unreserved set, `/` included, so whatever decodes it gets the original string back.
+
+  The `:url` form is the one thing Look does **not** quote, and it does not need to: what comes out is only `A-Za-z0-9-._~%`, which no shell reads as punctuation. That is what lets you write the URL inside quotes, which you have to, since `?` and `&` are shell punctuation.
 
 Steps also see the row in their environment, for [a script that would rather read a variable](#point-a-block-at-your-own-script) than take an argument: `LOOK_ID`, `LOOK_TITLE`, `LOOK_PATH`.
 
 Commands run through your **login shell**, so shell punctuation works too: `&&`, `|`, `>`. Which of your shell files that reads, and what it means if you use fish, is [its own section](#your-shell-and-your-shell-config).
+
+## Typing into a block (`{arg}`)
+
+A block whose producer uses `{arg}` takes the rest of what you typed as its
+argument, so it stays a row you can reach directly:
+
+```toml
+[newnote]
+name    = "New note"
+aliases = ["newnote", "nn"]
+icon    = "🆕"
+do      = ["open \"obsidian://new?vault=notes&name={arg:url}\""]
+```
+
+Type `newnote Meeting with Bob`, or `nn Meeting with Bob`, and the row leads the
+results showing `Meeting with Bob` as its subtitle, so `Enter` is not a guess.
+
+- the opening word is the block's `name` or one of its `aliases`, matched
+  without regard to case. **The block's id is not one of them**, and a name with
+  a space in it cannot be the word either, since you type one token before the
+  argument begins. Both are why the example above repeats `newnote` as an alias.
+- only a `do` block can take an argument. `dir`, `file` and `run` make their
+  rows before you have typed anything, so `{arg}` in one of those is reported
+  and the block stays out of the index rather than running with the braces
+  still in it.
+- `{arg}` is empty when the row was reached any other way, by search or through
+  `Cmd+K`. The query that found a row is not an argument, and handing it over
+  would create a note called `meeting`.
+- `{arg}` alone, with nothing typed after the word, is also empty, and the row
+  is simply the block's own row.
+- this is why `{arg}` and `{query}` are different keys. `{query}` means "the
+  query that found this row", which only makes sense against a row, so a
+  producer using it is reachable only through another block's `then`.
 
 ## What Enter does (verbs)
 

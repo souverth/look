@@ -5,8 +5,10 @@ mod answers_api;
 mod calc_api;
 mod calling_api;
 mod clipboard_api;
+mod connectors_api;
 mod hotkey_api;
 mod lunar_api;
+mod markdown_api;
 mod matching_api;
 mod meeting_api;
 mod modes_api;
@@ -100,6 +102,20 @@ pub extern "C" fn look_record_usage_json(
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// Starts every declared connector, and restarts any that died. Safe to call
+/// repeatedly; the shell calls it at launch and after a reload.
+#[unsafe(no_mangle)]
+pub extern "C" fn look_connectors_start() {
+    let _ = std::panic::catch_unwind(connectors_api::start);
+}
+
+/// Ends every connector. Their rows stay cached, so the next launch shows what
+/// they last sent while they start again.
+#[unsafe(no_mangle)]
+pub extern "C" fn look_connectors_stop() {
+    let _ = std::panic::catch_unwind(connectors_api::stop);
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn look_reload_config() -> bool {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -131,6 +147,10 @@ pub extern "C" fn look_seed_uwp_apps_json(json: *const c_char) -> bool {
 #[unsafe(no_mangle)]
 pub extern "C" fn look_request_index_refresh() -> bool {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // Opening the launcher is "next use", so a connector that died since
+        // the last one comes back here. Reads no directories, so it costs a
+        // lock and a `try_wait` when everything is healthy.
+        connectors_api::restart_dead();
         state::request_background_index_refresh()
     }))
     .unwrap_or(false)
@@ -301,6 +321,17 @@ pub extern "C" fn look_translate_json(
     .unwrap_or(std::ptr::null_mut())
 }
 
+/// Parses a raw `translate_languages` config value and returns an owned JSON C
+/// string: an array of `{code, label}` in the configured order. Free the result
+/// with `look_free_cstring`.
+#[unsafe(no_mangle)]
+pub extern "C" fn look_translate_languages_json(raw: *const c_char) -> *mut c_char {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        translate_api::look_translate_languages_json_impl(raw)
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
 /// Resolves a shared instant answer (currency/weather/crypto) for `query`,
 /// returning an owned JSON C string - an `Answer` object on a hit, or the JSON
 /// literal `null` otherwise. Free the result with `look_free_cstring`.
@@ -321,6 +352,7 @@ pub extern "C" fn look_source_block_json(
     row_id: *const c_char,
     row_title: *const c_char,
     row_path: *const c_char,
+    query: *const c_char,
     ancestors_json: *const c_char,
 ) -> *mut c_char {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -329,6 +361,7 @@ pub extern "C" fn look_source_block_json(
             row_id,
             row_title,
             row_path,
+            query,
             ancestors_json,
         )
     }))
@@ -364,6 +397,12 @@ pub extern "C" fn look_source_rows_json(
 }
 
 /// Every declared block as `{id, name, icon}`, for the shell's row-icon cache.
+/// Everything declared, for the Extend screen. Free with `look_free_cstring`.
+#[unsafe(no_mangle)]
+pub extern "C" fn look_installed_json() -> *mut c_char {
+    std::panic::catch_unwind(sources_api::look_installed_json_impl).unwrap_or(std::ptr::null_mut())
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn look_source_blocks_json() -> *mut c_char {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(
@@ -468,6 +507,7 @@ pub extern "C" fn look_source_preview_json(
     row_id: *const c_char,
     row_title: *const c_char,
     row_path: *const c_char,
+    query: *const c_char,
     ancestors_json: *const c_char,
 ) -> *mut c_char {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -476,6 +516,7 @@ pub extern "C" fn look_source_preview_json(
             row_id,
             row_title,
             row_path,
+            query,
             ancestors_json,
         )
     }))
@@ -802,7 +843,18 @@ pub extern "C" fn look_ai_future_leaning(
 #[unsafe(no_mangle)]
 pub extern "C" fn look_ai_markdown_segments_json(text: *const c_char) -> *mut c_char {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        ai_api::look_ai_markdown_segments_json_impl(text)
+        markdown_api::look_ai_markdown_segments_json_impl(text)
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+/// Markdown block structure for the preview pane: JSON array of
+/// `{kind: "heading"|"paragraph"|"list"|"code", ...}`, YAML frontmatter
+/// dropped. Free with `look_free_cstring`.
+#[unsafe(no_mangle)]
+pub extern "C" fn look_markdown_blocks_json(text: *const c_char) -> *mut c_char {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        markdown_api::look_markdown_blocks_json_impl(text)
     }))
     .unwrap_or(std::ptr::null_mut())
 }
