@@ -94,7 +94,12 @@ pub fn get_icon(cache: &IconCache, kind: &str, path: &str, id: Option<&str>) -> 
     {
         let mut map = cache.0.lock().unwrap();
         if map.len() >= ICON_CACHE_ENTRIES {
-            map.clear();
+            // Drop a quarter rather than everything, so a full cache does not
+            // make every icon on screen resolve again at once.
+            let stale: Vec<String> = map.keys().take(ICON_CACHE_ENTRIES / 4).cloned().collect();
+            for key in stale {
+                map.remove(&key);
+            }
         }
         map.insert(key, data_url.clone());
     }
