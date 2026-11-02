@@ -305,24 +305,7 @@ mod winbt {
         info: &BLUETOOTH_DEVICE_INFO,
         connect: bool,
     ) -> Result<(), String> {
-        // First pass: how many services the device has installed.
-        let mut count: u32 = 0;
-        unsafe { BluetoothEnumerateInstalledServices(Some(radio), info, &mut count, None) };
-        if count == 0 {
-            return Err("No connectable services on this device".to_string());
-        }
-        let mut guids = vec![GUID::default(); count as usize];
-        let status = unsafe {
-            BluetoothEnumerateInstalledServices(
-                Some(radio),
-                info,
-                &mut count,
-                Some(guids.as_mut_ptr()),
-            )
-        };
-        if status != ERROR_SUCCESS.0 {
-            return Err("Windows could not read the device services".to_string());
-        }
+        let guids = installed_services(radio, info);
 
         let flag = if connect {
             BLUETOOTH_SERVICE_ENABLE
@@ -341,12 +324,16 @@ mod winbt {
         // again would only make the user wait twice as long.
         if connect && started.elapsed() < std::time::Duration::from_secs(3) {
             set_all(radio, info, &guids, BLUETOOTH_SERVICE_DISABLE);
-            std::thread::sleep(std::time::Duration::from_millis(400));
-            let (changed, retry) = set_all(radio, info, &guids, BLUETOOTH_SERVICE_ENABLE);
-            if changed > 0 {
-                return Ok(());
+            // Right after a disconnect the stack is not ready to take the
+            // device back, so the enable gets a few tries, waiting longer each.
+            for wait_ms in [400, 1200, 2000] {
+                std::thread::sleep(std::time::Duration::from_millis(wait_ms));
+                let (changed, retry) = set_all(radio, info, &guids, BLUETOOTH_SERVICE_ENABLE);
+                if changed > 0 {
+                    return Ok(());
+                }
+                codes = retry;
             }
-            codes = retry;
         }
         codes.sort_unstable();
         codes.dedup();
@@ -362,6 +349,36 @@ mod winbt {
         } else {
             format!("Windows could not disconnect{code}")
         })
+    }
+
+    /// The services to switch. Windows is asked which the device has installed;
+    /// for a device paired through the newer settings it answers with none, so
+    /// the audio and input profiles a headset, speaker or keyboard uses are
+    /// tried by their well-known ids instead. A service the device lacks just
+    /// refuses, and one that takes the change is enough.
+    fn installed_services(radio: HANDLE, info: &BLUETOOTH_DEVICE_INFO) -> Vec<GUID> {
+        let mut count: u32 = 0;
+        unsafe { BluetoothEnumerateInstalledServices(Some(radio), info, &mut count, None) };
+        if count > 0 {
+            let mut guids = vec![GUID::default(); count as usize];
+            let status = unsafe {
+                BluetoothEnumerateInstalledServices(
+                    Some(radio),
+                    info,
+                    &mut count,
+                    Some(guids.as_mut_ptr()),
+                )
+            };
+            if status == ERROR_SUCCESS.0 && !guids.is_empty() {
+                return guids;
+            }
+        }
+        // Bluetooth base UUID, short ids: A2DP sink, headset, hands-free, AVRCP
+        // target and controller, HID.
+        [0x110B, 0x1108, 0x111E, 0x110C, 0x110E, 0x1124]
+            .into_iter()
+            .map(|short: u32| GUID::from_u128((u128::from(short) << 96) | 0x1000_8000_00805F9B34FB))
+            .collect()
     }
 
     /// Applies `flag` to every service; how many took it, and the codes of the
