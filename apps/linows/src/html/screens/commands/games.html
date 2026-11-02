@@ -1,0 +1,29 @@
+<div class="cmd-panel" id="cmd-panel-games" hidden>
+    <div class="cmd-header-bar">
+        <span class="cmd-input-bar-icon" id="cmd-games-header-icon"></span>
+        <span class="cmd-subtitle">Pass the time against a bot</span>
+        <span class="cmd-pill">/games</span>
+    </div>
+    <div class="cmd-content games-content">
+        <!-- The list of games and how to play them (built by games.js) -->
+        <div class="games-menu" id="games-menu"></div>
+
+        <!-- A game in progress -->
+        <div class="games-play" id="games-play" hidden>
+            <div class="games-bar">
+                <button type="button" class="games-btn" id="games-back" title="Back to the games (Esc)">&larr; Games</button>
+                <span class="games-title" id="games-title"></span>
+                <span class="games-status" id="games-status" aria-live="polite"></span>
+                <span class="games-spacer"></span>
+                <div class="games-seg" id="games-level" role="group" aria-label="Bot level">
+                    <button type="button" data-level="easy">Easy</button>
+                    <button type="button" data-level="medium">Medium</button>
+                    <button type="button" data-level="hard">Hard</button>
+                </div>
+                <button type="button" class="games-btn" id="games-undo" title="Take back your last move (U)">Undo</button>
+                <button type="button" class="games-btn games-btn-primary" id="games-new" title="Start again (N)">New game</button>
+            </div>
+            <div class="games-board" id="games-board"></div>
+        </div>
+    </div>
+</div>

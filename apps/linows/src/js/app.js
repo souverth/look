@@ -110,6 +110,7 @@ const COMMAND_HINTS = {
     speed: 'R: Rerun \u2022 E: Show IP \u2022 Esc: Back',
     kill: 'Y: Confirm \u2022 N: Cancel \u2022 Esc: Back',
     sys: 'Esc: Back',
+    games: 'Click: Play • N: New game • U: Undo • L: Level • Esc: Back',
     note: 'Ctrl+N: New • Arrows: Pick • Ctrl+E: Preview • Ctrl+\\: Split • /: Blocks • Esc: Back',
     calc: 'Enter: Evaluate \u2022 Tab: Select \u2022 Esc: Back',
     shell: 'Enter: Run \u2022 Tab: Select \u2022 Esc: Back',

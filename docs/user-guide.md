@@ -331,7 +331,7 @@ Enter command mode with `Cmd+/`, or jump straight to a specific command from the
 - Same pattern for `:shell`, `:kill`, `:sys`, `:pomo`, `:speed`
 - `:note`, `:todo` and `:done` followed by text are the exception: they act from the search box instead of opening a panel (see [Quick capture](#quick-capture-from-the-search-box))
 
-The `:` prefix only triggers when the word right after it is a known command id (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`); anything else (`:foo`, `:Users/me/...`) stays in normal search.
+The `:` prefix only triggers when the word right after it is a known command id (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`, `games`); anything else (`:foo`, `:Users/me/...`) stays in normal search.
 
 Built-in commands:
 
@@ -339,6 +339,7 @@ Built-in commands:
 - `shell`: run shell command text
 - `kill`: force-kill a running app/process (with confirmation), supports port queries like `:3000` or `port 3000`
 - `sys`: show system information
+- `games` (Linux, Windows): caro and cờ tướng against a bot, to pass the time. Choose the game (`1` caro, `2` cờ tướng), the bot's level (`L` cycles easy, medium, hard) and whether you play first (`S`). Click to play: caro goes in the squares and five or more in a row wins; in cờ tướng click a piece to see where it may go, then click there (a red ring marks a capture, a red glow a general in check). `U` takes your last move back, `N` starts again, `Esc` returns to the list. Playing second turns the cờ tướng board round so you are always at the bottom
 - `pomo`: pomodoro focus timer with editable session list, three timer styles (Modern Ring / Vintage Dial / Minimal Text), background-music folder, menu-bar mini-timer, and a 5-second standby fade
 - `todo`: daily tasks and progress. Two pages - a task list grouped by day, and a Stats page (weekly/monthly completion, streak, 30-day trend, GitHub-style year heatmap)
 - `speed`: measure the connection (download, upload, latency) on a live dial, with your LAN and public addresses
@@ -454,7 +455,7 @@ Behavior:
 - `Escape`: leave command mode
 - `Shift+Escape`: hide launcher
 - `Tab` / `Shift+Tab`: switch commands while staying in command mode
-- `Cmd+1`..`Cmd+7` (macOS) / `Ctrl+1`..`Ctrl+9` (Linux, Windows): jump to a specific command (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`). On Linux and Windows they also work from the home screen, without entering command mode first
+- `Cmd+1`..`Cmd+7` (macOS) / `Ctrl+1`..`Ctrl+9` (Linux, Windows): jump to a specific command (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`, `games`). On Linux and Windows they also work from the home screen, without entering command mode first
 - `Cmd+N` / `Cmd+S` (inside `/todo`): switch Tasks/Stats page, save changes
 - `R` / `E` (inside `/speed`): run the test again, show or hide the public address
 - `Up` / `Down`: in `kill`, navigate process/app results
@@ -797,7 +798,7 @@ shortcut_main_edit=ctrl+shift+e
 - `Cmd+/`: command mode
 - `:cmd` (e.g. `:calc 2+2`, `:kill chrome`, `:sys`, `:speed`): jump to a command directly from the home screen
 - `:note <text>`, `:todo <text>`, `:done` (Linux, Windows): save a note, add a task, or tick one off without opening a panel
-- `Cmd+1`..`Cmd+7` (macOS): in command mode, direct command switch. `Ctrl+1`..`Ctrl+9` (Linux, Windows): open or switch to a command (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`), from the home screen too
+- `Cmd+1`..`Cmd+7` (macOS): in command mode, direct command switch. `Ctrl+1`..`Ctrl+9` (Linux, Windows): open or switch to a command (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`, `games`), from the home screen too
 - `Cmd+1`..`Cmd+9` (macOS) / `Alt+1`..`Alt+9` (Linux, Windows): on the home screen, activate the running-app whose badge shows that digit, when `Running Apps` is on. Badge labels are ergonomic, not strictly positional - see Settings → Appearance → Running Apps
 - `Option+Up` / `Option+Down` in AI mode (`>`): walk your recent prompts, like a shell history. `Shift+Up` / `Shift+Down` select text in the message instead
 - `Shift+Enter` in AI mode (`>`): new line in the message instead of sending. The box grows to 6 lines and stops there. Elsewhere `Shift+Enter` still opens all picked files

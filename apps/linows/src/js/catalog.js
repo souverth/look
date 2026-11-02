@@ -17,6 +17,7 @@ import {
     image,
     fileText,
     alertCircle,
+    gamepad,
 } from './icons.js';
 import * as shortcuts from './shortcuts.js';
 
@@ -144,6 +145,7 @@ const COMMAND_DEFINITIONS = [
         icon: gauge,
     },
     { id: 'sys', detail: 'Show system information', icon: info },
+    { id: 'games', detail: 'Caro and cờ tướng against a bot', icon: gamepad },
 ];
 
 export const COMMAND_ENTRIES = COMMAND_DEFINITIONS.map((entry, index) => ({

@@ -1,0 +1,342 @@
+/* /games: the list of games, and the boards for caro and cờ tướng. */
+
+.games-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+kbd.games-key,
+.games-menu kbd,
+.games-hint kbd {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    border: 1px solid var(--divider-color);
+    border-radius: 4px;
+    background: var(--control-fill);
+    color: var(--font-secondary);
+    font-family: inherit;
+    font-size: calc(var(--font-size) - 3px);
+    line-height: 1.5;
+    text-align: center;
+}
+
+/* --- The menu ------------------------------------------------------------- */
+.games-menu {
+    padding: 6px 10px;
+    overflow-y: auto;
+}
+
+.games-menu[hidden],
+.games-play[hidden] {
+    display: none;
+}
+
+.games-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+}
+
+.games-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 18px 14px 14px;
+    border: 1px solid var(--divider-color);
+    border-radius: var(--bar-radius);
+    background: var(--control-fill);
+    color: var(--font-color);
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        transform 0.15s ease;
+}
+
+.games-card:hover,
+.games-card:focus-visible {
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+    outline: none;
+}
+
+.games-card strong {
+    font-size: calc(var(--font-size) + 3px);
+}
+
+.games-card small {
+    color: var(--font-secondary);
+    text-align: center;
+}
+
+.games-card kbd {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}
+
+.games-card-art svg {
+    display: block;
+}
+
+.games-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.games-opt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.games-opt > span:first-child {
+    width: 84px;
+    color: var(--font-secondary);
+}
+
+.games-hint {
+    margin: 18px 0 0;
+    color: var(--font-muted);
+    font-size: calc(var(--font-size) - 2px);
+}
+
+/* --- Buttons and the level switch ------------------------------------------- */
+.games-seg {
+    display: inline-flex;
+    border: 1px solid var(--divider-color);
+    border-radius: var(--chip-radius);
+    overflow: hidden;
+}
+
+.games-seg button {
+    padding: 4px 12px;
+    border: none;
+    background: none;
+    color: var(--font-secondary);
+    font: inherit;
+    cursor: pointer;
+}
+
+.games-seg button + button {
+    border-left: 1px solid var(--divider-color);
+}
+
+.games-seg button:hover {
+    background: var(--control-fill);
+}
+
+.games-seg button.is-on {
+    background: var(--accent-color);
+    color: #fff;
+}
+
+.games-btn {
+    padding: 4px 11px;
+    border: 1px solid var(--divider-color);
+    border-radius: var(--chip-radius);
+    background: var(--control-fill);
+    color: var(--font-color);
+    font: inherit;
+    cursor: pointer;
+}
+
+.games-btn:hover {
+    border-color: var(--accent-color);
+}
+
+.games-btn-primary {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: #fff;
+}
+
+/* --- A game ----------------------------------------------------------------- */
+.games-play {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.games-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 2px 8px 8px;
+}
+
+.games-title {
+    font-weight: 700;
+}
+
+.games-status {
+    color: var(--font-secondary);
+}
+
+.games-status[data-tone='busy'] {
+    color: var(--font-muted);
+    font-style: italic;
+}
+
+.games-status[data-tone='win'] {
+    color: var(--color-success, #46b96b);
+    font-weight: 700;
+}
+
+.games-status[data-tone='lose'] {
+    color: var(--color-danger, #e5484d);
+    font-weight: 700;
+}
+
+.games-status[data-tone='warn'] {
+    color: var(--color-warning, #e8a33d);
+    font-weight: 700;
+}
+
+.games-spacer {
+    flex: 1;
+}
+
+.games-board {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.games-svg {
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* --- Caro ------------------------------------------------------------------- */
+.caro-bg,
+.xq-bg {
+    fill: #e8c987;
+}
+
+.caro-line {
+    stroke: #9a7a45;
+    stroke-width: 1;
+    fill: none;
+}
+
+.caro-x {
+    stroke: #2f6fed;
+    stroke-width: 3.2;
+    stroke-linecap: round;
+    fill: none;
+}
+
+.caro-o {
+    stroke: #e5484d;
+    stroke-width: 3.2;
+    fill: none;
+}
+
+.caro-last {
+    fill: rgba(255, 196, 0, 0.32);
+}
+
+.caro-win {
+    fill: rgba(70, 185, 107, 0.5);
+}
+
+/* --- Cờ tướng --------------------------------------------------------------- */
+.xq-line {
+    stroke: #6b4f2a;
+    stroke-width: 1.5;
+}
+
+.xq-frame {
+    fill: none;
+    stroke: #6b4f2a;
+    stroke-width: 3;
+}
+
+.xq-river {
+    fill: #6b4f2a;
+    font-size: 22px;
+    font-family: 'KaiTi', 'STKaiti', 'Noto Serif CJK SC', 'SimSun', serif;
+    text-anchor: middle;
+    dominant-baseline: central;
+    opacity: 0.75;
+}
+
+.xq-disc {
+    fill: #f6e4bd;
+    stroke: #6b4f2a;
+    stroke-width: 2;
+}
+
+.xq-ring {
+    fill: none;
+    stroke-width: 1.5;
+}
+
+.xq-piece.is-red .xq-ring,
+.is-red-ring {
+    stroke: #b3261e;
+}
+
+.xq-piece.is-black .xq-ring {
+    stroke: #222;
+}
+
+.xq-char {
+    font-size: 25px;
+    font-weight: 700;
+    font-family: 'KaiTi', 'STKaiti', 'Noto Serif CJK SC', 'SimSun', serif;
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+
+.xq-piece.is-red .xq-char,
+.xq-art-char {
+    fill: #b3261e;
+}
+
+.xq-piece.is-black .xq-char {
+    fill: #1d1d1d;
+}
+
+.xq-art-char {
+    font-size: 26px;
+}
+
+.xq-selected {
+    fill: none;
+    stroke: #2f6fed;
+    stroke-width: 3;
+}
+
+.xq-check {
+    fill: rgba(229, 72, 77, 0.35);
+    stroke: #e5484d;
+    stroke-width: 3;
+}
+
+.xq-dot {
+    fill: rgba(47, 111, 237, 0.75);
+}
+
+.xq-capture {
+    fill: none;
+    stroke: #e5484d;
+    stroke-width: 3;
+}
+
+.xq-last {
+    fill: rgba(255, 196, 0, 0.3);
+}

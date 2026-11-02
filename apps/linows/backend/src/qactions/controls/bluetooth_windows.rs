@@ -243,7 +243,18 @@ mod winbt {
             if let Some(info) = find_device(radio, address) {
                 let connect = !info.fConnected.as_bool();
                 let name = device_name(&info);
-                result = set_services(radio, &info, connect).map(|()| (connect, name));
+                // Windows reports success for switching a service on even when the
+                // device is off or out of range, so a connect is only believed once
+                // the device itself says it is connected.
+                result = set_services(radio, &info, connect)
+                    .and_then(|()| {
+                        if connect {
+                            wait_connected(radio, address, &name)
+                        } else {
+                            Ok(())
+                        }
+                    })
+                    .map(|()| (connect, name));
                 unsafe { CloseHandle(radio) }.ok();
                 break;
             }
@@ -255,6 +266,22 @@ mod winbt {
         }
         unsafe { BluetoothFindRadioClose(radio_find) }.ok();
         result
+    }
+
+    /// Waits for the device to report itself connected, a few seconds at most.
+    fn wait_connected(radio: HANDLE, address: u64, name: &str) -> Result<(), String> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(8);
+        loop {
+            if find_device(radio, address).is_some_and(|info| info.fConnected.as_bool()) {
+                return Ok(());
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err(format!(
+                    "{name} did not connect. Turn it on and bring it close, then try again"
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
     }
 
     fn find_device(radio: HANDLE, address: u64) -> Option<BLUETOOTH_DEVICE_INFO> {
