@@ -193,6 +193,8 @@ const ICON = {
 
 export function init(containerEl) {
     container = containerEl;
+    // The Water widget follows the backend's count and its overdue flag.
+    widgets.watchWater(() => refreshWidgets(['water']));
     // Prefetch the layout so the first show builds with no round trip; if the
     // strip was already asked to show before it arrived, build now.
     ensureLayout().then(() => {
@@ -1363,6 +1365,11 @@ function buildCustom(tile) {
 function buildWidget(tile) {
     const el = tileEl(tile.action_id, 'custom');
     el.classList.add('ctl-tile--widget');
+    // A liquid level behind the text, for a widget that reports `fill` (Water).
+    const liquid = document.createElement('span');
+    liquid.className = 'ctl-liquid';
+    liquid.innerHTML = '<span class="ctl-liquid-body"><i class="ctl-wave"></i><i class="ctl-wave ctl-wave--back"></i></span>';
+    el.appendChild(liquid);
     // One cell shows the headline; a wide row adds a one-line summary; a tall
     // tile adds the caption and a short list.
     const shape = tile.row_span > 1 ? 'tall' : tile.col_span > 1 ? 'wide' : 'compact';
@@ -1410,6 +1417,7 @@ function buildWidget(tile) {
         linesEl: text.querySelector('.ctl-custom-lines'),
         barsEl: roomy ? bars : null,
         railEl: rail,
+        liquidEl: liquid,
         cols: tile.col_span,
     });
     bindActionable(el, tile);
@@ -1437,6 +1445,14 @@ function applyReading(id, w, r) {
     const has = typeof r.progress === 'number';
     w.railEl.classList.toggle('is-on', has);
     if (has) w.railEl.firstElementChild.style.width = `${Math.round(Math.max(0, Math.min(1, r.progress)) * 100)}%`;
+    const filled = typeof r.fill === 'number';
+    w.el.classList.toggle('has-liquid', filled);
+    if (filled) w.el.style.setProperty('--fill', `${Math.round(Math.max(0, Math.min(1, r.fill)) * 100)}%`);
+    w.el.classList.toggle('is-due', Boolean(r.due));
+    if (r.splash && !w.el.classList.contains('is-splash')) {
+        w.el.classList.add('is-splash');
+        setTimeout(() => w.el.classList.remove('is-splash'), 900);
+    }
     if (w.barsEl) w.barsEl.replaceChildren(...(r.bars || []).map(barRow));
     if (w.captionEl) w.captionEl.textContent = r.caption ?? '';
     if (w.linesEl) {

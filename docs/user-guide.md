@@ -178,7 +178,7 @@ If the drawing is wrong, Look says so in the window rather than failing quietly.
 
 ### Data widgets and the visual editor (Linux, Windows)
 
-Beyond the controls above there are six data widgets, none in the default strip: `todo`, `pomo`, `speed`, `notes`, `clock`, `system`. Name one in the drawing like any other tile. A widget draws itself for the room it has: one cell shows the headline, a wide row adds a summary line, a tall tile adds a list. Their keys are `O` Todo, `F` Focus, `E` Speed, `N` Notes, `C` Clock; Todo, Focus, Speed, and Notes are pressable (open the panel, start or pause the timer, run a test).
+Beyond the controls above there are seven data widgets, none in the default strip: `water`, `todo`, `pomo`, `speed`, `notes`, `clock`, `system`. Name one in the drawing like any other tile. A widget draws itself for the room it has: one cell shows the headline, a wide row adds a summary line, a tall tile adds a list. `water` counts glasses against a daily goal and fills like a glass as you drink: a press logs one, and when one is overdue the tile sways and glows and Look sends a system notification (Linux and Windows, Tauri build). The goal, the interval and the active hours live in `~/.look/water.json` (`goal` 8, `interval_min` 60, `start_hour` 8, `end_hour` 22, `reminders` true), read again at every check, so an edit applies without a restart. Their keys are `A` Water, `O` Todo, `F` Focus, `E` Speed, `N` Notes, `C` Clock; Todo, Focus, Speed, and Notes are pressable (open the panel, start or pause the timer, run a test).
 
 You do not have to edit the file by hand. `Settings > Appearance > Super Actions > Customize...` opens a visual editor:
 

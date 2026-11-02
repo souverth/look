@@ -463,6 +463,20 @@ export async function notesSetTagColor(tag, color) {
     return invoke('notes_set_tag_color', { tag, color });
 }
 
+// Water widget: glasses today and whether one is overdue. `glasses` is +1 for a
+// drink, -1 to take one back.
+export async function waterStatus() {
+    return invoke('water_status');
+}
+
+export async function waterDrink(glasses = 1) {
+    return invoke('water_drink', { glasses });
+}
+
+export async function onWaterChanged(callback) {
+    return listen('water-changed', callback);
+}
+
 // Super Actions editor. The model is `{ columns, rows, tiles: [{ id, col, row,
 // w, h }], custom: [{ id, title, icon, value, refresh, press, confirm,
 // mnemonic }] }`; the state adds the built-in catalog, the file path and the

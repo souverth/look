@@ -9,6 +9,7 @@ mod notes;
 mod note_assets;
 mod snippets;
 mod pickers;
+mod water;
 mod window;
 
 use linows_backend::crash;
@@ -480,6 +481,7 @@ fn main() {
     let mut builder = tauri::Builder::default()
         .plugin(single_instance.build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState::new())
         .manage(IconCache::new());
 
@@ -512,6 +514,7 @@ fn main() {
             linows_backend::host::install(Box::new(window::TauriHost(app.handle().clone())));
             app.state::<AppState>().start_bootstrap();
             linows_backend::clipboard::start_monitor();
+            water::start(app.handle().clone());
 
             // Probes the user's systemd manager, so the first launch of a
             // session does not wait on it.
@@ -658,6 +661,8 @@ fn main() {
             commands::activate_running_app,
             commands::todo_list,
             commands::todo_save,
+            water::water_status,
+            water::water_drink,
             notes::notes_list,
             snippets::snippets_search,
             snippets::snippets_expand,

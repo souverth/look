@@ -1,0 +1,303 @@
+//! The Water widget: glasses drunk today, and a reminder when one is due.
+//!
+//! The reminder lives here rather than in the webview because the launcher is
+//! hidden almost all day and a hidden page is not a clock to rely on. A ticker
+//! checks twice a minute, sends a system notification when a glass is overdue
+//! and tells the page, which animates the tile.
+//!
+//! State is one small JSON file beside `look.db`. It is read on every call, so
+//! editing `goal`, `interval_min` or the active hours by hand takes effect at
+//! the next tick without a restart.
+
+use chrono::{Local, TimeZone, Timelike};
+use linows_backend::state::default_db_path;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
+use tauri::{AppHandle, Emitter};
+use tauri_plugin_notification::NotificationExt;
+
+const EVENT_CHANGED: &str = "water-changed";
+const TICK: Duration = Duration::from_secs(30);
+
+/// Serialises load-modify-save between the ticker and the commands.
+static LOCK: Mutex<()> = Mutex::new(());
+/// When this run began: a reminder is never due before it, so opening Look at
+/// 3pm does not greet the user with a notification for the missed morning.
+static STARTED: OnceLock<i64> = OnceLock::new();
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+struct Stored {
+    /// Off silences the notification; the tile still counts glasses.
+    reminders: bool,
+    /// Glasses a day.
+    goal: u32,
+    /// Minutes between reminders.
+    interval_min: u32,
+    /// Reminders only between these local hours: `start_hour <= h < end_hour`.
+    start_hour: u32,
+    end_hour: u32,
+    /// The local date `count` belongs to, `YYYY-MM-DD`.
+    day: String,
+    count: u32,
+    last_drink_unix_s: i64,
+    last_remind_unix_s: i64,
+}
+
+impl Default for Stored {
+    fn default() -> Self {
+        Self {
+            reminders: true,
+            goal: 8,
+            interval_min: 60,
+            start_hour: 8,
+            end_hour: 22,
+            day: String::new(),
+            count: 0,
+            last_drink_unix_s: 0,
+            last_remind_unix_s: 0,
+        }
+    }
+}
+
+/// What the page needs to draw the tile.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct Status {
+    pub count: u32,
+    pub goal: u32,
+    pub interval_min: u32,
+    /// A glass is overdue and the goal is not met.
+    pub due: bool,
+    /// When the next glass is expected, or 0 when no reminder is pending
+    /// (goal met, reminders off, or outside the active hours).
+    pub next_unix_s: i64,
+}
+
+/// The moment being judged, split out so the rules can be tested.
+struct Clock {
+    now: i64,
+    hour: u32,
+    day: String,
+    /// Local midnight today as a unix time.
+    midnight: i64,
+}
+
+impl Clock {
+    fn local() -> Self {
+        let now = Local::now();
+        let midnight = now
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .and_then(|t| Local.from_local_datetime(&t).earliest())
+            .map(|t| t.timestamp())
+            .unwrap_or(0);
+        Self {
+            now: now.timestamp(),
+            hour: now.hour(),
+            day: now.format("%Y-%m-%d").to_string(),
+            midnight,
+        }
+    }
+}
+
+/// A new day starts from zero.
+fn roll_over(s: &mut Stored, clock: &Clock) {
+    if s.day != clock.day {
+        s.day = clock.day.clone();
+        s.count = 0;
+        s.last_drink_unix_s = 0;
+        s.last_remind_unix_s = 0;
+    }
+}
+
+fn evaluate(s: &Stored, clock: &Clock, started: i64) -> Status {
+    let window_start = clock.midnight + i64::from(s.start_hour) * 3600;
+    let interval = i64::from(s.interval_min.max(1)) * 60;
+    let in_window = (s.start_hour..s.end_hour).contains(&clock.hour);
+    let pending = s.reminders && in_window && s.count < s.goal;
+    // The wait counts from the last glass, or from the start of the day's
+    // window (or of this run, if later) when none has been drunk yet.
+    let anchor = s.last_drink_unix_s.max(window_start).max(started);
+    let next = anchor + interval;
+    Status {
+        count: s.count,
+        goal: s.goal,
+        interval_min: s.interval_min,
+        due: pending && clock.now >= next,
+        next_unix_s: if pending { next } else { 0 },
+    }
+}
+
+fn path() -> PathBuf {
+    default_db_path().with_file_name("water.json")
+}
+
+fn load(clock: &Clock) -> Stored {
+    let mut s: Stored = std::fs::read_to_string(path())
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default();
+    s.goal = s.goal.max(1);
+    roll_over(&mut s, clock);
+    s
+}
+
+fn save(s: &Stored) -> Result<(), String> {
+    let text = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
+    let path = path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    std::fs::write(path, text).map_err(|e| e.to_string())
+}
+
+fn started() -> i64 {
+    *STARTED.get_or_init(|| Local::now().timestamp())
+}
+
+fn status_of(s: &Stored, clock: &Clock) -> Status {
+    evaluate(s, clock, started())
+}
+
+#[tauri::command]
+pub fn water_status() -> Status {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let clock = Clock::local();
+    status_of(&load(&clock), &clock)
+}
+
+/// Logs `glasses` (negative to take one back after a mis-tap).
+#[tauri::command]
+pub fn water_drink(app: AppHandle, glasses: i32) -> Result<Status, String> {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let clock = Clock::local();
+    let mut s = load(&clock);
+    s.count = s.count.saturating_add_signed(glasses);
+    if glasses > 0 {
+        s.last_drink_unix_s = clock.now;
+        s.last_remind_unix_s = 0;
+    }
+    save(&s)?;
+    let status = status_of(&s, &clock);
+    let _ = app.emit(EVENT_CHANGED, &status);
+    Ok(status)
+}
+
+/// Checks twice a minute for the rest of the run.
+pub fn start(app: AppHandle) {
+    started();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(TICK).await;
+            remind_if_due(&app);
+        }
+    });
+}
+
+fn remind_if_due(app: &AppHandle) {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let clock = Clock::local();
+    let mut s = load(&clock);
+    let status = status_of(&s, &clock);
+    // Every interval until a glass is logged, not every tick.
+    let again = clock.now - s.last_remind_unix_s >= i64::from(s.interval_min.max(1)) * 60;
+    if status.due && again {
+        let body = format!(
+            "Time for a glass of water. {} of {} today.",
+            s.count, s.goal
+        );
+        let _ = app.notification().builder().title("Look").body(body).show();
+        s.last_remind_unix_s = clock.now;
+        let _ = save(&s);
+    }
+    // The page keeps the tile's state true even if the tick sent nothing new:
+    // it is what flips the tile to "due" the moment the interval runs out.
+    let _ = app.emit(EVENT_CHANGED, &status);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MIDNIGHT: i64 = 1_000_000;
+    /// The default window opens at 08:00.
+    const START: i64 = MIDNIGHT + 8 * 3600;
+
+    fn clock(now: i64, hour: u32) -> Clock {
+        Clock {
+            now,
+            hour,
+            day: "2026-11-02".into(),
+            midnight: MIDNIGHT,
+        }
+    }
+
+    fn at(s: &Stored, now: i64, hour: u32) -> Status {
+        evaluate(s, &clock(now, hour), 0)
+    }
+
+    #[test]
+    fn a_glass_is_due_one_interval_after_the_window_opens() {
+        let s = Stored::default();
+        assert!(!at(&s, START + 59 * 60, 8).due);
+        assert!(at(&s, START + 60 * 60, 9).due);
+    }
+
+    #[test]
+    fn drinking_restarts_the_wait() {
+        let s = Stored {
+            count: 1,
+            last_drink_unix_s: START + 3 * 3600,
+            ..Stored::default()
+        };
+        assert!(!at(&s, START + 3 * 3600 + 30 * 60, 11).due);
+        assert!(at(&s, START + 4 * 3600, 12).due);
+    }
+
+    #[test]
+    fn nothing_is_due_outside_the_hours_or_once_the_goal_is_met() {
+        let s = Stored::default();
+        assert!(!at(&s, START + 20 * 3600, 23).due, "after the window");
+        assert_eq!(at(&s, START + 20 * 3600, 23).next_unix_s, 0);
+        let done = Stored {
+            count: 8,
+            ..Stored::default()
+        };
+        assert!(!at(&done, START + 5 * 3600, 13).due, "goal met");
+    }
+
+    #[test]
+    fn reminders_off_still_counts_but_never_asks() {
+        let s = Stored {
+            reminders: false,
+            count: 3,
+            ..Stored::default()
+        };
+        let status = at(&s, START + 5 * 3600, 13);
+        assert!(!status.due);
+        assert_eq!(status.count, 3);
+    }
+
+    #[test]
+    fn a_run_that_starts_late_does_not_owe_the_morning() {
+        let s = Stored::default();
+        let late = START + 6 * 3600;
+        let status = evaluate(&s, &clock(late + 60, 14), late);
+        assert!(!status.due, "the wait starts when Look does");
+    }
+
+    #[test]
+    fn a_new_day_starts_from_zero() {
+        let mut s = Stored {
+            day: "2026-11-01".into(),
+            count: 5,
+            last_drink_unix_s: 42,
+            ..Stored::default()
+        };
+        roll_over(&mut s, &clock(START, 8));
+        assert_eq!((s.count, s.last_drink_unix_s), (0, 0));
+        assert_eq!(s.day, "2026-11-02");
+    }
+}

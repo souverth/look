@@ -128,6 +128,7 @@ fn describe(id: &str) -> &'static str {
         "restart" => "Restarts the machine. Asks first, so a stray key cannot.",
         "shutdown" => "Shuts the machine down. Asks first, so a stray key cannot.",
         "nowplaying" => "The current track, with play and pause.",
+        "water" => "Glasses of water today, with a reminder to drink. Press to log a glass.",
         "todo" => "Today's tasks done and still open. Press to open /todo.",
         "pomo" => {
             "Your focus timer: a live countdown while a session runs. Press to start or pause."

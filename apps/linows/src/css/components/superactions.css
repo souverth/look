@@ -633,6 +633,164 @@ html[data-motion="off"] .control-strip.is-armed .ctl-tile {
     cursor: default;
 }
 
+/* --- Water: a liquid level behind the text, rising with the glasses drunk.
+   Any widget reporting `fill` gets it; the level is --fill on the tile. */
+.ctl-tile--widget {
+    isolation: isolate;
+}
+
+.ctl-liquid {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.ctl-tile--widget.has-liquid .ctl-liquid {
+    opacity: 1;
+}
+
+/* The body is the water; its top edge is the waves. It rises when --fill does. */
+.ctl-liquid-body {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--fill, 0%);
+    min-height: 0;
+    background: color-mix(in srgb, var(--accent-color) 20%, transparent);
+    transition: height 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ctl-wave {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 7px;
+    background: color-mix(in srgb, var(--accent-color) 20%, transparent);
+    -webkit-mask: var(--wave) repeat-x 0 100% / 36px 7px;
+    mask: var(--wave) repeat-x 0 100% / 36px 7px;
+    animation: ctl-wave 2.6s linear infinite;
+    --wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 7' preserveAspectRatio='none'%3E%3Cpath d='M0 4 Q9 0 18 4 T36 4 V7 H0 Z'/%3E%3C/svg%3E");
+}
+
+.ctl-wave--back {
+    height: 9px;
+    opacity: 0.55;
+    -webkit-mask-size: 48px 9px;
+    mask-size: 48px 9px;
+    animation: ctl-wave-back 4.2s linear infinite;
+}
+
+@keyframes ctl-wave {
+    to {
+        -webkit-mask-position: 36px 100%;
+        mask-position: 36px 100%;
+    }
+}
+
+@keyframes ctl-wave-back {
+    to {
+        -webkit-mask-position: -48px 100%;
+        mask-position: -48px 100%;
+    }
+}
+
+/* A glass logged: the drop hops, and a ring spreads from it. */
+.ctl-tile--widget.is-splash .ctl-icon {
+    animation: ctl-drop 0.8s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.ctl-tile--widget.is-splash::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 24px;
+    height: 24px;
+    margin: -12px 0 0 -12px;
+    border-radius: 50%;
+    border: 2px solid var(--accent-color);
+    pointer-events: none;
+    animation: ctl-ripple 0.8s ease-out forwards;
+}
+
+@keyframes ctl-drop {
+    0% {
+        transform: translateY(-9px) scale(0.8);
+    }
+    55% {
+        transform: translateY(2px) scale(1.18, 0.88);
+    }
+    100% {
+        transform: none;
+    }
+}
+
+@keyframes ctl-ripple {
+    from {
+        opacity: 0.7;
+        transform: scale(0.4);
+    }
+    to {
+        opacity: 0;
+        transform: scale(5);
+    }
+}
+
+/* A glass is overdue: the drop sways and the tile breathes a soft glow. */
+.ctl-tile--widget.is-due {
+    animation: ctl-due 2.2s ease-in-out infinite;
+}
+
+.ctl-tile--widget.is-due .ctl-icon,
+.ctl-tile--widget.is-due .ctl-custom-caption {
+    color: var(--accent-color);
+}
+
+.ctl-tile--widget.is-due .ctl-icon {
+    animation: ctl-sway 1.8s ease-in-out infinite;
+    transform-origin: 50% 90%;
+}
+
+@keyframes ctl-due {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 transparent;
+    }
+    50% {
+        box-shadow: 0 0 14px 1px color-mix(in srgb, var(--accent-color) 45%, transparent);
+    }
+}
+
+@keyframes ctl-sway {
+    0%,
+    100% {
+        transform: rotate(-9deg);
+    }
+    50% {
+        transform: rotate(9deg) translateY(-2px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ctl-wave,
+    .ctl-tile--widget.is-due,
+    .ctl-tile--widget.is-due .ctl-icon,
+    .ctl-tile--widget.is-splash .ctl-icon,
+    .ctl-tile--widget.is-splash::after {
+        animation: none;
+    }
+    .ctl-liquid-body {
+        transition: none;
+    }
+}
+
 /* A low number is good news and reads as such; it only turns loud when it must. */
 .ctl-tile--widget .ctl-value {
     white-space: nowrap;

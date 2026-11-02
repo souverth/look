@@ -1,4 +1,4 @@
-﻿// The data widgets of the Super Actions strip: Todo, Focus, Speed,
+// The data widgets of the Super Actions strip: Todo, Focus, Speed,
 // Notes, Clock and System. Unlike the system toggles they have no native
 // adapter; each reads a feature the app already has and hands the strip a
 // "reading" - a headline, a caption and a few lines - which superactions.js
@@ -13,15 +13,63 @@
 // 'warn' | 'danger' for a quota getting tight; `active` lights the tile up the
 // way an "on" toggle is (a running timer, a finished list).
 
-import { todoList, notesList, systemUptime, getSystemInfo } from '../ipc.js';
+import {
+    todoList,
+    notesList,
+    systemUptime,
+    getSystemInfo,
+    waterStatus,
+    waterDrink,
+    onWaterChanged,
+} from '../ipc.js';
 import { snapshot as pomoSnapshot, formatTime, togglePlayback } from '../screens/commands/pomo.js';
 import * as speed from '../screens/commands/speed.js';
-import { listChecks, timer, clock, gauge, notebook, info } from '../icons.js';
+import { listChecks, timer, clock, gauge, notebook, info, droplet } from '../icons.js';
 import { noteTitle } from './superactions-format.js';
 
 const TTL_MS = 15_000;
 const SYSINFO_TTL_MS = 60_000;
 let openCommand = null;
+
+// The Water widget reads this copy, which the backend keeps true: it pushes a
+// status on every glass and every tick, so the once-a-second redraw costs no IPC.
+let water = null;
+let waterDrankAt = 0;
+let onWater = null;
+const SPLASH_MS = 900;
+
+/** Calls `fn` whenever the water numbers change, so the tile stays true. */
+export function watchWater(fn) {
+    onWater = fn;
+    void waterStatus()
+        .then((status) => {
+            water = status;
+            onWater?.();
+        })
+        .catch((err) => console.error('[water] status failed:', err));
+    void onWaterChanged((event) => {
+        water = event.payload;
+        onWater?.();
+    });
+}
+
+function drinkWater() {
+    void waterDrink(1)
+        .then((status) => {
+            water = status;
+            waterDrankAt = Date.now();
+            onWater?.();
+        })
+        .catch((err) => console.error('[water] drink failed:', err));
+}
+
+const waterCaption = (w) => {
+    if (w.count >= w.goal) return 'Goal reached';
+    if (w.due) return 'Time to drink';
+    if (!w.next_unix_s) return 'Press to log a glass';
+    const minutes = Math.max(1, Math.ceil((w.next_unix_s * 1000 - Date.now()) / 60000));
+    return minutes >= 60 ? `Next in ${Math.floor(minutes / 60)}h ${minutes % 60}m` : `Next in ${minutes} min`;
+};
 
 /** superactions.js is told how to jump into a command panel by app.js. */
 export function setOpenCommand(fn) {
@@ -78,6 +126,30 @@ const readSystem = cached(SYSINFO_TTL_MS, async () => {
 // `live` widgets are re-read every second (a countdown, a clock); the others
 // when the strip is shown.
 const WIDGETS = {
+    water: {
+        icon: droplet,
+        // The "next in" caption counts down.
+        live: true,
+        async read(shape) {
+            if (!water) return { value: '--', caption: 'Water', lines: [] };
+            const left = Math.max(0, water.goal - water.count);
+            return {
+                value: `${water.count}/${water.goal}`,
+                caption: waterCaption(water),
+                active: water.count >= water.goal,
+                // The glass fills as the day goes; the tile wears it as a wave.
+                fill: Math.min(1, water.count / water.goal),
+                due: water.due,
+                splash: Date.now() - waterDrankAt < SPLASH_MS,
+                lines:
+                    shape === 'tall'
+                        ? [left ? `${left} to go` : 'Well done', `A glass every ${water.interval_min} min`]
+                        : [],
+            };
+        },
+        press: drinkWater,
+    },
+
     todo: {
         icon: listChecks,
         async read(shape) {
@@ -88,15 +160,15 @@ const WIDGETS = {
                 value: `${done}/${tasks.length}`,
                 caption:
                     shape === 'wide' && open.length
-                        ? `Done today  Â·  next: ${open[0]}`
+                        ? `Done today  ·  next: ${open[0]}`
                         : tasks.length
                           ? open.length || shape !== 'wide'
                               ? 'Done today'
-                              : 'Done today  Â·  all clear'
+                              : 'Done today  ·  all clear'
                           : 'No tasks today',
                 active: tasks.length > 0 && open.length === 0,
                 progress: tasks.length ? done / tasks.length : null,
-                lines: shape === 'tall' ? (open.length ? open.slice(0, 5).map((n) => `â€¢ ${n}`) : tasks.length ? ['All clear'] : []) : [],
+                lines: shape === 'tall' ? (open.length ? open.slice(0, 5).map((n) => `• ${n}`) : tasks.length ? ['All clear'] : []) : [],
             };
         },
         press: () => openCommand?.('todo'),
@@ -124,13 +196,13 @@ const WIDGETS = {
         live: true,
         async read(shape) {
             const { running, reading, error } = speed.snapshot();
-            if (running) return { value: 'â€¦', caption: shape === 'compact' ? 'Testing' : 'Testing, about 15 seconds', active: true, lines: [] };
+            if (running) return { value: '…', caption: shape === 'compact' ? 'Testing' : 'Testing, about 15 seconds', active: true, lines: [] };
             if (!reading) return { value: 'Run', caption: error ? 'Test failed' : 'Press to test your speed', lines: shape === 'tall' && error ? [String(error)] : [] };
             return {
                 value: reading.download_display,
                 caption:
                     shape === 'wide'
-                        ? `Download  Â·  Upload ${reading.upload_display}  Â·  Ping ${reading.latency_display}`
+                        ? `Download  ·  Upload ${reading.upload_display}  ·  Ping ${reading.latency_display}`
                         : 'Download',
                 lines: shape === 'tall' ? [`Upload  ${reading.upload_display}`, `Ping  ${reading.latency_display}`] : [],
             };
@@ -178,7 +250,7 @@ const WIDGETS = {
                 value: uptime || '--',
                 caption:
                     shape === 'wide' && wanted.length
-                        ? `Uptime  Â·  ${wanted.slice(0, 2).map((r) => `${r.label} ${r.value}`).join('  Â·  ')}`
+                        ? `Uptime  ·  ${wanted.slice(0, 2).map((r) => `${r.label} ${r.value}`).join('  ·  ')}`
                         : 'Uptime',
                 lines: shape === 'tall' ? wanted.map((r) => `${r.label}  ${r.value}`) : [],
             };
