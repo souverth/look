@@ -7,6 +7,7 @@
 //! ids, ranking, or process execution: mapping rows into the index is the
 //! engine's job, and running a user's command is the shell's.
 //!
+mod check;
 mod collect;
 mod connect;
 mod def;
@@ -17,13 +18,14 @@ mod rows;
 mod run;
 mod tools;
 
+pub use check::{Reason, Unready, check, installed};
 pub use collect::{
     CollectError, Collected, MAX_ROWS_PER_SOURCE, collect, collect_for_row, expand_home,
 };
 pub use connect::{Ask, Content, PROTOCOL_VERSION, Row as ConnectorRow, Say, read as read_frame};
 pub use def::{
-    Applies, AppliesOnly, Block, Only, ParsedFile, Producer, RowFormat, RowKind, Verbs, inferred,
-    parse_duration, parse_file,
+    Applies, AppliesOnly, Block, Control, ControlKind, Only, ParsedFile, Producer, RowFormat,
+    RowKind, Verbs, inferred, parse_duration, parse_file,
 };
 pub use detail::{DetailBlock, DetailField, DetailItem, parse as parse_detail};
 pub use load::{

@@ -59,6 +59,10 @@ pub struct ThenTarget {
     pub name: String,
     pub icon: Option<String>,
     pub performs: bool,
+    /// The connector that owns the row works out what this verb would do, so
+    /// the shell asks for a plan rather than performing it. Its confirmation
+    /// is computed, which is why `confirm` is null on one of these.
+    pub plans: bool,
     /// The question to ask before running it, already expanded against the row,
     /// or null when it needs no confirmation.
     pub confirm: Option<String>,
@@ -125,6 +129,19 @@ pub struct Reported {
     pub message: String,
 }
 
+/// A declared value that cannot work on this machine, although the file it was
+/// written in is valid. Not a `Reported` problem: nothing failed to load, the
+/// block simply names a folder or a program that is not here, which is the one
+/// thing a copied example almost always gets wrong.
+#[derive(Serialize, Debug)]
+pub struct Needed {
+    /// The key to change: a producer key, `cwd`, `preview`, or a verb.
+    pub key: String,
+    /// The declared value as written in the file.
+    pub value: String,
+    pub message: String,
+}
+
 /// One declared block, as a screen listing what is installed needs it.
 #[derive(Serialize)]
 pub struct InstalledBlock {
@@ -140,6 +157,8 @@ pub struct InstalledBlock {
     pub from_app: bool,
     /// Only meaningful for a `connect` block: whether its process is up.
     pub running: bool,
+    /// What to change before this block works here. Empty is the normal case.
+    pub needs: Vec<Needed>,
 }
 
 /// Everything declared, from both directories, with the state a management
@@ -162,13 +181,22 @@ pub fn inventory(home: &Path) -> Inventory {
         .blocks
         .into_iter()
         .map(|block| {
+            // Before `source_file` is moved out from under it.
+            let needs: Vec<Needed> = look_sources::check(&block, home)
+                .into_iter()
+                .map(|unready| Needed {
+                    message: unready.message(),
+                    key: unready.key.to_string(),
+                    value: unready.value,
+                })
+                .collect();
             let file = block.source_file.unwrap_or_default();
             // A control nothing can offer is the other silent failure: the row
             // simply shows no control, with the reason on stderr.
             if let Some(message) = block
                 .control
-                .as_deref()
-                .and_then(crate::qactions::declared_control_problem)
+                .as_ref()
+                .and_then(|control| crate::qactions::declared_control_problem(&control.id))
             {
                 problems.push(Reported {
                     file: file.clone(),
@@ -184,6 +212,7 @@ pub fn inventory(home: &Path) -> Inventory {
                 icon: block.icon,
                 enabled: block.enabled,
                 file,
+                needs,
             }
         })
         .collect();
@@ -199,6 +228,8 @@ pub struct PerformOutcome {
     /// caller should descend into it. An explicit signal, because "nothing was
     /// performed" is also what a failure looks like.
     pub produces_rows: bool,
+    /// The block supplies a control and nothing else, so Enter presses it.
+    pub presses_control: bool,
     /// The block declares no `open` and the row names a path, so the row IS the
     /// thing: the shell opens it the way it opens any file. One rule for Enter,
     /// decided here rather than from the row's kind, which says which producer
@@ -340,7 +371,8 @@ fn then_target(target: &Block, row: &RowContext) -> ThenTarget {
         id: target.id.clone(),
         name: target.name.clone(),
         icon: target.icon.clone(),
-        performs: target.is_bundle(),
+        performs: target.performs(),
+        plans: matches!(target.producer, Producer::Ask { .. }),
         // Expanded here so the question names the row the user is looking at
         // ("Delete main?"), not the template.
         confirm: target
@@ -459,6 +491,13 @@ pub fn perform_block(block_id: &str, row: &RowContext, as_target: bool) -> Perfo
     // that means descend, reached by Enter it means run the block's `open`.
     let steps: Vec<String> = match &block.producer {
         Producer::Bundle { steps } => steps.clone(),
+        // Loud rather than silent: a verb goes through `plan_verb`, and
+        // reaching here means the shell routed it as an ordinary block.
+        Producer::Ask { .. } => {
+            return failed(vec![format!(
+                "[{block_id}] is a verb, which is planned not performed"
+            )]);
+        }
         _ if as_target => {
             return PerformOutcome {
                 produces_rows: true,
@@ -472,6 +511,15 @@ pub fn perform_block(block_id: &str, row: &RowContext, as_target: bool) -> Perfo
             None if !row.path.is_empty() => {
                 return PerformOutcome {
                     opens_path: true,
+                    ..Default::default()
+                };
+            }
+            // A row whose block supplies a control and declares nothing else:
+            // the control IS the purpose, so Enter presses it rather than
+            // failing with a verb the block never had.
+            None if block.control.is_some() => {
+                return PerformOutcome {
+                    presses_control: true,
                     ..Default::default()
                 };
             }
@@ -637,6 +685,159 @@ pub fn preview(candidate_id: &str, row: &RowContext) -> Option<PreviewOutcome> {
     )
 }
 
+/// What a verb would do, for the question the user confirms. `error` is the
+/// reason there is nothing to confirm, which is not the same as a plan that
+/// says it will do nothing.
+#[derive(Serialize, Default)]
+pub struct PlanOutcome {
+    pub plan: u64,
+    pub title: String,
+    pub detail: Option<String>,
+    pub error: Option<String>,
+}
+
+/// How running a confirmed plan went.
+#[derive(Serialize, Default)]
+pub struct RunOutcome {
+    pub ok: bool,
+    pub summary: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Asks the connector that owns the row what `block_id`'s verb would do to it.
+///
+/// The connector is the one behind the row, not behind the verb: a verb is
+/// declared beside the rows it acts on and has no process of its own.
+pub fn plan_verb(block_id: &str, candidate_id: &str, row: &RowContext) -> PlanOutcome {
+    let Some(block) = find_block(block_id) else {
+        return PlanOutcome {
+            error: Some("that block no longer exists".into()),
+            ..Default::default()
+        };
+    };
+    let Producer::Ask { verb } = &block.producer else {
+        return PlanOutcome {
+            error: Some(format!("[{block_id}] is not a verb")),
+            ..Default::default()
+        };
+    };
+    let Some(owner) = owner_of(candidate_id) else {
+        return PlanOutcome {
+            error: Some("that row came from no connector".into()),
+            ..Default::default()
+        };
+    };
+    let Some(plan) = crate::connectors::ask_plan(&owner, verb, vec![row.id.clone()]) else {
+        return PlanOutcome {
+            error: Some("connector is not running".into()),
+            ..Default::default()
+        };
+    };
+    match crate::connectors::planned_of(plan, CONNECTOR_PLAN_WAIT) {
+        Some(found) => PlanOutcome {
+            plan,
+            title: found.title,
+            detail: found.detail,
+            error: None,
+        },
+        None => PlanOutcome {
+            error: Some("connector did not answer".into()),
+            ..Default::default()
+        },
+    }
+}
+
+/// Runs a plan the user confirmed, and waits for the connector to say how it
+/// went. The candidate names the connector, as it did for the plan.
+pub fn run_verb(candidate_id: &str, plan: u64) -> RunOutcome {
+    let Some(owner) = owner_of(candidate_id) else {
+        return RunOutcome {
+            error: Some("that row came from no connector".into()),
+            ..Default::default()
+        };
+    };
+    if !crate::connectors::run_plan(&owner, plan) {
+        return RunOutcome {
+            error: Some("connector is not running".into()),
+            ..Default::default()
+        };
+    }
+    match crate::connectors::result_of(plan, CONNECTOR_RUN_WAIT) {
+        Some(found) => RunOutcome {
+            ok: found.ok,
+            summary: found.summary,
+            error: None,
+        },
+        // It was told to run and may well be running. Saying nothing happened
+        // would be a guess, so this says only that nothing came back.
+        None => RunOutcome {
+            ok: true,
+            summary: None,
+            error: None,
+        },
+    }
+}
+
+/// The connector block a row came from, which is the block half of the
+/// candidate id. The row's own id is what the connector calls it, and is no
+/// use for finding which connector that is.
+fn owner_of(candidate_id: &str) -> Option<String> {
+    CandidateIdKind::source_id_of(candidate_id).map(str::to_string)
+}
+
+/// Where a declared control stands, or why it could not be read.
+#[derive(Serialize, Default)]
+pub struct ControlState {
+    pub on: bool,
+    pub error: Option<String>,
+}
+
+/// Reads a control, or presses it and reads where it ended up. One call for
+/// both, because a connector answers a press with the state it reached, and a
+/// shell that assumed instead would show a toggle the connector refused.
+pub fn control(action_id: &str, press: bool) -> ControlState {
+    let Some((block, control)) = crate::qactions::control_parts(action_id) else {
+        return ControlState {
+            error: Some("not a declared control".into()),
+            ..Default::default()
+        };
+    };
+    // The action id carries the block, so a press does not depend on what is
+    // still selected by the time it lands.
+    let Some(req) = crate::connectors::ask_control(block, control, press) else {
+        return ControlState {
+            error: Some("connector is not running".into()),
+            ..Default::default()
+        };
+    };
+    let wait = if press {
+        CONNECTOR_PRESS_WAIT
+    } else {
+        CONNECTOR_CONTROL_WAIT
+    };
+    match crate::connectors::state_of(req, wait) {
+        Some(on) => ControlState { on, error: None },
+        None => ControlState {
+            error: Some("connector did not answer".into()),
+            ..Default::default()
+        },
+    }
+}
+
+/// A control is read on every selection, so it is held to the preview's
+/// budget rather than the verb's.
+const CONNECTOR_CONTROL_WAIT: Duration = Duration::from_millis(400);
+
+/// A press is not a read. It happens once, the user is waiting on it, and it
+/// is not idempotent: giving up early would report a press that landed as one
+/// that did not, and the user would press again and flip it back.
+const CONNECTOR_PRESS_WAIT: Duration = Duration::from_millis(1_500);
+
+/// Running is the user's own action, so it may take longer than a preview the
+/// panel merely wanted.
+const CONNECTOR_PLAN_WAIT: Duration = Duration::from_millis(1_500);
+const CONNECTOR_RUN_WAIT: Duration = Duration::from_secs(5);
+
 /// How long a panel waits on a connector. Long enough for a local process to
 /// answer, short enough that a dead one costs a beat rather than the frame.
 const CONNECTOR_PREVIEW_WAIT: Duration = Duration::from_millis(400);
@@ -650,7 +851,7 @@ fn connector_preview(block: &str, row: &str) -> PreviewOutcome {
     let Some(req) = crate::connectors::ask_preview(block, row) else {
         return PreviewOutcome::failed("connector is not running");
     };
-    let Some(found) = crate::connectors::preview_of(block, row, req, CONNECTOR_PREVIEW_WAIT) else {
+    let Some(found) = crate::connectors::preview_of(req, CONNECTOR_PREVIEW_WAIT) else {
         return PreviewOutcome::default();
     };
     let text = found.text.clone();
@@ -1076,6 +1277,56 @@ mod tests {
     }
 
     #[test]
+    fn the_inventory_says_what_to_change_in_a_block_that_cannot_work_here() {
+        let _guard = GUARD.lock().unwrap_or_else(|err| err.into_inner());
+        let fixture = Fixture::new(
+            "inventory-needs",
+            "[notes]\ndir = \"~/Documents/look-not-here\"\n",
+        );
+        let found = inventory(&fixture.base);
+
+        // The file is valid, so it is not a problem: it is a line to change.
+        assert!(found.problems.is_empty(), "{:?}", found.problems.len());
+        let block = found
+            .blocks
+            .iter()
+            .find(|one| one.id == "notes")
+            .expect("the block");
+        assert_eq!(block.needs.len(), 1, "{:?}", block.needs);
+        assert_eq!(block.needs[0].key, "dir");
+        assert_eq!(block.needs[0].value, "~/Documents/look-not-here");
+        assert!(
+            block.needs[0].message.contains("is not there"),
+            "{}",
+            block.needs[0].message
+        );
+
+        // The Extend screen decodes these names, and nothing else would fail
+        // if one of them were renamed: a missing key there is a silent screen.
+        let wire = serde_json::to_string(&found).expect("serializes");
+        for key in ["\"needs\":", "\"key\":", "\"value\":", "\"message\":"] {
+            assert!(wire.contains(key), "{key} missing from {wire}");
+        }
+    }
+
+    #[test]
+    fn a_block_whose_paths_are_all_there_needs_nothing() {
+        let _guard = GUARD.lock().unwrap_or_else(|err| err.into_inner());
+        let fixture = Fixture::new("inventory-ready", "[notes]\ndir = \"~\"\n");
+        let found = inventory(&fixture.base);
+
+        assert!(
+            found.blocks.iter().all(|one| one.needs.is_empty()),
+            "{:?}",
+            found
+                .blocks
+                .iter()
+                .map(|one| &one.needs)
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn an_installed_manifest_declares_blocks_under_its_own_name() {
         let _guard = GUARD.lock().unwrap_or_else(|err| err.into_inner());
         let fixture = Fixture::new("manifest", "[notes]\ndo = [\"true\"]\n");
@@ -1100,12 +1351,15 @@ mod tests {
         let _guard = GUARD.lock().unwrap_or_else(|err| err.into_inner());
         let _fixture = Fixture::new(
             "control",
-            "[lamp]\ncontrol = \"bluetooth\"\ndo = [\"true\"]\n\n[plain]\ndo = [\"true\"]\n",
+            "[lamp]\ncontrol = { id = \"bluetooth\", title = \"Bluetooth\" }\ndo = [\"true\"]\n\n[plain]\ndo = [\"true\"]\n",
         );
 
         // Borrowing a system control is refused: the row runs `true` and has
         // no business offering the machine's Bluetooth.
         let lamp = CandidateIdKind::source_row_candidate_id("lamp", &[], "");
+        // The block has to be there for the refusal to be what empties the
+        // list: a fixture that fails to parse would pass this on its own.
+        assert!(find_block("lamp").is_some(), "the fixture must load");
         assert!(crate::qactions::descriptors_for(&lamp, "action").is_empty());
 
         // No table on any platform names a declared row, so a block that says

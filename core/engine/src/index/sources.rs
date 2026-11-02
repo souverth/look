@@ -53,10 +53,20 @@ pub(super) fn discover_user_sources(tx: SyncSender<Candidate>) {
         // Silent at the row, so it is said once here instead.
         if let Some(problem) = block
             .control
-            .as_deref()
-            .and_then(crate::qactions::declared_control_problem)
+            .as_ref()
+            .and_then(|control| crate::qactions::declared_control_problem(&control.id))
         {
             eprintln!("look sources: [{}] {problem}", block.id);
+        }
+
+        // A block that parsed but cannot work here: a folder the example's
+        // author had and this machine does not, a program that is not
+        // installed. Said for a `then` target too, which never reaches the
+        // index of its own but is just as broken when its command is missing.
+        if block.enabled {
+            for unready in look_sources::check(block, home) {
+                eprintln!("look sources: [{}] {}", block.id, unready.message());
+            }
         }
 
         // A block whose producer refers to a row (`make -C {path} deploy`) is
@@ -69,6 +79,9 @@ pub(super) fn discover_user_sources(tx: SyncSender<Candidate>) {
             Producer::Bundle { steps } => {
                 let _ = tx.send(bundle_candidate(block, steps.len()));
             }
+            // Never reached: `needs_row` keeps a verb out of the index, since
+            // it is only ever about the row it was picked on.
+            Producer::Ask { .. } => {}
             Producer::Dir { .. } => emit_dir(block, home, &tx),
             Producer::File { .. } => emit_rows(block, home, &tx),
             // A `run` block needs a process, and spawning one per index pass

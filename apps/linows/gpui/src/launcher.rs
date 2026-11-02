@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 
 use gpui::{
     Animation, AnimationExt, AnyElement, App, Bounds, ClipboardItem, Context, Div, Entity,
-    FontWeight, KeyDownEvent, Pixels, Render, ScrollStrategy, SharedString, Stateful, Task,
-    Transition, TransitionState, UniformListScrollHandle, Window, canvas, deferred, div, fill, img,
+    FontWeight, KeyDownEvent, PaintQuad, Pixels, Render, ScrollStrategy, SharedString, Stateful,
+    Task, Transition, TransitionState, UniformListScrollHandle, Window, canvas, deferred, div, img,
     point, prelude::*, px, relative, size, svg, uniform_list,
 };
 use linows_backend::health::HealthIssue;
@@ -54,7 +54,7 @@ use crate::settings::{self, Settings};
 use crate::shortcuts::{self, Hint, Piece};
 use crate::theme::{self, Theme};
 use crate::update::Update;
-use crate::{Shell, fonts, health, state as app_state};
+use crate::{Shell, clipwrite, fonts, health, state as app_state};
 
 /// The answer card is the answer: no row is picked, so Enter has no target.
 static HINT_ANSWER: Hint = Hint::new(&[
@@ -97,6 +97,7 @@ const TRANSLATING: &str = "Translating\u{2026}";
 const TRANSLATE_FAILED: &str = "Translation failed";
 const OPEN_IN_BROWSER: &str = "Open in Browser";
 const CLIP_DELETED: &str = "Clipboard item deleted";
+const PASTE_NOTHING: &str = "Only clips, files or folders can be pasted";
 const CLIP_IMAGE_DELETED: &str = "Image removed from history";
 static HINT_LEVEL: Hint = Hint::new(&[
     Piece::Id(shortcuts::ACTIONS, "Actions"),
@@ -159,6 +160,7 @@ struct Translation {
 pub struct Retained {
     pub query: String,
     pub screen: Option<(usize, String)>,
+    pub settings: Option<settings::Kept>,
     pub answer: Option<answers::Settled>,
     pub suggestions: Option<Suggestions>,
     /// The new launcher reads the switch off the UI thread, after the
@@ -171,6 +173,7 @@ impl Retained {
     pub fn expire(self) -> Self {
         Self {
             screen: self.screen,
+            settings: self.settings,
             ai_enabled: self.ai_enabled,
             ..Default::default()
         }
@@ -353,7 +356,7 @@ impl Launcher {
             menu_token: 0,
             backdrop_loading: None,
             backdrop_failed: None,
-            pill: cx.new(|_| TransitionState::new(0.0)),
+            pill: cx.new(|_| motion::rest(0.0)),
             follow_pill: Rc::new(Cell::new(false)),
             rows_epoch: 1,
             pill_rows: 0,
@@ -412,6 +415,7 @@ impl Launcher {
             Retained {
                 query: self.query(cx),
                 screen: None,
+                settings: self.settings_open.then(|| self.settings.kept()),
                 answer: self.ai.settled(),
                 suggestions: self.suggestions.clone(),
                 ai_enabled: self.ai.enabled,
@@ -430,6 +434,9 @@ impl Launcher {
         }
         if let Some((index, text)) = &retained.screen {
             self.enter_command_mode(*index, text, cx);
+        } else if let Some(kept) = retained.settings {
+            self.settings_open = true;
+            self.settings.resume(kept, cx);
         } else if !retained.query.is_empty() {
             self.input.update(cx, |input, cx| {
                 input.set_text(&retained.query, cx);
@@ -1374,7 +1381,7 @@ impl Launcher {
     pub(crate) fn copy_text(&mut self, text: String, done: String, cx: &mut Context<Self>) {
         bg::fetch(
             cx,
-            move || clipboard::copy_to_clipboard(&text),
+            clipwrite::ordered(Box::new(move || clipboard::copy_to_clipboard(&text))),
             move |this, outcome, cx| match outcome {
                 Ok(()) => this.banner.show(done, Tone::Success, banner::SHORT, cx),
                 Err(_) => this
@@ -1514,6 +1521,7 @@ impl Launcher {
         let Some((work, done)) = self.selected_row().and_then(|row| clip_write(&row.open)) else {
             return;
         };
+        let work = clipwrite::ordered(work);
         bg::fetch(cx, work, move |this, outcome, cx| match outcome {
             Ok(()) => this
                 .banner
@@ -1526,7 +1534,9 @@ impl Launcher {
     /// underneath. The blocker is asked first, since a banner behind a hidden
     /// window explains nothing; the copy happens either way.
     fn paste_selected_clip(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some((work, _)) = self.selected_row().and_then(|row| clip_write(&row.open)) else {
+        let Some(work) = self.paste_write().map(clipwrite::ordered) else {
+            self.banner
+                .show(PASTE_NOTHING.into(), Tone::Info, banner::PASTE_BLOCKED, cx);
             return true;
         };
         let shell: Arc<dyn LauncherWindow> = Arc::new(self.shell.clone());
@@ -1546,6 +1556,22 @@ impl Launcher {
             },
         );
         true
+    }
+
+    /// What Ctrl+I puts on the clipboard before the chord: the clip under the
+    /// cursor, else every pick, else whatever the row under the cursor has on
+    /// disk. The picks outrank the row since picking is how several get
+    /// chosen at all.
+    fn paste_write(&self) -> Option<ClipWrite> {
+        let row = self.selected_row();
+        if let Some((work, _)) = row.and_then(|row| clip_write(&row.open)) {
+            return Some(work);
+        }
+        if !self.picked.is_empty() {
+            return Some(files_write(self.picked.paths()));
+        }
+        row.filter(|row| row.on_disk())
+            .map(|row| files_write(vec![row.path.clone()]))
     }
 
     /// `t"` Enter: one translation per configured language, each landing as it
@@ -1636,10 +1662,9 @@ impl Launcher {
             cx.notify();
             return;
         }
-        let paths = self.picked.paths();
         bg::fetch(
             cx,
-            move || files::copy_files_to_clipboard(&paths),
+            clipwrite::ordered(files_write(self.picked.paths())),
             move |this, outcome, cx| {
                 let (text, tone, seconds) = match outcome {
                     Ok(()) => (
@@ -3262,7 +3287,7 @@ fn blur_commit(frosted: bool) -> impl IntoElement {
         move |_, _, _| commit_blur_region(frosted),
         |_, _, _, _| {},
     ))
-    .with_priority(usize::MAX)
+    .priority(usize::MAX)
 }
 
 /// The frame's cards to the compositor; none when the frost is off, so the
@@ -3364,13 +3389,11 @@ impl Launcher {
                 }
                 let offset = handle.offset().y;
                 let y = (f32::from(bounds.origin.y + offset) + top).round();
-                let mut quad = fill(
-                    Bounds::new(
-                        point(bounds.origin.x, px(y)),
-                        size(bounds.size.width, px(theme::ROW_HEIGHT)),
-                    ),
-                    colour,
-                );
+                let mut quad = PaintQuad::new(Bounds::new(
+                    point(bounds.origin.x, px(y)),
+                    size(bounds.size.width, px(theme::ROW_HEIGHT)),
+                ))
+                .background(colour);
                 quad.corner_radii = gpui::Corners::all(px(radius));
                 window.paint_quad(quad);
             },
@@ -3514,7 +3537,7 @@ fn glyph_icon(path: &'static str, th: &Theme) -> AnyElement {
 
 /// What putting a clip back on the clipboard runs, and what the banner says
 /// once it has.
-type ClipWrite = Box<dyn FnOnce() -> Result<(), String> + Send>;
+type ClipWrite = clipwrite::Write;
 
 fn clip_write(open: &Open) -> Option<(ClipWrite, &'static str)> {
     match open {
@@ -3534,6 +3557,12 @@ fn clip_write(open: &Open) -> Option<(ClipWrite, &'static str)> {
         }
         _ => None,
     }
+}
+
+/// Files and folders go out in every form at once, so a file manager pastes
+/// the items and a text field pastes the paths.
+fn files_write(paths: Vec<String>) -> ClipWrite {
+    Box::new(move || files::copy_files_to_clipboard(&paths))
 }
 
 /// Percent-encoding for a query in a URL: letters, digits and the unreserved

@@ -68,6 +68,7 @@ Useful actions:
 - `Cmd+C`: copy selected file/folder
 - `Cmd+P`: toggle pick on the selected file/folder (multi-select); the picked set is written to the system pasteboard so you can paste them anywhere in Finder
 - `Cmd+Shift+P`: clear all picked items
+- `Cmd+I` (`Ctrl+I` on Linux and Windows): paste the selected file or folder, or every picked item, straight into the app you came from. A file manager or a chat app gets the items, a text field or terminal gets the paths. Same chord, permissions, and limits as pasting a clip (see [Clipboard and translation](#clipboard-and-translation))
 - `Cmd+D`: move the selected file/folder - or all picked items - to the Trash (macOS only for now). Like Finder's `Cmd+Delete`, this is immediate and unconfirmed because it's recoverable: the items go to the Trash, not permanent deletion. The rows disappear from results right away.
 - `Cmd+Enter`: web search current query (Google)
 
@@ -252,6 +253,17 @@ An unrecognised name draws nothing at all rather than a placeholder, so a tile w
 
 **`press` is what a click or the tile's key runs.** A tile with `press` and no `value` is a button: it shows its name and never runs anything until you press it. A tile with `value` and no `press` is a readout. `confirm` arms the tile on the first press and fires on the second, the way Restart and Shut Down do.
 
+**`control` puts a switch an app supplies on the strip.** An app integrated with Look can declare a control on one of its blocks (see [Integrating your app](integrating.md)); naming it here is how you decide where it sits. It takes the place of `value` and `press` - the app answers both - so a tile with all three warns and runs neither command:
+
+```toml
+[tiles.lamp]
+title    = "Lamp"
+control  = "myapp.records#lamp"
+mnemonic = "A"
+```
+
+The name is `<block>#<control>`, exactly as the app's manifest wrote it. The tile shows the state the app reports, lights up when it is on, and presses it with a click or its key. If the app is not running, the tile says so and keeps its last reading, like any other tile that fails.
+
 **Keep the command light.** `value` runs unattended - the point of a live tile - so it is capped: **two seconds**, then it is killed along with anything it started, and 16 KB of output. Within a tile's `refresh` window nothing runs at all, so most opens cost nothing. Read something and print it; a slow command will be cut off and the tile keeps its last good reading. Anything that needs to fetch, build, or wait belongs behind `press`, or in a script that caches to a file the tile just reads.
 
 A tile that fails says so and keeps what it last showed - one broken tile never blanks the strip. Its key follows the same rules as the built-ins: it fires with `Cmd` on macOS and `Alt` on Linux/Windows, a letter already used by a tile on the screen is not given away, `Cmd+Q` belongs to quitting Look, and either way the tile still works, it just has no key.
@@ -288,7 +300,8 @@ Don't remember the prefixes? Type a single `"` to open a menu listing every pref
 
 Path-like queries (for example `git/project/readme`) are also supported and bias path matches.
 
-URL-like queries are detected automatically (no prefix). Type a URL and Look offers an **Open in browser** row: a structural URL (with a scheme, port, path, or `localhost`/IP - e.g. `http://localhost:3000` or `example.com/docs`) ranks at the top, while a bare `host.tld` (e.g. `github.com`) ranks after your local results so it never displaces a real match. URLs you open this way come back as **Recently opened** rows, ranked by frecency and filtered as you type.
+URL-like queries are detected automatically (no prefix). Type a URL and Look offers an **Open in browser** row: a structural URL (with a scheme, port, path, `localhost`, or a full IP address - e.g. `http://localhost:3000`, `192.168.1.1` or `example.com/docs`) ranks at the top, while a bare `host.tld` (e.g. `github.com`) ranks after your local results so it never displaces a real match.
+A decimal like `3.14` is never a URL, and a shorthand address like `127.1` needs a port or scheme to count as one (`127.1:8080`). URLs you open this way come back as **Recently opened** rows, ranked by frecency and filtered as you type.
 
 Arithmetic is detected automatically too (no prefix). Type an expression like `2+2` or `sqrt(16)` and Look pins a **Calculator** row above every other result with the answer. `Enter` or a click copies the value and hides the launcher; clipboard history (`c"`) shows the worked expression (`2+2 = 4`) but still pastes just the value. Shape decides whether something counts as math, not spacing, so a date (`20-05-2026`), a resolution (`1920x1080`), or a ratio (`16:9`) is left alone. Aliases `x`, `:`, and a leading `v` (multiply, divide, square root) only count as operators when they stand alone (`3 x 4`, `10 : 2`, `v 16`) - inside the dedicated `/calc` panel below they're honored wherever they land, so `1920x1080` there evaluates as a product.
 
@@ -322,7 +335,7 @@ The `:` prefix only triggers when the word right after it is a known command id 
 
 Built-in commands:
 
-- `calc`: evaluate expressions (supports `^`, `!`, constants `pi`/`e`, functions `sqrt`/`abs`/`round`/`floor`/`ceil`, `%` shorthand, implicit multiplication like `2pi`, comma-grouped/scientific-notation input like `1,500` or `1e6`, and aliases `x`/`:`/leading `v` honored wherever they land, e.g. `1920x1080`)
+- `calc`: evaluate expressions (supports `^`, `!`, constants `pi`/`e`, functions `sqrt`/`abs`/`round`/`floor`/`ceil`, `%` shorthand, implicit multiplication like `2pi`, comma-grouped/scientific-notation input like `1,500` or `1e6`, typographic operators and fractions like `3 × 4`, `10 ÷ 2` or `1½`, and aliases `x`/`:`/leading `v` honored wherever they land, e.g. `1920x1080`)
 - `shell`: run shell command text
 - `kill`: force-kill a running app/process (with confirmation), supports port queries like `:3000` or `port 3000`
 - `sys`: show system information
@@ -813,7 +826,7 @@ shortcut_main_edit=ctrl+shift+e
 - `Cmd+F`: reveal in Finder, or in the `file_manager` you declared
 - `Cmd+C`: copy selected file/folder
 - `Cmd+P` / `Cmd+Shift+P`: toggle pick / clear picked set
-- `Cmd+I` (`Ctrl+I` on Linux, Windows): paste the selected clipboard history item into the app you came from
+- `Cmd+I` (`Ctrl+I` on Linux, Windows): paste the selected clipboard history item, or the selected file/folder (or all picked items), into the app you came from
 - `Cmd+D`: remove the selected clipboard history item; otherwise move selected file/folder (or picked items) to Trash, or empty the pinned Trash folder
 - `Cmd+O`: flip the selected row's toggle (Bluetooth, Wi-Fi, Do Not Disturb)
 - `Cmd+Shift+,`: toggle settings panel

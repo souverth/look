@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use gpui::{
-    App, Bounds, Pixels, Size, Window, WindowBackgroundAppearance, WindowKind,
+    App, Bounds, LinuxWindowBackground, Pixels, Size, Window, WindowKind, WindowOptions,
     layer_shell::{Anchor, KeyboardInteractivity, Layer, LayerShellOptions},
     point, px,
 };
@@ -18,7 +18,12 @@ use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use linows_backend::platform::linux::{outputs, wm};
 
 /// Blur behind comes from the compositor over its own protocol, see blur/wayland.rs.
-pub const BACKGROUND: WindowBackgroundAppearance = WindowBackgroundAppearance::Transparent;
+pub fn with_background(options: WindowOptions) -> WindowOptions {
+    WindowOptions {
+        linux_window_background: LinuxWindowBackground::Transparent,
+        ..options
+    }
+}
 
 /// A hide drops the surface; a layer surface cannot be unmapped and kept.
 pub const KEEP_WINDOW: bool = false;
@@ -54,6 +59,12 @@ pub fn bind(summon: &str) -> std::io::Result<UnixListener> {
 /// gpui's own pick between its two Linux backends (`guess_compositor`).
 fn is_x11() -> bool {
     std::env::var_os("WAYLAND_DISPLAY").is_none_or(|d| d.is_empty())
+}
+
+/// The window is a layer surface, which outranks every toplevel: a dialog
+/// can only come up behind it.
+pub fn layered() -> bool {
+    !is_x11() && wm::has_layer_shell()
 }
 
 static OPAQUE: AtomicBool = AtomicBool::new(false);
@@ -213,7 +224,7 @@ pub fn decorate(window: &Window, bounds: Bounds<Pixels>) {
         let y = (f32::from(bounds.origin.y) * scale).round() as i32;
         std::thread::spawn(move || x11_undecorate_and_place(wid, x, y));
     }
-    window.activate_window();
+    window.activate();
 }
 
 fn x11_window(window: &Window) -> Option<u32> {
@@ -289,7 +300,7 @@ pub fn kind() -> WindowKind {
     if is_x11() {
         return WindowKind::Dialog;
     }
-    if !wm::has_layer_shell() {
+    if !layered() {
         return WindowKind::Normal;
     }
     WindowKind::LayerShell(LayerShellOptions {

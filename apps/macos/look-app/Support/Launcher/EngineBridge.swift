@@ -158,6 +158,18 @@ private func look_ai_future_leaning(_ phrase: UnsafePointer<CChar>?, _ resolvedE
 nonisolated
 private func look_ai_markdown_segments_json(_ text: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
 
+@_silgen_name("look_plan_verb_json")
+nonisolated
+private func look_plan_verb_json(_ blockID: UnsafePointer<CChar>?, _ candidateID: UnsafePointer<CChar>?, _ rowID: UnsafePointer<CChar>?, _ rowTitle: UnsafePointer<CChar>?, _ rowPath: UnsafePointer<CChar>?, _ query: UnsafePointer<CChar>?, _ ancestorsJSON: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
+
+@_silgen_name("look_control_json")
+nonisolated
+private func look_control_json(_ actionID: UnsafePointer<CChar>?, _ press: Bool) -> UnsafeMutablePointer<CChar>?
+
+@_silgen_name("look_run_verb_json")
+nonisolated
+private func look_run_verb_json(_ candidateID: UnsafePointer<CChar>?, _ plan: UInt64) -> UnsafeMutablePointer<CChar>?
+
 @_silgen_name("look_markdown_blocks_json")
 nonisolated
 private func look_markdown_blocks_json(_ text: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
@@ -1042,6 +1054,50 @@ final class EngineBridge: @unchecked Sendable {
         return segments
     }
 
+    /// Asks the connector that owns the row what the verb would do. Spawns no
+    /// process but waits on one, so call it off the main thread.
+    nonisolated func planVerb(
+        blockID: String, candidateID: String, row: RowRef, query: String, ancestorsJSON: String
+    ) -> VerbPlan? {
+        let ptr = blockID.withCString { block in
+            candidateID.withCString { candidate in
+                row.id.withCString { id in
+                    row.title.withCString { title in
+                        row.path.withCString { path in
+                            query.withCString { query in
+                                ancestorsJSON.withCString { ancestors in
+                                    look_plan_verb_json(
+                                        block, candidate, id, title, path, query, ancestors)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        guard let ptr else { return nil }
+        defer { look_free_cstring(ptr) }
+        guard let data = String(cString: ptr).data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(VerbPlan.self, from: data)
+    }
+
+    /// Reads a declared control, or presses it and reads where it ended up.
+    /// Waits on a connector, so call it off the main thread.
+    nonisolated func control(actionID: String, press: Bool) -> ControlState? {
+        guard let ptr = actionID.withCString({ look_control_json($0, press) }) else { return nil }
+        defer { look_free_cstring(ptr) }
+        guard let data = String(cString: ptr).data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(ControlState.self, from: data)
+    }
+
+    /// Runs a plan the user confirmed.
+    nonisolated func runVerb(candidateID: String, plan: UInt64) -> VerbRun? {
+        guard let ptr = candidateID.withCString({ look_run_verb_json($0, plan) }) else { return nil }
+        defer { look_free_cstring(ptr) }
+        guard let data = String(cString: ptr).data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(VerbRun.self, from: data)
+    }
+
     /// Markdown as blocks, frontmatter already dropped. Rust core
     /// (core/markdown), so the shells agree on what a heading is.
     nonisolated func markdownBlocks(_ text: String) -> [MarkdownBlock] {
@@ -1280,7 +1336,7 @@ final class EngineBridge: @unchecked Sendable {
         guard let ptr else {
             return PerformBlockOutcome(
                 performed: 0, errors: ["the core did not answer"], producesRows: false,
-                opensPath: false)
+                pressesControl: false, opensPath: false)
         }
         defer { look_free_cstring(ptr) }
         // The core sends snake_case, so `produces_rows` only reaches
@@ -1292,7 +1348,7 @@ final class EngineBridge: @unchecked Sendable {
         else {
             return PerformBlockOutcome(
                 performed: 0, errors: ["the core's answer could not be read"],
-                producesRows: false, opensPath: false)
+                producesRows: false, pressesControl: false, opensPath: false)
         }
         return outcome
     }
@@ -1658,8 +1714,32 @@ nonisolated struct SourceBlockTarget: Decodable, Identifiable {
     let name: String
     let icon: String?
     let performs: Bool
+    /// A connector works out what this verb would do, so the question comes
+    /// from it rather than from a declared string.
+    let plans: Bool
     /// Already expanded against the row, so it names what will actually happen.
     let confirm: String?
+}
+
+/// What a verb would do, for the question the user confirms.
+nonisolated struct VerbPlan: Decodable {
+    let plan: UInt64
+    let title: String
+    let detail: String?
+    let error: String?
+}
+
+/// Where a declared control stands, or why it could not be read.
+nonisolated struct ControlState: Decodable {
+    let on: Bool
+    let error: String?
+}
+
+/// How running a confirmed plan went.
+nonisolated struct VerbRun: Decodable {
+    let ok: Bool
+    let summary: String?
+    let error: String?
 }
 
 /// A declared block as the row layer needs it: what to call it and what icon it
@@ -1698,6 +1778,18 @@ nonisolated struct Reported: Decodable, Identifiable {
     var id: String { "\(file)\u{1}\(message)" }
 }
 
+/// Something to change in a declaration before the block works on this
+/// machine. Not a `Reported` problem: the file is valid, it just names a folder
+/// or a program that is not here, which is what a copied example gets wrong.
+nonisolated struct Needed: Decodable, Identifiable {
+    /// The key to change: a producer key, `cwd`, `preview`, or a verb.
+    let key: String
+    /// The declared value as written in the file.
+    let value: String
+    let message: String
+    var id: String { "\(key)\u{1}\(value)\u{1}\(message)" }
+}
+
 /// One declared block as the Extend screen lists it.
 nonisolated struct InstalledBlock: Decodable, Identifiable {
     let id: String
@@ -1711,6 +1803,8 @@ nonisolated struct InstalledBlock: Decodable, Identifiable {
     let fromApp: Bool
     /// Only meaningful for `connect`: whether its process is up.
     let running: Bool
+    /// What to change before this block works here. Empty is the normal case.
+    let needs: [Needed]
 }
 
 nonisolated struct SourceBlockSummary: Decodable {
@@ -1790,6 +1884,8 @@ nonisolated struct PerformBlockOutcome: Decodable {
     /// The target lists rows to pick from rather than steps to run. An explicit
     /// flag, because "nothing performed" is also what a failure looks like.
     let producesRows: Bool
+    /// The block supplies a control and nothing else, so Enter presses it.
+    let pressesControl: Bool
     /// Nothing declared and the row has a path, so it opens like any file. The
     /// core decides this, not the row's kind.
     let opensPath: Bool

@@ -38,8 +38,9 @@ extension LauncherView {
         case .calc(let raw):
             // Calculator row: copy the raw value, launcher out of the way.
             // History keeps the labeled working (`2+2 = 4`); the paste is the number.
+            // Nothing opens to take focus, so hand it back to the previous app.
             clipboardStore.recordLabeled(display: "\(selected.calcExpression ?? "") = \(selected.title)", payload: raw)
-            hideLauncherWindow(restorePreviousApp: false)
+            hideLauncherWindow()
             return
         case .aiAction:
             // Planner-proposed action row: the row the user just read IS the
@@ -263,6 +264,19 @@ extension LauncherView {
                     openTargetAsync(row.path)
                     return
                 }
+                // The control is the row's purpose, so Enter is its press.
+                // `.run`, not `.toggle`: a toggle is resolved against the state
+                // on screen, and Enter may land before the pane has read one.
+                // A connector decides a press for itself and answers with where
+                // it ended up, so there is nothing here to take the opposite of.
+                if outcome.pressesControl,
+                    let control = bridge.quickActions(
+                        forResultID: selected.id, kind: selected.kind.rawValue
+                    ).first
+                {
+                    runQuickAction(control, intent: .run)
+                    return
+                }
                 guard let failure = outcome.errors.first else { return }
                 // Steps are detached, so this only fires when one could not be
                 // started at all. A step's own exit code is its business.
@@ -416,9 +430,24 @@ extension LauncherView {
     /// Picked FILES, in pick order. Folders are excluded: a text op reads
     /// contents, and a folder has none.
     func pickedFilePathsForTextOp() -> [String] {
+        pickedResults().filter { $0.kind == .file }.map(\.path)
+    }
+
+    /// Every pick, in pick order.
+    func pickedResults() -> [LauncherResult] {
         pickedKeys.compactMap { pickedResultsByKey[$0] }
-            .filter { $0.kind == .file }
-            .map(\.path)
+    }
+
+    /// One URL and one string per path, the pair Finder and a text field each
+    /// take one of. Replaces whatever the pasteboard held.
+    @discardableResult
+    func writeFilesToPasteboard(_ paths: [String]) -> Bool {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        let objects = paths.flatMap { path -> [NSPasteboardWriting] in
+            [URL(fileURLWithPath: path) as NSURL, path as NSString]
+        }
+        return pasteboard.writeObjects(objects)
     }
 
     func removePicked(key: String) {
@@ -437,17 +466,12 @@ extension LauncherView {
     }
 
     func writePickedToPasteboard() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        guard !pickedKeys.isEmpty else { return }
-        var objects: [NSPasteboardWriting] = []
-        for key in pickedKeys {
-            guard let r = pickedResultsByKey[key], r.kind.isFileOrFolder else { continue }
-            objects.append(URL(fileURLWithPath: r.path) as NSURL)
-            objects.append(r.path as NSString)
+        guard !pickedKeys.isEmpty else {
+            NSPasteboard.general.clearContents()
+            return
         }
-        let didWrite = pasteboard.writeObjects(objects)
-        if didWrite {
+        let paths = pickedResults().filter { $0.kind.isFileOrFolder }.map(\.path)
+        if writeFilesToPasteboard(paths) {
             showBanner("Picked \(pickedKeys.count) item(s)", style: .success, duration: 1.0)
         } else {
             showBanner("Pick failed", style: .error, duration: 1.0)
@@ -466,11 +490,7 @@ extension LauncherView {
 
         guard selected.kind.isFileOrFolder else { return false }
 
-        let targetURL = URL(fileURLWithPath: selected.path)
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        let didWrite = pasteboard.writeObjects([targetURL as NSURL, selected.path as NSString])
-
+        let didWrite = writeFilesToPasteboard([selected.path])
         if didWrite {
             showBanner("Copied \(selected.kind.rawValue) to pasteboard", style: .success, duration: 1.0)
         } else {
@@ -550,9 +570,9 @@ extension LauncherView {
         )
     }
 
-    /// Cmd+I: put the selected clip on the pasteboard, get out of the way, and
-    /// type ⌘V into the app that owned the cursor. False leaves the chord
-    /// unclaimed.
+    /// Cmd+I: put the selected clip, the picks, or the selected file on the
+    /// pasteboard, get out of the way, and type ⌘V into the app that owned
+    /// the cursor. False leaves the chord unclaimed.
     func pasteSelectedClipboardEntry() -> Bool {
         guard ClipboardPasteTarget.allowsKeyboardPaste(
             showsThemeSettings: appUIState.showsThemeSettings,
@@ -562,7 +582,8 @@ extension LauncherView {
         ) else { return false }
 
         let selected = displayedResults.first { $0.id == selectedResultID }
-        guard let target = ClipboardPasteTarget.resolve(selected) else { return false }
+        guard let target = ClipboardPasteTarget.resolve(selected, picked: pickedResults())
+        else { return false }
 
         // Asked before hiding: a banner behind a closed window explains nothing.
         if let blocker = FrontmostAppPaste.blocker() {
@@ -596,6 +617,8 @@ extension LauncherView {
                 let entry = clipboardStore.imageEntries.first(where: { $0.id == entryID })
             else { return false }
             return clipboardStore.copyImage(entry: entry)
+        case .files(let paths):
+            return writeFilesToPasteboard(paths)
         }
     }
 

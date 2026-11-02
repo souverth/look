@@ -31,7 +31,7 @@ fn main() {
 
     say(&serde_json::json!({
         "op": "ready",
-        "capabilities": ["rows", "preview"],
+        "capabilities": ["rows", "preview", "plan", "control"],
     }));
 
     match mode {
@@ -89,6 +89,7 @@ fn sized(block: &str, bytes: usize) -> serde_json::Value {
 
 /// Answers asks until Look says goodbye or closes the pipe.
 fn serve(block: &str) {
+    let mut lamp = false;
     for line in std::io::stdin().lock().lines().map_while(Result::ok) {
         let Ok(ask) = serde_json::from_str::<serde_json::Value>(&line) else {
             continue;
@@ -96,6 +97,13 @@ fn serve(block: &str) {
         match ask.get("op").and_then(serde_json::Value::as_str) {
             Some("bye") => return,
             Some("preview") => preview(block, &ask),
+            Some("plan") => plan(block, &ask),
+            Some("run") => run(block, &ask),
+            Some("state") => state(block, &ask, lamp),
+            Some("press") => {
+                lamp = !lamp;
+                state(block, &ask, lamp)
+            }
             // An op this program does not know is ignored, never fatal. Look
             // holds itself to the same rule.
             _ => {}
@@ -127,6 +135,51 @@ fn preview(block: &str, ask: &serde_json::Value) {
         "req": ask.get("req"),
         "content_type": "markdown",
         "text": text,
+    }));
+}
+
+/// Where the control stands. A press answers with where it ended up, so a
+/// shell never has to assume the connector agreed.
+fn state(block: &str, ask: &serde_json::Value, on: bool) {
+    say(&serde_json::json!({
+        "op": "state",
+        "block": block,
+        "control": ask.get("control"),
+        "req": ask.get("req"),
+        "on": on,
+    }));
+}
+
+/// What the verb would do, named row by row. This is the confirmation the
+/// user reads, which is why it beats a declared `confirm` string: that string
+/// cannot know how many rows were picked or what they are called.
+fn plan(block: &str, ask: &serde_json::Value) {
+    let ids: Vec<&str> = ask
+        .get("ids")
+        .and_then(serde_json::Value::as_array)
+        .map(|ids| ids.iter().filter_map(serde_json::Value::as_str).collect())
+        .unwrap_or_default();
+    let verb = ask
+        .get("verb")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("do");
+    say(&serde_json::json!({
+        "op": "planned",
+        "block": block,
+        // Echoed back, or Look cannot tell this plan from the one before it.
+        "plan": ask.get("plan"),
+        "title": format!("{verb} {} row(s)", ids.len()),
+        "detail": ids.join(", "),
+    }));
+}
+
+fn run(block: &str, ask: &serde_json::Value) {
+    say(&serde_json::json!({
+        "op": "result",
+        "block": block,
+        "plan": ask.get("plan"),
+        "ok": true,
+        "summary": "nothing really happened, this is the reference connector",
     }));
 }
 

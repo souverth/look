@@ -257,6 +257,8 @@ pub struct Launchpad {
     custom: Option<HashMap<String, TileValue>>,
     /// Decoded user icons by data URL.
     images: HashMap<String, Option<Arc<Image>>>,
+    /// Decoded user SVGs by data URL, the bytes the element takes.
+    vectors: HashMap<String, Option<Arc<[u8]>>>,
     /// The destructive tile awaiting its second press.
     confirm: Option<String>,
     _confirm_timer: Option<Task<()>>,
@@ -306,13 +308,14 @@ impl Launchpad {
             task_cursor: 0,
             custom: None,
             images: HashMap::new(),
+            vectors: HashMap::new(),
             confirm: None,
             _confirm_timer: None,
             applying: false,
             token: 0,
             shown: true,
             pressed: None,
-            bar: cx.new(|_| TransitionState::new(0.0)),
+            bar: cx.new(|_| motion::rest(0.0)),
             bar_fill: 0.0,
             slot_since: None,
             slot_opacity: 1.0,
@@ -1644,8 +1647,8 @@ impl Launchpad {
     }
 
     /// A user icon: one of the shell's glyph names, or a file the backend
-    /// inlined as a data URL. An SVG goes through the asset source so it takes
-    /// the tile's colour like the glyphs beside it; a raster draws as it is.
+    /// inlined as a data URL. An SVG is handed over as bytes so it takes the
+    /// tile's colour like the glyphs beside it; a raster draws as it is.
     fn custom_icon(
         &mut self,
         index: usize,
@@ -1658,9 +1661,14 @@ impl Launchpad {
             return Some(bouncing(index, glyph(path, size, colour)));
         }
         if name.starts_with(glyphs::INLINE_SVG_PREFIX) {
+            let bytes = self
+                .vectors
+                .entry(name.to_string())
+                .or_insert_with(|| glyphs::inline_svg(name).map(Arc::from))
+                .clone()?;
             return Some(
                 svg()
-                    .path(SharedString::from(name.to_string()))
+                    .data(&bytes)
                     .size(px(size))
                     .text_color(colour)
                     .flex_shrink_0()
