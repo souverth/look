@@ -468,7 +468,10 @@ function newXiangqi() {
             }
             group.appendChild(el('circle', { cx: x, cy: y, r: 23, class: 'xq-disc' }));
             group.appendChild(el('circle', { cx: x, cy: y, r: 19, class: 'xq-ring' }));
-            group.appendChild(el('text', { x, y: y + 1, class: 'xq-char' }, xq.PIECE_CHARS[side][xq.kindOf(piece)]));
+            const char = el('text', { x, y: y + 1, class: 'xq-char' }, xq.PIECE_CHARS[side][xq.kindOf(piece)]);
+            // As on a real board, the other player's pieces are written to face them.
+            if (side !== human) char.setAttribute('transform', `rotate(180 ${x} ${y})`);
+            group.appendChild(char);
             svg.appendChild(group);
         }
         for (const idx of targets) {
