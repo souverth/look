@@ -290,6 +290,18 @@ async function run(handle, intent) {
     );
 }
 
+// A device that never answers must not leave every control inert: past this the
+// row is released and the user told, whatever the backend is still doing.
+const DEVICE_TIMEOUT_MS = 20000;
+
+function withTimeout(promise, ms, fallback) {
+    let timer;
+    const late = new Promise((resolve) => {
+        timer = setTimeout(() => resolve(fallback), ms);
+    });
+    return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
 // Toggle one list item (connect/disconnect a device), then reconcile as `run`.
 async function runItem(handle, item, row) {
     if (inFlight || pendingItems.has(item.id)) return;
@@ -310,7 +322,15 @@ async function runItem(handle, item, row) {
     await applyAndReconcile(
         handle,
         myToken,
-        () => quickActionApplyItem(handle.descriptor.action_id, item.id, 'toggle'),
+        () =>
+            withTimeout(
+                quickActionApplyItem(handle.descriptor.action_id, item.id, 'toggle'),
+                DEVICE_TIMEOUT_MS,
+                {
+                    outcome: 'failed',
+                    message: `${item.label} did not respond. Check it is on and in range`,
+                },
+            ),
         // Clear pending before the reconcile re-renders the list, so the fresh
         // rows read from the real state instead of inheriting the busy marker.
         () => pendingItems.delete(item.id),

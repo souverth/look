@@ -906,6 +906,34 @@
     background: none;
 }
 
+/* The dot becomes a ring that turns while the device connects, so a click is
+   seen to have landed. */
+.qaction-device-row.is-pending {
+    opacity: 0.8;
+}
+
+.qaction-device-row.is-pending .qaction-device-dot {
+    box-sizing: border-box;
+    width: 11px;
+    height: 11px;
+    border: 2px solid color-mix(in srgb, var(--accent-color) 25%, transparent);
+    border-top-color: var(--accent-color);
+    background: none;
+    animation: qaction-spin 0.7s linear infinite;
+}
+
+@keyframes qaction-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .qaction-device-row.is-pending .qaction-device-dot {
+        animation-duration: 2s;
+    }
+}
+
 /* One action at a time: while any control is applying, the others (the toggle,
    a plain button, every non-pending device row) go inert so nothing looks
    clickable that the in-flight guard would silently swallow. The applying row

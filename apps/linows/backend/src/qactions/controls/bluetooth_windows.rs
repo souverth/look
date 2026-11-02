@@ -329,14 +329,17 @@ mod winbt {
         } else {
             BLUETOOTH_SERVICE_DISABLE
         };
+        let started = std::time::Instant::now();
         let (changed, mut codes) = set_all(radio, info, &guids, flag);
         if changed > 0 {
             return Ok(());
         }
-        // A device Windows lists as paired but refuses every enable is usually
-        // stuck half-open after a drop or a sleep. Switching its services off and
-        // on again is what the Settings page does when it reconnects it.
-        if connect {
+        // A device Windows lists as paired but refuses every enable straight away
+        // is usually stuck half-open after a drop or a sleep. Switching its
+        // services off and on again is what the Settings page does when it
+        // reconnects it. One that took seconds to refuse is out of range: asking
+        // again would only make the user wait twice as long.
+        if connect && started.elapsed() < std::time::Duration::from_secs(3) {
             set_all(radio, info, &guids, BLUETOOTH_SERVICE_DISABLE);
             std::thread::sleep(std::time::Duration::from_millis(400));
             let (changed, retry) = set_all(radio, info, &guids, BLUETOOTH_SERVICE_ENABLE);
@@ -369,14 +372,28 @@ mod winbt {
         guids: &[GUID],
         flag: u32,
     ) -> (usize, Vec<u32>) {
-        let mut changed = 0;
-        let mut codes = Vec::new();
-        for guid in guids {
-            match unsafe { BluetoothSetServiceState(Some(radio), info, guid, flag) } {
-                code if code == ERROR_SUCCESS.0 => changed += 1,
-                code => codes.push(code),
-            }
-        }
+        // One thread per service: each call can block for seconds on a device
+        // that does not answer, and in turn they would add up to a minute.
+        let raw = radio.0 as isize;
+        let info = *info;
+        let results: Vec<u32> = std::thread::scope(|scope| {
+            let jobs: Vec<_> = guids
+                .iter()
+                .map(|guid| {
+                    scope.spawn(move || unsafe {
+                        BluetoothSetServiceState(Some(HANDLE(raw as _)), &info, guid, flag)
+                    })
+                })
+                .collect();
+            jobs.into_iter()
+                .map(|job| job.join().unwrap_or(u32::MAX))
+                .collect()
+        });
+        let changed = results.iter().filter(|&&c| c == ERROR_SUCCESS.0).count();
+        let codes = results
+            .into_iter()
+            .filter(|&c| c != ERROR_SUCCESS.0)
+            .collect();
         (changed, codes)
     }
 }
