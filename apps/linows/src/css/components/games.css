@@ -253,6 +253,87 @@ kbd.games-key,
     fill: rgba(70, 185, 107, 0.5);
 }
 
+/* --- Cờ vây, Atari Go and ngũ tử: stones on the crossings --------------------- */
+.go-bg {
+    fill: #e2b970;
+}
+
+.go-line {
+    stroke: #6b4f2a;
+    stroke-width: 1;
+    fill: none;
+}
+
+.go-star {
+    fill: #6b4f2a;
+}
+
+.go-stone {
+    stroke: rgba(0, 0, 0, 0.45);
+    stroke-width: 0.8;
+}
+
+.go-stone.is-black {
+    fill: url(#go-b);
+}
+
+.go-stone.is-white {
+    fill: url(#go-w);
+}
+
+/* A stone that the count finds dead stays on the board, faded. */
+.go-stone.is-dead {
+    opacity: 0.35;
+}
+
+.go-last.on-black {
+    fill: #f4f4f4;
+}
+
+.go-last.on-white {
+    fill: #222;
+}
+
+.go-ko {
+    fill: none;
+    stroke: #e5484d;
+    stroke-width: 2;
+}
+
+.go-win-ring {
+    fill: none;
+    stroke: #46b96b;
+    stroke-width: 3;
+}
+
+/* The points counted for one side at the end. */
+.go-terr.is-black {
+    fill: rgba(20, 20, 20, 0.7);
+}
+
+.go-terr.is-white {
+    fill: rgba(250, 250, 250, 0.9);
+    stroke: rgba(0, 0, 0, 0.35);
+    stroke-width: 0.8;
+}
+
+.go-art-b {
+    fill: #1a1a1a;
+}
+
+.go-art-w {
+    fill: #f2f2f2;
+    stroke: #8a8a8a;
+    stroke-width: 1;
+}
+
+.games-seg.is-off {
+    opacity: 0.45;
+}
+
+.games-opt small {
+    color: var(--font-muted);
+}
 /* --- Cờ tướng --------------------------------------------------------------- */
 .xq-line {
     stroke: #6b4f2a;
