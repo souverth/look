@@ -39,8 +39,46 @@ test('a run of six counts, and a gap or another colour breaks a run', () => {
     assert.equal(winLine(broken, at(3, 3)), null);
 });
 
-test('the first move is the centre, whatever the level', () => {
-    for (const level of LEVELS) assert.equal(chooseMove(emptyBoard(), 1, level), at(7, 7));
+test('the first move is near the centre, and not always the same', () => {
+    for (const level of LEVELS) {
+        const seen = new Set();
+        for (let i = 0; i < 25; i++) {
+            const move = chooseMove(emptyBoard(), 1, level, () => i / 25);
+            const row = Math.floor(move / SIZE);
+            const col = move % SIZE;
+            assert.ok(Math.abs(row - 7) <= 2 && Math.abs(col - 7) <= 2, `${level} opened at ${row},${col}`);
+            seen.add(move);
+        }
+        assert.ok(seen.size >= 10, `${level} opened ${seen.size} different ways`);
+    }
+});
+
+test('the reply to a lone stone is one of the cells around it, and varies', () => {
+    const b = board([[7, 7, 1]]);
+    const around = new Set([at(6, 6), at(6, 7), at(6, 8), at(7, 6), at(7, 8), at(8, 6), at(8, 7), at(8, 8)]);
+    for (const level of LEVELS) {
+        const seen = new Set();
+        for (let i = 0; i < 16; i++) {
+            const move = chooseMove(b, 2, level, () => i / 16);
+            assert.ok(around.has(move), `${level} replied at ${move}`);
+            seen.add(move);
+        }
+        assert.ok(seen.size >= 5, `${level} replied ${seen.size} different ways`);
+    }
+});
+
+test('hard does not always play the same cell early in a game', () => {
+    const b = board([
+        [7, 7, 1],
+        [7, 8, 2],
+    ]);
+    const seen = new Set();
+    for (let i = 0; i < 12; i++) {
+        const move = chooseMove(b, 1, 'hard', () => i / 12);
+        assert.equal(b[move], 0, 'played onto a stone');
+        seen.add(move);
+    }
+    assert.ok(seen.size >= 2, 'one cell every time');
 });
 
 test('every level takes a win in one', () => {

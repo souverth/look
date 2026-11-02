@@ -153,6 +153,53 @@ test('a mated side has no moves and the status says so', () => {
     assert.equal(status(initialBoard(), RED).state, 'play');
 });
 
+test('the opening is drawn from a book, so games do not all begin alike', () => {
+    for (const level of LEVELS) {
+        const first = new Set();
+        const reply = new Set();
+        for (let i = 0; i < 16; i++) {
+            const rng = () => i / 16;
+            const b = initialBoard();
+            const move = chooseMove(b, RED, level, rng);
+            assert.ok(legalMoves(b, RED).includes(move), `${level} opened with an illegal move`);
+            first.add(move);
+            // Black answers a fixed first move, also from the book.
+            applyMove(b, makeMove(at(7, 1), at(7, 4)));
+            const answer = chooseMove(b, BLACK, level, rng);
+            assert.ok(legalMoves(b, BLACK).includes(answer), `${level} replied with an illegal move`);
+            reply.add(answer);
+        }
+        assert.ok(first.size >= 5, `${level} opened ${first.size} different ways`);
+        assert.ok(reply.size >= 5, `${level} replied ${reply.size} different ways`);
+    }
+});
+
+test('a few moves in, medium and hard answer a threat instead of drawing at random', () => {
+    const b = initialBoard();
+    // A horse out each. Here the black cannon on the right file can take red's far
+    // horse over red's own cannon, so the window of "equal" moves holds just the
+    // ones that deal with it: a draw must not be able to walk into the loss.
+    for (const m of [makeMove(at(9, 1), at(7, 2)), makeMove(at(0, 7), at(2, 6))]) {
+        applyMove(b, m);
+    }
+    for (const level of ['medium', 'hard']) {
+        for (let i = 0; i < 8; i++) {
+            const move = chooseMove(b, RED, level, () => i / 8);
+            const captured = applyMove(b, move);
+            // Taking a horse is fine to allow when it can be taken straight back: a trade.
+            const free = legalMoves(b, BLACK).filter((r) => {
+                if (b[moveTo(r)] !== HORSE) return false;
+                const taken = applyMove(b, r);
+                const retaken = legalMoves(b, RED).some((q) => moveTo(q) === moveTo(r));
+                undoMove(b, r, taken);
+                return !retaken;
+            });
+            undoMove(b, move, captured);
+            assert.equal(free.length, 0, `${level} left its horse to be taken for nothing`);
+        }
+    }
+});
+
 test('every level plays a legal move from the opening', () => {
     for (const level of LEVELS) {
         const b = initialBoard();

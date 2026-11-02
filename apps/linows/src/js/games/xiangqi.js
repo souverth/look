@@ -424,6 +424,40 @@ function scoreRoot(board, side, moves, depth, clock) {
     });
 }
 
+// --- Openings ------------------------------------------------------------------
+//
+// With the pieces all at home almost every sensible first move is worth the same to
+// a search, so left alone a bot plays the same one every game. These are the usual
+// first moves for red (from row, col, to row, col); black draws from the same list
+// turned round, as its reply.
+
+const OPENING_BOARD = initialBoard();
+const OPENINGS = [
+    [7, 1, 7, 4], // cannon to the centre
+    [7, 7, 7, 4], // the other cannon to the centre
+    [9, 1, 7, 2], // a horse out
+    [9, 7, 7, 6], // the other horse out
+    [9, 2, 7, 4], // an elephant to the centre
+    [9, 6, 7, 4], // the other elephant to the centre
+    [6, 2, 5, 2], // a pawn forward
+    [6, 6, 5, 6], // the other pawn forward
+];
+
+/** How far the position is from the start, in squares that differ (two to a move). */
+function movesAway(board) {
+    let differing = 0;
+    for (let i = 0; i < 90; i++) if (board[i] !== OPENING_BOARD[i]) differing++;
+    return differing;
+}
+
+/** A first move or reply drawn from the openings, or null once the game has moved on. */
+function bookMove(board, side, legal, rng) {
+    if (movesAway(board) > 2) return null;
+    const turned = (r, c) => (side === RED ? idxOf(r, c) : idxOf(9 - r, 8 - c));
+    const book = OPENINGS.map(([fr, fc, tr, tc]) => makeMove(turned(fr, fc), turned(tr, tc))).filter((m) => legal.includes(m));
+    return book.length ? book[Math.floor(rng() * book.length)] : null;
+}
+
 /**
  * A move for `side`, or null when it has none. `easy` takes a capture now and
  * then and otherwise wanders; `medium` looks two plies ahead; `hard` keeps
@@ -433,6 +467,12 @@ export function chooseMove(board, side, level = 'medium', rng = Math.random) {
     const moves = legalMoves(board, side);
     if (moves.length === 0) return null;
     const work = board.slice();
+
+    // Every level opens from the book, so no two games begin alike. Easy then
+    // wanders on its own; the others keep a wider choice for a few more moves.
+    const opening = bookMove(work, side, moves, rng);
+    if (opening !== null) return opening;
+    const early = movesAway(work) <= 8;
 
     if (level === 'easy') {
         const captures = moves.filter((m) => work[m & 127]);
@@ -452,13 +492,14 @@ export function chooseMove(board, side, level = 'medium', rng = Math.random) {
         }
         const best = Math.max(...scored.map((s) => s.score));
         // Moves worth the same to within a little are a coin toss.
-        const pool = scored.filter((s) => s.score >= best - 12);
+        const pool = scored.filter((s) => s.score >= best - (early ? 40 : 12));
         return pool[Math.floor(rng() * pool.length)].move;
     }
 
     // hard: deeper each round, keeping the last round that finished.
     const clock = makeClock(1700);
     let best = moves[0];
+    let last = null; // the last round that finished
     let order = moves.slice().sort((a, b) => captureOrder(work, b) - captureOrder(work, a));
     for (let depth = 1; depth <= 6; depth++) {
         let scored;
@@ -470,8 +511,16 @@ export function chooseMove(board, side, level = 'medium', rng = Math.random) {
         }
         scored.sort((a, b) => b.score - a.score);
         best = scored[0].move;
+        last = scored;
         order = scored.map((s) => s.move);
         if (scored[0].score >= MATE - 50) break; // a mate is found
+    }
+    // Never a choice when a win is in sight; otherwise the early moves are drawn from
+    // those the search rates alike, so the same position is not always met the same way.
+    if (last && last[0].score < MATE - 50) {
+        const window = early ? 30 : 3;
+        const pool = last.filter((s) => s.score >= last[0].score - window);
+        return pool[Math.floor(rng() * pool.length)].move;
     }
     return best;
 }

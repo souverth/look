@@ -174,7 +174,26 @@ export function chooseMove(board, player, level = 'medium', rng = Math.random) {
     const work = board.slice();
     const opponent = other(player);
     const near = candidates(work);
-    if (near.length === 1 && !work.some(Boolean)) return near[0];
+
+    // The first moves are a matter of taste, so they are drawn rather than worked
+    // out: near the centre on a bare board, and one of the eight cells around a
+    // lone stone as the reply. Every game then starts differently.
+    const stones = work.reduce((n, cell) => n + (cell ? 1 : 0), 0);
+    if (stones === 0) {
+        const spots = [];
+        for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) spots.push(at(7 + dr, 7 + dc));
+        return spots[Math.floor(rng() * spots.length)];
+    }
+    if (stones === 1) {
+        const lone = work.findIndex(Boolean);
+        const row = Math.floor(lone / SIZE);
+        const col = lone % SIZE;
+        const around = [];
+        for (const [dr, dc] of [...DIRS, ...DIRS.map(([r, c]) => [-r, -c])]) {
+            if (inside(row + dr, col + dc)) around.push(at(row + dr, col + dc));
+        }
+        return around[Math.floor(rng() * around.length)];
+    }
 
     // A win now, or the other side's win to stop, come before everything. Easy
     // takes its own win but lets the other side's through one time in three.
@@ -188,9 +207,9 @@ export function chooseMove(board, player, level = 'medium', rng = Math.random) {
         return pool[Math.floor(rng() * pool.length)].idx;
     }
     if (level === 'medium') {
-        const top = ranked(work, player, 0.95).slice(0, 3);
+        const top = ranked(work, player, 0.95).slice(0, 5);
         // Near-equal cells are a coin toss, so the game is not the same twice.
-        const pool = top.filter((c) => c.score >= top[0].score * 0.9);
+        const pool = top.filter((c) => c.score >= top[0].score * 0.85);
         return pool[Math.floor(rng() * pool.length)].idx;
     }
 
@@ -198,11 +217,16 @@ export function chooseMove(board, player, level = 'medium', rng = Math.random) {
     const forced = forcedWin(work, player, 4);
     if (forced >= 0) return forced;
     const choices = ranked(work, player, 1).slice(0, 12);
-    for (const { idx } of choices) {
-        work[idx] = player;
+    const safe = [];
+    for (const choice of choices) {
+        work[choice.idx] = player;
         const leavesOne = forcedWin(work, opponent, 4) !== -1;
-        work[idx] = 0;
-        if (!leavesOne) return idx;
+        work[choice.idx] = 0;
+        if (!leavesOne) safe.push(choice);
+        // Only the first few safe cells matter: they are the ones worth drawing from.
+        if (safe.length === 4) break;
     }
-    return choices[0].idx;
+    if (safe.length === 0) return choices[0].idx;
+    const pool = safe.filter((c) => c.score >= safe[0].score * 0.93);
+    return pool[Math.floor(rng() * pool.length)].idx;
 }
