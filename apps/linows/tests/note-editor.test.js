@@ -40,10 +40,7 @@ test('note settings read what is configured and ignore what is not valid', () =>
         theme: 'monokai',
         size: 'normal', // "huge" is not a size
         colors: {}, // none changed on top of the theme
-        deck: false, // the desktop deck is off until asked for
     });
-    assert.equal(settings.parseMap({ note_desktop_deck: 'true' }).deck, true);
-    assert.equal(settings.parseMap({ note_desktop_deck: 'yes' }).deck, false, 'not a boolean: the default');
     assert.equal(settings.parseMap({ note_editor_theme: 'nope' }).theme, 'look');
     assert.equal(settings.parseMap({ note_default_view: '' }).defaultView, 'edit');
 });

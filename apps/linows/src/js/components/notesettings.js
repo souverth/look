@@ -48,7 +48,6 @@ export function init(screen) {
         ['settings-note-line-numbers', 'lineNumbers'],
         ['settings-note-wrap', 'wrap'],
         ['settings-note-highlight', 'highlight'],
-        ['settings-note-deck', 'deck'],
     ]) {
         $(id).addEventListener('change', (e) => change({ [key]: e.target.checked }));
     }
@@ -280,7 +279,6 @@ function render() {
     $('settings-note-line-numbers').checked = state.lineNumbers;
     $('settings-note-wrap').checked = state.wrap;
     $('settings-note-highlight').checked = state.highlight;
-    $('settings-note-deck').checked = state.deck;
 
     const theme = $('settings-note-theme');
     const name = activeName();
