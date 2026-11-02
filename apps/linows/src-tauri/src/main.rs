@@ -2,7 +2,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
-mod agents;
 mod consts;
 mod host;
 mod launcher_hotkey;
@@ -660,7 +659,6 @@ fn main() {
             commands::todo_list,
             commands::todo_save,
             notes::notes_list,
-            agents::agents_status,
             snippets::snippets_search,
             snippets::snippets_expand,
             snippets::snippets_info,

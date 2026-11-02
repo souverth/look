@@ -4407,14 +4407,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "look-agents"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "look-answers"
 version = "0.1.0"
 dependencies = [
@@ -4579,7 +4571,6 @@ dependencies = [
  "gtk",
  "libloading 0.8.9",
  "linows-backend",
- "look-agents",
  "look-notes",
  "look-snippets",
  "raw-window-handle",

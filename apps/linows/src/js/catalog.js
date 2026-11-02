@@ -8,7 +8,6 @@ import {
     timer,
     listChecks,
     notebook,
-    bot,
     gauge,
     xCircle,
     terminal,
@@ -145,7 +144,6 @@ const COMMAND_DEFINITIONS = [
         icon: gauge,
     },
     { id: 'sys', detail: 'Show system information', icon: info },
-    { id: 'agents', detail: 'Coding agents & quota', icon: bot },
 ];
 
 export const COMMAND_ENTRIES = COMMAND_DEFINITIONS.map((entry, index) => ({

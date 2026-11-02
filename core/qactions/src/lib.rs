@@ -62,7 +62,6 @@ pub mod action_id {
     /// system control, so it has no descriptor and no native adapter.
     pub const L_SLOT: &str = "lslot";
     // Data widgets (see `builtin_tiles`).
-    pub const AGENTS: &str = "agents";
     pub const TODO: &str = "todo";
     pub const POMO: &str = "pomo";
     pub const SPEED: &str = "speed";
@@ -146,8 +145,8 @@ pub enum TileRole {
     Weather,
     /// The rotating Todo / Pomo / Clock slot; rendered entirely by the shell.
     Slot,
-    /// A data widget the shell fills from the app's own features (agents,
-    /// todo, focus timer, speed, notes, clock, system). Not part of the default
+    /// A data widget the shell fills from the app's own features (todo,
+    /// focus timer, speed, notes, clock, system). Not part of the default
     /// strip: it only appears when the user's drawing places it. Rendered
     /// entirely by the shell, like `Slot`.
     Widget,
@@ -424,8 +423,7 @@ pub fn launchpad_layout() -> Vec<LaunchpadTile> {
 type WidgetSpec = (&'static str, &'static str, Option<char>, bool, u8, u8);
 
 #[cfg(not(target_os = "macos"))]
-const WIDGETS: [WidgetSpec; 7] = [
-    (action_id::AGENTS, "Agents", Some('A'), true, 2, 1),
+const WIDGETS: [WidgetSpec; 6] = [
     (action_id::TODO, "Todo", Some('O'), true, 2, 1),
     (action_id::POMO, "Focus", Some('F'), true, 1, 1),
     (action_id::SPEED, "Speed", Some('E'), true, 1, 1),

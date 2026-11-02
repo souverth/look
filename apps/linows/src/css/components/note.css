@@ -1130,11 +1130,6 @@
 }
 /* The "/" menu and the selection toolbar are in note-editor.css. */
 
-/* /agents: detected agents with quota meters and token windows */
-#cmd-panel-agents [hidden] {
-    display: none !important;
-}
-
 /* Code block: header (file path or language) + Copy, then the code. */
 .cmd-note-preview .md-code {
     margin: 0.9em 0;

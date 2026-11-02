@@ -1,7 +1,6 @@
-import { test } from 'node:test';
+﻿import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderMarkdown, parseFenceInfo, escapeHtml } from '../src/js/markdown.js';
-import { agentLogo } from '../src/js/agent-logos.js';
 
 test('a fence with line=N shows the file and numbers lines from N', () => {
     assert.deepEqual(parseFenceInfo('ts index.ts line=1'), { lang: 'ts', path: 'index.ts', line: 1 });
@@ -91,14 +90,4 @@ test('fence info: language, path forms and Windows drives', () => {
     for (const [info, want] of Object.entries(cases)) {
         assert.deepEqual(parseFenceInfo(info), want, JSON.stringify(info));
     }
-});
-
-test('agent logos: known agents get their mark, unknown ones a neutral chip', () => {
-    for (const id of ['claude', 'codex', 'gemini', 'cursor', 'copilot', 'opencode', 'aider']) {
-        assert.ok(agentLogo(id, 14).startsWith('<svg'), id);
-    }
-    assert.ok(agentLogo('claude').includes('#D97757'));
-    assert.ok(agentLogo('gemini').includes('linearGradient'));
-    assert.ok(agentLogo('something-new').includes('<rect'));
-    assert.ok(agentLogo('claude', 22).includes('width="22"'));
 });

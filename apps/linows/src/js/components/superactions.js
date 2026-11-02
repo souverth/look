@@ -193,8 +193,6 @@ const ICON = {
 
 export function init(containerEl) {
     container = containerEl;
-    // The Agents widget follows the agents' numbers as they arrive.
-    widgets.watchAgents(() => refreshWidgets(['agents']));
     // Prefetch the layout so the first show builds with no round trip; if the
     // strip was already asked to show before it arrived, build now.
     ensureLayout().then(() => {
@@ -1032,8 +1030,6 @@ function todayKey() {
 
 function render(layout) {
     const { tiles } = layout;
-    // Agents are only read while a tile for them is on the strip.
-    widgets.holdAgents(tiles.some((tile) => tile.action_id === 'agents'));
     tilesById = new Map();
     mnemonicIndex = new Map();
     controls = new Map();
@@ -1529,7 +1525,7 @@ function tickWidgets() {
     if (live.length) void refreshWidgets(live);
 }
 
-/** app.js tells the strip how to jump into a command panel (Agents, Todo, Notes). */
+/** app.js tells the strip how to jump into a command panel (Todo, Notes). */
 export function setOpenCommand(fn) {
     widgets.setOpenCommand(fn);
 }

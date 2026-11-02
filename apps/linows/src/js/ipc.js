@@ -463,13 +463,6 @@ export async function notesSetTagColor(tag, color) {
     return invoke('notes_set_tag_color', { tag, color });
 }
 
-// Coding agents: detection plus usage for every known agent. `useApi` allows
-// asking the vendor for the plan's real limits; `tzOffsetMinutes` is the local
-// zone's offset east of UTC.
-export async function agentsStatus(useApi, tzOffsetMinutes) {
-    return invoke('agents_status', { useApi, tzOffsetMinutes });
-}
-
 // Super Actions editor. The model is `{ columns, rows, tiles: [{ id, col, row,
 // w, h }], custom: [{ id, title, icon, value, refresh, press, confirm,
 // mnemonic }] }`; the state adds the built-in catalog, the file path and the

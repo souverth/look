@@ -178,7 +178,7 @@ If the drawing is wrong, Look says so in the window rather than failing quietly.
 
 ### Data widgets and the visual editor (Linux, Windows)
 
-Beyond the controls above there are seven data widgets, none in the default strip: `agents`, `todo`, `pomo`, `speed`, `notes`, `clock`, `system`. Name one in the drawing like any other tile. A widget draws itself for the room it has: one cell shows the headline, a wide row adds a summary line, a tall tile adds a list. `Agents` shows the `5h` and `Week` windows as bars with reset times, and whether the numbers are `LIVE` or `LOCAL`. Their keys are `A` Agents, `O` Todo, `F` Focus, `E` Speed, `N` Notes, `C` Clock; Todo, Focus, Speed, Notes and Agents are pressable (open the panel, start or pause the timer, run a test).
+Beyond the controls above there are six data widgets, none in the default strip: `todo`, `pomo`, `speed`, `notes`, `clock`, `system`. Name one in the drawing like any other tile. A widget draws itself for the room it has: one cell shows the headline, a wide row adds a summary line, a tall tile adds a list. Their keys are `O` Todo, `F` Focus, `E` Speed, `N` Notes, `C` Clock; Todo, Focus, Speed, and Notes are pressable (open the panel, start or pause the timer, run a test).
 
 You do not have to edit the file by hand. `Settings > Appearance > Super Actions > Customize...` opens a visual editor:
 
@@ -328,10 +328,10 @@ Enter command mode with `Cmd+/`, or jump straight to a specific command from the
 
 - `:calc` then `Enter` - open `/calc` with empty input
 - `:calc 2+2` - opens `/calc` with `2+2` already typed (the space after the command id is the trigger; you can keep typing without pressing Enter)
-- Same pattern for `:shell`, `:kill`, `:sys`, `:pomo`, `:speed`, `:agents`
+- Same pattern for `:shell`, `:kill`, `:sys`, `:pomo`, `:speed`
 - `:note`, `:todo` and `:done` followed by text are the exception: they act from the search box instead of opening a panel (see [Quick capture](#quick-capture-from-the-search-box))
 
-The `:` prefix only triggers when the word right after it is a known command id (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`, `agents`); anything else (`:foo`, `:Users/me/...`) stays in normal search.
+The `:` prefix only triggers when the word right after it is a known command id (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`); anything else (`:foo`, `:Users/me/...`) stays in normal search.
 
 Built-in commands:
 
@@ -343,7 +343,6 @@ Built-in commands:
 - `todo`: daily tasks and progress. Two pages - a task list grouped by day, and a Stats page (weekly/monthly completion, streak, 30-day trend, GitHub-style year heatmap)
 - `speed`: measure the connection (download, upload, latency) on a live dial, with your LAN and public addresses
 - `note` (Linux, Windows): quick notes for ideas, as cards you can tag and filter, with a Markdown editor
-- `agents` (Linux, Windows): the coding agents on this machine and how much of their quota is used
 
 `calc` quick examples:
 
@@ -406,12 +405,6 @@ Unit conversion works the same way, in the search box and in `/calc`, offline: a
 - Deleting a note asks twice and cannot be undone; notes are plain text in the local database
 - `Settings > Notes` (saved the moment you change it, and `Ctrl+Shift+;` re-reads the file): **Open notes in** Edit, Split or Preview; **Editor Theme** Follow Look (the launcher's own), VS Dark+, VS Light+, Monokai, Solarized Dark / Light, GitHub Dark / Light, which also colour the preview; **Text Size** Small, Normal or Large; **Line Numbers**, **Word Wrap** (off scrolls sideways) and **Syntax Colours**. In `~/.look/config`: `note_default_view`, `note_editor_theme`, `note_text_size`, `note_line_numbers`, `note_word_wrap`, `note_syntax_highlight`; a value it does not know is the default
 
-`agents` quick reference (Linux, Windows):
-
-- Detection looks for each agent's command on `PATH` and for its config in your home directory. Claude Code and Codex show token use for the last 5 hours, today and 7 days from their own logs. The others are detected only: they keep nothing Look can read
-- `L` turns on `Live quota` (saved as `agents_live_quota` in `~/.look/config`, off by default): Claude's plan limits (`5h` and `Week`) come from the usage endpoint Claude Code's own sign-in can call, and Codex's from `codex app-server`. Nothing is sent unless it is on, and Claude's token only ever goes to `api.anthropic.com`. `R` refreshes
-- The logs are read only while something shows them: this panel, or an Agents tile on the Super Actions strip
-
 ### Notes and tasks in the main search
 
 On Linux and Windows, typing in the home search box also finds your notes and open tasks:
@@ -461,7 +454,7 @@ Behavior:
 - `Escape`: leave command mode
 - `Shift+Escape`: hide launcher
 - `Tab` / `Shift+Tab`: switch commands while staying in command mode
-- `Cmd+1`..`Cmd+7` (macOS) / `Ctrl+1`..`Ctrl+9` (Linux, Windows): jump to a specific command (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`, `agents` on Linux and Windows). On Linux and Windows they also work from the home screen, without entering command mode first
+- `Cmd+1`..`Cmd+7` (macOS) / `Ctrl+1`..`Ctrl+9` (Linux, Windows): jump to a specific command (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`). On Linux and Windows they also work from the home screen, without entering command mode first
 - `Cmd+N` / `Cmd+S` (inside `/todo`): switch Tasks/Stats page, save changes
 - `R` / `E` (inside `/speed`): run the test again, show or hide the public address
 - `Up` / `Down`: in `kill`, navigate process/app results
@@ -804,7 +797,7 @@ shortcut_main_edit=ctrl+shift+e
 - `Cmd+/`: command mode
 - `:cmd` (e.g. `:calc 2+2`, `:kill chrome`, `:sys`, `:speed`): jump to a command directly from the home screen
 - `:note <text>`, `:todo <text>`, `:done` (Linux, Windows): save a note, add a task, or tick one off without opening a panel
-- `Cmd+1`..`Cmd+7` (macOS): in command mode, direct command switch. `Ctrl+1`..`Ctrl+9` (Linux, Windows): open or switch to a command (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`, `agents`), from the home screen too
+- `Cmd+1`..`Cmd+7` (macOS): in command mode, direct command switch. `Ctrl+1`..`Ctrl+9` (Linux, Windows): open or switch to a command (`todo`, `pomo`, `note`, `kill`, `shell`, `calc`, `speed`, `sys`), from the home screen too
 - `Cmd+1`..`Cmd+9` (macOS) / `Alt+1`..`Alt+9` (Linux, Windows): on the home screen, activate the running-app whose badge shows that digit, when `Running Apps` is on. Badge labels are ergonomic, not strictly positional - see Settings → Appearance → Running Apps
 - `Option+Up` / `Option+Down` in AI mode (`>`): walk your recent prompts, like a shell history. `Shift+Up` / `Shift+Down` select text in the message instead
 - `Shift+Enter` in AI mode (`>`): new line in the message instead of sending. The box grows to 6 lines and stops there. Elsewhere `Shift+Enter` still opens all picked files

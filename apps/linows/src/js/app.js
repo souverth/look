@@ -9,7 +9,6 @@ import * as health from './components/health.js';
 import * as confirm from './components/confirm.js';
 import * as commands from './screens/commands/index.js';
 import * as todoCmd from './screens/commands/todo.js';
-import * as agentsCmd from './screens/commands/agents.js';
 import * as layoutEditor from './screens/layout-editor.js';
 import * as quickcapture from './components/quickcapture.js';
 import * as snippets from './components/snippets.js';
@@ -111,7 +110,6 @@ const COMMAND_HINTS = {
     speed: 'R: Rerun \u2022 E: Show IP \u2022 Esc: Back',
     kill: 'Y: Confirm \u2022 N: Cancel \u2022 Esc: Back',
     sys: 'Esc: Back',
-    agents: 'R: Refresh \u2022 L: Live quota \u2022 Esc: Back',
     note: 'Ctrl+N: New • Arrows: Pick • Ctrl+E: Preview • Ctrl+\\: Split • /: Blocks • Esc: Back',
     calc: 'Enter: Evaluate \u2022 Tab: Select \u2022 Esc: Back',
     shell: 'Enter: Run \u2022 Tab: Select \u2022 Esc: Back',
@@ -435,7 +433,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Empty-state super-actions control strip
     superactions.init(document.getElementById('control-strip'));
-    // Widgets that open a panel (Agents, Todo, Notes) jump there like the hint bar does.
+    // Widgets that open a panel (Todo, Notes) jump there like the hint bar does.
     superactions.setOpenCommand((id) => {
         commands.enterById(id);
         enterCommandMode();
@@ -850,7 +848,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Re-read todos when nothing would be lost, so the quick view stays
         // fresh across day rollovers and edits from other Look clients.
         todoCmd.reloadIfClean();
-        void agentsCmd.refreshQuiet();
         // Most re-opens keep the query and selection; an expired hide first
         // returns to the empty-query home state, then this re-asserts the strip
         // and its entrance animation.

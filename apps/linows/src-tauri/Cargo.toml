@@ -13,7 +13,6 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-dialog = "2"
 linows-backend = { path = "../backend" }
 look-notes = { path = "../../../core/notes" }
-look-agents = { path = "../../../core/agents" }
 look-snippets = { path = "../../../core/snippets" }
 base64 = "0.22"
 serde_json = "1"

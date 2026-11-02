@@ -128,9 +128,6 @@ fn describe(id: &str) -> &'static str {
         "restart" => "Restarts the machine. Asks first, so a stray key cannot.",
         "shutdown" => "Shuts the machine down. Asks first, so a stray key cannot.",
         "nowplaying" => "The current track, with play and pause.",
-        "agents" => {
-            "How much of each coding agent's quota is used. Press to open /agents. Shows more when drawn larger."
-        }
         "todo" => "Today's tasks done and still open. Press to open /todo.",
         "pomo" => {
             "Your focus timer: a live countdown while a session runs. Press to start or pause."
@@ -834,7 +831,7 @@ mod tests {
         let model = EditorModel {
             columns: 3,
             rows: 1,
-            tiles: vec![tile("agents", 0, 0, 2, 1), tile("pomo", 2, 0, 1, 1)],
+            tiles: vec![tile("todo", 0, 0, 2, 1), tile("pomo", 2, 0, 1, 1)],
             custom: vec![],
         };
         let (text, _) = compose(&model, None).unwrap();
@@ -845,7 +842,7 @@ mod tests {
             .iter()
             .map(|t| t.action_id.as_str())
             .collect();
-        assert_eq!(ids, ["agents", "pomo"]);
+        assert_eq!(ids, ["todo", "pomo"]);
         assert!(resolved.tiles.iter().all(|t| t.role == TileRole::Widget));
         assert!(validate(&model).unwrap().is_empty());
     }

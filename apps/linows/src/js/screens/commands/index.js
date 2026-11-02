@@ -6,13 +6,12 @@ import * as kill from './kill.js';
 import * as shell from './shell.js';
 import * as sys from './sys.js';
 import * as note from './note.js';
-import * as agents from './agents.js';
 import { COMMAND_ENTRIES } from '../../catalog.js';
 import * as tooltip from '../../components/tooltip.js';
 
 // catalog.js owns the order, the details and the Ctrl+N each command answers
 // to; this side only binds an id to the panel module that renders it.
-const MODULES = { calc, pomo, todo, speed, kill, shell, sys, note, agents };
+const MODULES = { calc, pomo, todo, speed, kill, shell, sys, note };
 
 const COMMANDS = COMMAND_ENTRIES.map((entry) => ({
     ...entry,
@@ -50,7 +49,6 @@ export function init(contentAreaEl, inputEl, { onExitMode, onExecuteCommand, onG
     shell.init(onExecuteCommand);
     sys.init(onExecuteCommand);
     note.init();
-    agents.init();
 
     // Every panel names its header slot the same way, so the catalog's icon
     // reaches it without a per-command line.

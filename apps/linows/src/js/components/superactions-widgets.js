@@ -1,4 +1,4 @@
-// The data widgets of the Super Actions strip: Agents, Todo, Focus, Speed,
+﻿// The data widgets of the Super Actions strip: Todo, Focus, Speed,
 // Notes, Clock and System. Unlike the system toggles they have no native
 // adapter; each reads a feature the app already has and hands the strip a
 // "reading" - a headline, a caption and a few lines - which superactions.js
@@ -16,24 +16,12 @@
 import { todoList, notesList, systemUptime, getSystemInfo } from '../ipc.js';
 import { snapshot as pomoSnapshot, formatTime, togglePlayback } from '../screens/commands/pomo.js';
 import * as speed from '../screens/commands/speed.js';
-import * as agents from '../screens/commands/agents.js';
-import { listChecks, timer, clock, gauge, notebook, info, bot } from '../icons.js';
-import { agentLogo } from '../agent-logos.js';
-import { toneOf, windowName, tokens, noteTitle } from './superactions-format.js';
+import { listChecks, timer, clock, gauge, notebook, info } from '../icons.js';
+import { noteTitle } from './superactions-format.js';
 
 const TTL_MS = 15_000;
 const SYSINFO_TTL_MS = 60_000;
 let openCommand = null;
-
-/** The strip shows (or no longer shows) an Agents tile: start or stop reading agents. */
-export function holdAgents(on) {
-    agents.hold('strip', on);
-}
-
-/** Calls `fn` whenever the agents' numbers change, so their widget stays true. */
-export function watchAgents(fn) {
-    agents.setOnQuickChange(fn);
-}
 
 /** superactions.js is told how to jump into a command panel by app.js. */
 export function setOpenCommand(fn) {
@@ -90,78 +78,6 @@ const readSystem = cached(SYSINFO_TTL_MS, async () => {
 // `live` widgets are re-read every second (a countdown, a clock); the others
 // when the strip is shown.
 const WIDGETS = {
-    agents: {
-        icon: bot,
-        async read(shape) {
-            const items = agents.getQuick()?.items ?? [];
-            if (!items.length) return { value: '--', caption: 'No agents', lines: [] };
-            const top = items[0];
-
-            // The windows an agent reports, each named: "5h" and "Week", not a bare
-            // percentage that could be either.
-            const barsOf = (item) =>
-                item.meters
-                    .filter((m) => !m.stale)
-                    .slice(0, 2)
-                    .map((m) => ({
-                        label: windowName(m.label),
-                        percent: Math.round(m.used_percent),
-                        tone: toneOf(m.used_percent),
-                        reset: m.resets_at_unix_s
-                            ? agents.formatReset(m.resets_at_unix_s).replace(/^resets in /, '')
-                            : '',
-                        title: `${item.name}, ${m.label}${m.resets_at_unix_s ? `, ${agents.formatReset(m.resets_at_unix_s)}` : ''}`,
-                    }));
-            // Where the numbers came from: asked the vendor just now, or read from the
-            // agent's own log.
-            const sourceOf = (item) =>
-                item.meters.some((m) => m.source === 'live' && !m.stale) ? 'Live' : 'Local';
-
-            const topBars = barsOf(top);
-            const headline =
-                top.percent !== null
-                    ? { value: `${top.percent}%`, unit: windowName(top.label), tone: toneOf(top.percent) }
-                    : { value: tokens(top.tokens5h), unit: 'tokens · 5h', tone: null };
-            // The tile's header keeps the Agents icon. An agent's logo belongs to
-            // the line that names it, so it is never mistaken for the widget's own.
-            const logo = (size) => agentLogo(top.id, size);
-
-            if (shape === 'compact') {
-                return {
-                    ...headline,
-                    // One cell has no line for the name, so the logo rides on the unit chip.
-                    unitIcon: logo(11),
-                    caption: top.name,
-                    lines: [],
-                    progress: top.percent !== null ? top.percent / 100 : null,
-                };
-            }
-            if (shape === 'wide') {
-                // The headline gives way to the two windows side by side.
-                return {
-                    ...headline,
-                    caption: top.name,
-                    unitIcon: logo(11),
-                    hideValue: topBars.length > 0,
-                    bars: topBars.length
-                        ? [{ heading: top.name, logo: logo(14), badge: sourceOf(top) }, ...topBars]
-                        : [],
-                    lines: [],
-                };
-            }
-            // Tall: every agent, each with its own windows.
-            const bars = items.slice(0, 3).flatMap((item) => {
-                const b = barsOf(item);
-                return [
-                    { heading: item.name, logo: agentLogo(item.id, 13), badge: sourceOf(item) },
-                    ...(b.length ? b : [{ label: '5h', text: `${tokens(item.tokens5h)} tokens` }]),
-                ];
-            });
-            return { ...headline, caption: top.name, hideValue: true, bars, lines: [] };
-        },
-        press: () => openCommand?.('agents'),
-    },
-
     todo: {
         icon: listChecks,
         async read(shape) {
@@ -172,15 +88,15 @@ const WIDGETS = {
                 value: `${done}/${tasks.length}`,
                 caption:
                     shape === 'wide' && open.length
-                        ? `Done today  ·  next: ${open[0]}`
+                        ? `Done today  Â·  next: ${open[0]}`
                         : tasks.length
                           ? open.length || shape !== 'wide'
                               ? 'Done today'
-                              : 'Done today  ·  all clear'
+                              : 'Done today  Â·  all clear'
                           : 'No tasks today',
                 active: tasks.length > 0 && open.length === 0,
                 progress: tasks.length ? done / tasks.length : null,
-                lines: shape === 'tall' ? (open.length ? open.slice(0, 5).map((n) => `• ${n}`) : tasks.length ? ['All clear'] : []) : [],
+                lines: shape === 'tall' ? (open.length ? open.slice(0, 5).map((n) => `â€¢ ${n}`) : tasks.length ? ['All clear'] : []) : [],
             };
         },
         press: () => openCommand?.('todo'),
@@ -208,13 +124,13 @@ const WIDGETS = {
         live: true,
         async read(shape) {
             const { running, reading, error } = speed.snapshot();
-            if (running) return { value: '…', caption: shape === 'compact' ? 'Testing' : 'Testing, about 15 seconds', active: true, lines: [] };
+            if (running) return { value: 'â€¦', caption: shape === 'compact' ? 'Testing' : 'Testing, about 15 seconds', active: true, lines: [] };
             if (!reading) return { value: 'Run', caption: error ? 'Test failed' : 'Press to test your speed', lines: shape === 'tall' && error ? [String(error)] : [] };
             return {
                 value: reading.download_display,
                 caption:
                     shape === 'wide'
-                        ? `Download  ·  Upload ${reading.upload_display}  ·  Ping ${reading.latency_display}`
+                        ? `Download  Â·  Upload ${reading.upload_display}  Â·  Ping ${reading.latency_display}`
                         : 'Download',
                 lines: shape === 'tall' ? [`Upload  ${reading.upload_display}`, `Ping  ${reading.latency_display}`] : [],
             };
@@ -262,7 +178,7 @@ const WIDGETS = {
                 value: uptime || '--',
                 caption:
                     shape === 'wide' && wanted.length
-                        ? `Uptime  ·  ${wanted.slice(0, 2).map((r) => `${r.label} ${r.value}`).join('  ·  ')}`
+                        ? `Uptime  Â·  ${wanted.slice(0, 2).map((r) => `${r.label} ${r.value}`).join('  Â·  ')}`
                         : 'Uptime',
                 lines: shape === 'tall' ? wanted.map((r) => `${r.label}  ${r.value}`) : [],
             };
