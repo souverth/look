@@ -38,6 +38,8 @@ const VARIANTS = [
 ];
 const VARIANT_NAME = { go: 'Cờ vây', atari: 'Atari Go', gomoku: 'Ngũ tử' };
 const SIZES = go.SIZES;
+const SIDES = ['first', 'second', 'random'];
+const SIDE_LABEL = { first: 'First', second: 'Second', random: 'Random' };
 
 let panel = null;
 let menuEl = null;
@@ -48,7 +50,8 @@ let titleEl = null;
 
 let view = 'menu'; // 'menu' | a game id
 let level = 'medium';
-let second = false; // the human plays second
+let side = 'first'; // which side the human takes: 'first', 'second' or 'random' (a toss each game)
+let second = false; // the human plays second in the game now being set up
 let variant = 'go'; // which game on the Go board
 let boardSize = 9; // the Go board's size (ngũ tử is always 15)
 let session = null; // the game in progress
@@ -60,7 +63,8 @@ function load() {
     try {
         const saved = JSON.parse(localStorage.getItem(STORE) || '{}');
         if (LEVELS.includes(saved.level)) level = saved.level;
-        second = saved.second === true;
+        if (SIDES.includes(saved.side)) side = saved.side;
+        else if (saved.second === true) side = 'second'; // from before there was a choice
         if (VARIANTS.some(([id]) => id === saved.variant)) variant = saved.variant;
         if (SIZES.includes(saved.boardSize)) boardSize = saved.boardSize;
     } catch {
@@ -70,7 +74,7 @@ function load() {
 
 function save() {
     try {
-        localStorage.setItem(STORE, JSON.stringify({ level, second, variant, boardSize }));
+        localStorage.setItem(STORE, JSON.stringify({ level, side, variant, boardSize }));
     } catch {
         // nothing to remember it in
     }
@@ -92,6 +96,14 @@ export function init() {
     document.getElementById('games-undo').addEventListener('click', () => undo());
     document.getElementById('games-pass').addEventListener('click', () => session?.pass?.());
     document.getElementById('games-resign').addEventListener('click', () => session?.resign?.());
+    document.getElementById('games-side').addEventListener('click', (e) => {
+        const button = e.target.closest('button[data-side]');
+        if (button) setSide(button.dataset.side);
+    });
+    document.getElementById('games-size').addEventListener('click', (e) => {
+        const button = e.target.closest('button[data-board]');
+        if (button) setBoard(Number(button.dataset.board));
+    });
     document.getElementById('games-level').addEventListener('click', (e) => {
         const button = e.target.closest('button[data-level]');
         if (button) setLevel(button.dataset.level);
@@ -124,9 +136,7 @@ export function handleKey(e) {
             return true;
         }
         if (key === 's') {
-            second = !second;
-            save();
-            renderMenu();
+            setSide(SIDES[(SIDES.indexOf(side) + 1) % SIDES.length]);
             return true;
         }
         if (key === 'v') {
@@ -189,13 +199,10 @@ function renderMenu() {
             'data-level',
         )}</div><kbd>L</kbd></div>` +
         `<div class="games-opt"><span>You play</span><div class="games-seg" data-opt="side">${segment(
-            [
-                ['first', 'First'],
-                ['second', 'Second'],
-            ],
-            second ? 'second' : 'first',
+            SIDES.map((s) => [s, SIDE_LABEL[s]]),
+            side,
             'data-side',
-        )}</div><kbd>S</kbd></div>` +
+        )}</div><kbd>S</kbd><small>first is X, Red or Black; random is a toss each game</small></div>` +
         `<div class="games-opt"><span>Cờ vây</span><div class="games-seg" data-opt="variant">${segment(
             VARIANTS,
             variant,
@@ -240,12 +247,16 @@ function onMenuClick(e) {
     }
     const lvl = e.target.closest('[data-level]');
     if (lvl) return setLevel(lvl.dataset.level);
-    const side = e.target.closest('[data-side]');
-    if (side) {
-        second = side.dataset.side === 'second';
-        save();
-        renderMenu();
-    }
+    const sideButton = e.target.closest('[data-side]');
+    if (sideButton) setSide(sideButton.dataset.side);
+}
+
+function setSide(next) {
+    if (!SIDES.includes(next)) return;
+    side = next;
+    save();
+    if (view === 'menu') renderMenu();
+    else newGame(); // a game already started is on the old side: begin again on the new one
 }
 
 function setLevel(next) {
@@ -277,19 +288,41 @@ function start(id) {
     view = id;
     menuEl.hidden = true;
     playEl.hidden = false;
-    const goBoard = id === 'go';
+    refreshBar();
+    newGame();
+}
+
+/** What the bar above the board shows for the game being played. */
+function refreshBar() {
+    const goBoard = view === 'go';
     const stones = goBoard && variant !== 'gomoku';
-    titleEl.textContent = goBoard ? `${VARIANT_NAME[variant]}${variant === 'gomoku' ? '' : ` ${boardSize}×${boardSize}`}` : GAMES[id].name;
+    titleEl.textContent = goBoard ? `${VARIANT_NAME[variant]}${variant === 'gomoku' ? '' : ` ${boardSize}×${boardSize}`}` : GAMES[view].name;
     // Passing and resigning belong to the games with territory or captures.
     document.getElementById('games-pass').hidden = !stones || variant === 'atari';
     document.getElementById('games-resign').hidden = !stones;
+    // The size only matters where there is a choice of it: not ngũ tử, always 15.
+    document.getElementById('games-size').hidden = !stones;
+    for (const button of document.querySelectorAll('#games-side button')) button.classList.toggle('is-on', button.dataset.side === side);
+    for (const button of document.querySelectorAll('#games-size button')) {
+        button.classList.toggle('is-on', Number(button.dataset.board) === boardSize);
+    }
     markLevel();
+}
+
+function setBoard(next) {
+    if (!SIZES.includes(next) || next === boardSize) return;
+    boardSize = next;
+    save();
+    refreshBar();
     newGame();
 }
 
 function newGame() {
     if (view === 'menu') return;
     token++;
+    // A toss for a random side, made afresh for every game.
+    second = side === 'random' ? Math.random() < 0.5 : side === 'second';
+    refreshBar();
     if (view === 'caro') session = newFiveInRow(false);
     else if (view === 'xiangqi') session = newXiangqi();
     else session = variant === 'gomoku' ? newFiveInRow(true) : newGo(variant === 'atari');
