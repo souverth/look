@@ -63,12 +63,25 @@ function drinkWater() {
         .catch((err) => console.error('[water] drink failed:', err));
 }
 
+const goalMet = (w) => w.goal > 0 && w.count >= w.goal;
+
+/** Seconds until the next glass is due: 0 when it is overdue, null with no reminder pending. */
+const secondsToNext = (w) => (w.next_unix_s ? Math.max(0, Math.round(w.next_unix_s - Date.now() / 1000)) : null);
+
+/** "42:15", or "1:05:30" past the hour: what the tile counts down. */
+function clockOf(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
 const waterCaption = (w) => {
-    if (w.count >= w.goal) return 'Goal reached';
+    if (goalMet(w)) return 'Goal reached';
     if (w.due) return 'Time to drink';
-    if (!w.next_unix_s) return 'Press to log a glass';
-    const minutes = Math.max(1, Math.ceil((w.next_unix_s * 1000 - Date.now()) / 60000));
-    return minutes >= 60 ? `Next in ${Math.floor(minutes / 60)}h ${minutes % 60}m` : `Next in ${minutes} min`;
+    const left = secondsToNext(w);
+    return left === null ? 'Press to log a glass' : `Next glass in ${clockOf(left)}`;
 };
 
 /** superactions.js is told how to jump into a command panel by app.js. */
@@ -132,18 +145,25 @@ const WIDGETS = {
         live: true,
         async read(shape) {
             if (!water) return { value: '--', caption: 'Water', lines: [] };
-            const left = Math.max(0, water.goal - water.count);
+            const goal = water.goal;
+            const left = secondsToNext(water);
             return {
-                value: `${water.count}/${water.goal}`,
+                // With no goal the count just runs on.
+                value: goal ? `${water.count}/${goal}` : String(water.count),
+                // One cell has no line for the caption, so the countdown rides on the chip.
+                unit: shape === 'compact' ? (water.due ? 'NOW' : left === null ? '' : clockOf(left)) : '',
                 caption: waterCaption(water),
-                active: water.count >= water.goal,
-                // The glass fills as the day goes; the tile wears it as a wave.
-                fill: Math.min(1, water.count / water.goal),
+                active: goalMet(water),
+                // The level follows the goal; with none it rests part-full once a glass is in.
+                fill: goal ? Math.min(1, water.count / goal) : water.count ? 0.6 : 0.15,
                 due: water.due,
                 splash: Date.now() - waterDrankAt < SPLASH_MS,
                 lines:
                     shape === 'tall'
-                        ? [left ? `${left} to go` : 'Well done', `A glass every ${water.interval_min} min`]
+                        ? [
+                              goal ? (water.count >= goal ? 'Well done' : `${goal - water.count} to go`) : `${water.count} today`,
+                              `A glass every ${water.interval_min} min`,
+                          ]
                         : [],
             };
         },

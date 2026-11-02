@@ -94,6 +94,23 @@ pub struct TileDef {
     pub control: Option<String>,
 }
 
+/// The letter a built-in widget gets: the one it asks for, or else the first
+/// letter of its title nobody on screen has. A widget never takes a key from a
+/// tile that owns it (Water wants W, which Wi-Fi holds, and settles for A).
+fn widget_key(tile: &LaunchpadTile, claimed: &mut HashMap<char, String>) -> Option<char> {
+    let asked = tile.mnemonic?.to_ascii_uppercase();
+    let key = std::iter::once(asked)
+        .chain(
+            tile.title
+                .chars()
+                .map(|c| c.to_ascii_uppercase())
+                .filter(|c| c.is_ascii_alphabetic()),
+        )
+        .find(|key| !claimed.contains_key(key) && look_qactions::chord_owner(*key).is_none())?;
+    claimed.insert(key, tile.action_id.clone());
+    Some(key)
+}
+
 /// A user tile, with its mnemonic granted or refused.
 ///
 /// - A letter held by a tile on the screen is never given away: a config file
@@ -585,6 +602,8 @@ pub fn resolve(contents: &str) -> Resolved {
     let mut claimed: HashMap<char, String> = order
         .iter()
         .filter_map(|name| known.get(*name))
+        // Widgets ask for their letter below, after the tiles that own theirs.
+        .filter(|tile| tile.role != look_qactions::TileRole::Widget)
         .filter_map(|tile| {
             tile.mnemonic
                 .map(|key| (key.to_ascii_uppercase(), tile.action_id.clone()))
@@ -623,7 +642,11 @@ pub fn resolve(contents: &str) -> Resolved {
                          entry is ignored"
                     ));
                 }
-                built_in.clone()
+                let mut built_in = built_in.clone();
+                if built_in.role == look_qactions::TileRole::Widget {
+                    built_in.mnemonic = widget_key(&built_in, &mut claimed);
+                }
+                built_in
             }
             None => {
                 let Some(def) = defs.get(name) else {
@@ -1179,6 +1202,21 @@ press   = "true"
         // Still drawn: the control works, so dropping the tile would punish the
         // user for a key they can simply delete.
         assert!(tile(&resolved, "lamp").is_some());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn water_takes_w_unless_wifi_is_on_screen() {
+        let alone = resolve("layout = [\"water\"]");
+        assert_eq!(tile(&alone, "water").unwrap().mnemonic, Some('W'));
+
+        let beside = resolve("layout = [\"wifi water\"]");
+        assert_eq!(tile(&beside, "wifi").unwrap().mnemonic, Some('W'));
+        assert_eq!(
+            tile(&beside, "water").unwrap().mnemonic,
+            Some('A'),
+            "the next free letter of its title"
+        );
     }
 
     #[test]

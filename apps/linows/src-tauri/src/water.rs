@@ -32,7 +32,8 @@ static STARTED: OnceLock<i64> = OnceLock::new();
 struct Stored {
     /// Off silences the notification; the tile still counts glasses.
     reminders: bool,
-    /// Glasses a day.
+    /// Glasses a day to aim for; 0 sets no goal, so the count runs on and the
+    /// reminders carry on through the active hours.
     goal: u32,
     /// Minutes between reminders.
     interval_min: u32,
@@ -50,7 +51,7 @@ impl Default for Stored {
     fn default() -> Self {
         Self {
             reminders: true,
-            goal: 8,
+            goal: 0,
             interval_min: 60,
             start_hour: 8,
             end_hour: 22,
@@ -116,7 +117,7 @@ fn evaluate(s: &Stored, clock: &Clock, started: i64) -> Status {
     let window_start = clock.midnight + i64::from(s.start_hour) * 3600;
     let interval = i64::from(s.interval_min.max(1)) * 60;
     let in_window = (s.start_hour..s.end_hour).contains(&clock.hour);
-    let pending = s.reminders && in_window && s.count < s.goal;
+    let pending = s.reminders && in_window && (s.goal == 0 || s.count < s.goal);
     // The wait counts from the last glass, or from the start of the day's
     // window (or of this run, if later) when none has been drunk yet.
     let anchor = s.last_drink_unix_s.max(window_start).max(started);
@@ -139,7 +140,6 @@ fn load(clock: &Clock) -> Stored {
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or_default();
-    s.goal = s.goal.max(1);
     roll_over(&mut s, clock);
     s
 }
@@ -196,7 +196,20 @@ pub fn start(app: AppHandle) {
     });
 }
 
+/// Whether the drawing in `super-actions.toml` places the Water tile. The
+/// reminders are the tile's, so a user who has not put it on the strip is never
+/// notified.
+fn on_strip() -> bool {
+    linows_backend::look_engine::launchpad::layout()
+        .tiles
+        .iter()
+        .any(|tile| tile.action_id == linows_backend::look_qactions::action_id::WATER)
+}
+
 fn remind_if_due(app: &AppHandle) {
+    if !on_strip() {
+        return;
+    }
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let clock = Clock::local();
     let mut s = load(&clock);
@@ -204,10 +217,14 @@ fn remind_if_due(app: &AppHandle) {
     // Every interval until a glass is logged, not every tick.
     let again = clock.now - s.last_remind_unix_s >= i64::from(s.interval_min.max(1)) * 60;
     if status.due && again {
-        let body = format!(
-            "Time for a glass of water. {} of {} today.",
-            s.count, s.goal
-        );
+        let body = if s.goal == 0 {
+            format!("Time for a glass of water. {} so far today.", s.count)
+        } else {
+            format!(
+                "Time for a glass of water. {} of {} today.",
+                s.count, s.goal
+            )
+        };
         let _ = app.notification().builder().title("Look").body(body).show();
         s.last_remind_unix_s = clock.now;
         let _ = save(&s);
@@ -262,10 +279,21 @@ mod tests {
         assert!(!at(&s, START + 20 * 3600, 23).due, "after the window");
         assert_eq!(at(&s, START + 20 * 3600, 23).next_unix_s, 0);
         let done = Stored {
+            goal: 8,
             count: 8,
             ..Stored::default()
         };
         assert!(!at(&done, START + 5 * 3600, 13).due, "goal met");
+    }
+
+    #[test]
+    fn no_goal_means_no_ceiling() {
+        let s = Stored {
+            count: 20,
+            ..Stored::default()
+        };
+        assert_eq!(s.goal, 0, "the default sets no goal");
+        assert!(at(&s, START + 5 * 3600, 13).due, "still asks after 20 glasses");
     }
 
     #[test]
