@@ -1,10 +1,11 @@
-// /games: caro and cờ tướng (xiangqi) against a bot, to pass the time. The rules and
-// the bots are in games/caro.js and games/xiangqi.js; this draws the boards and
-// takes the clicks.
+// /games: caro, cờ tướng (xiangqi), cờ vây (Go) and cờ vua (chess) against a bot, to
+// pass the time. The rules and the bots are in games/*.js; this draws the boards,
+// takes the clicks and keeps each game's own settings.
 
 import * as caro from '../../games/caro.js';
 import * as xq from '../../games/xiangqi.js';
 import * as go from '../../games/go.js';
+import * as chess from '../../games/chess.js';
 
 const LEVELS = ['easy', 'medium', 'hard'];
 const LEVEL_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
@@ -13,22 +14,12 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const BOT_DELAY_MS = 120;
 
 const GAMES = {
-    caro: {
-        name: 'Caro',
-        blurb: 'Five in a row on a 15 × 15 board',
-        key: '1',
-    },
-    xiangqi: {
-        name: 'Cờ tướng',
-        blurb: 'Chinese chess: trap the other general',
-        key: '2',
-    },
-    go: {
-        name: 'Cờ vây',
-        blurb: 'Go: surround territory. Also Atari Go and five in a row',
-        key: '3',
-    },
+    caro: { name: 'Caro', blurb: 'Five in a row on a 15 × 15 board, played in the squares', key: '1' },
+    xiangqi: { name: 'Cờ tướng', blurb: 'Chinese chess: trap the other general', key: '2' },
+    go: { name: 'Cờ vây', blurb: 'Go: surround territory. Also Atari Go and five in a row', key: '3' },
+    chess: { name: 'Cờ vua', blurb: 'Chess, with castling, en passant and promotion', key: '4' },
 };
+const ORDER = Object.keys(GAMES);
 
 /** The ways to play on a Go board. `gomoku` is five in a row on the crossings (ngũ tử). */
 const VARIANTS = [
@@ -39,7 +30,17 @@ const VARIANTS = [
 const VARIANT_NAME = { go: 'Cờ vây', atari: 'Atari Go', gomoku: 'Ngũ tử' };
 const SIZES = go.SIZES;
 const SIDES = ['first', 'second', 'random'];
-const SIDE_LABEL = { first: 'First', second: 'Second', random: 'Random' };
+
+/** What "first" and "second" are called in a game. */
+function sideLabels(game) {
+    const names = {
+        caro: ['X', 'O'],
+        xiangqi: ['Red', 'Black'],
+        go: ['Black', 'White'],
+        chess: ['White', 'Black'],
+    }[game];
+    return { first: `${names[0]} (first)`, second: `${names[1]} (second)`, random: 'Random' };
+}
 
 let panel = null;
 let menuEl = null;
@@ -49,32 +50,72 @@ let statusEl = null;
 let titleEl = null;
 
 let view = 'menu'; // 'menu' | a game id
+let selected = 'caro'; // the game the menu is on: its settings are the ones shown
+// The settings of the game that is selected. Each game keeps its own (see `prefs`);
+// these are what the game being set up or played reads.
 let level = 'medium';
 let side = 'first'; // which side the human takes: 'first', 'second' or 'random' (a toss each game)
-let second = false; // the human plays second in the game now being set up
 let variant = 'go'; // which game on the Go board
 let boardSize = 9; // the Go board's size (ngũ tử is always 15)
+let turnFoe = false; // xiangqi: write the other player's pieces facing them, as on a real board
+let second = false; // the human plays second in the game now being set up
 let session = null; // the game in progress
 let token = 0; // bumped when a game ends or restarts, so a late bot reply is dropped
 
-// --- What is remembered between runs -----------------------------------------
+// --- What is remembered between runs: each game's own settings ------------------
+
+const prefs = {
+    caro: { level: 'medium', side: 'first' },
+    xiangqi: { level: 'medium', side: 'first', turnFoe: false },
+    go: { level: 'medium', side: 'first', variant: 'go', boardSize: 9 },
+    chess: { level: 'medium', side: 'first' },
+};
+
+/** Takes the settings in view into the selected game's entry. */
+function collect() {
+    const entry = { level, side };
+    if (selected === 'xiangqi') entry.turnFoe = turnFoe;
+    if (selected === 'go') Object.assign(entry, { variant, boardSize });
+    prefs[selected] = entry;
+}
+
+/** Puts a game's remembered settings into view. */
+function adopt(id) {
+    const entry = prefs[id];
+    level = entry.level;
+    side = entry.side;
+    if (id === 'xiangqi') turnFoe = entry.turnFoe;
+    if (id === 'go') {
+        variant = entry.variant;
+        boardSize = entry.boardSize;
+    }
+}
 
 function load() {
     try {
         const saved = JSON.parse(localStorage.getItem(STORE) || '{}');
-        if (LEVELS.includes(saved.level)) level = saved.level;
-        if (SIDES.includes(saved.side)) side = saved.side;
-        else if (saved.second === true) side = 'second'; // from before there was a choice
-        if (VARIANTS.some(([id]) => id === saved.variant)) variant = saved.variant;
-        if (SIZES.includes(saved.boardSize)) boardSize = saved.boardSize;
+        for (const id of ORDER) {
+            const entry = saved.prefs?.[id] ?? {};
+            const mine = prefs[id];
+            if (LEVELS.includes(entry.level)) mine.level = entry.level;
+            if (SIDES.includes(entry.side)) mine.side = entry.side;
+            if (id === 'xiangqi') mine.turnFoe = entry.turnFoe === true;
+            if (id === 'go') {
+                if (VARIANTS.some(([v]) => v === entry.variant)) mine.variant = entry.variant;
+                if (SIZES.includes(entry.boardSize)) mine.boardSize = entry.boardSize;
+            }
+        }
+        if (ORDER.includes(saved.selected)) selected = saved.selected;
     } catch {
         // private window or cleared site data: the defaults
     }
+    adopt(selected);
 }
 
 function save() {
+    collect();
     try {
-        localStorage.setItem(STORE, JSON.stringify({ level, side, variant, boardSize }));
+        localStorage.setItem(STORE, JSON.stringify({ selected, prefs }));
     } catch {
         // nothing to remember it in
     }
@@ -96,19 +137,14 @@ export function init() {
     document.getElementById('games-undo').addEventListener('click', () => undo());
     document.getElementById('games-pass').addEventListener('click', () => session?.pass?.());
     document.getElementById('games-resign').addEventListener('click', () => session?.resign?.());
-    document.getElementById('games-side').addEventListener('click', (e) => {
-        const button = e.target.closest('button[data-side]');
-        if (button) setSide(button.dataset.side);
-    });
-    document.getElementById('games-size').addEventListener('click', (e) => {
-        const button = e.target.closest('button[data-board]');
-        if (button) setBoard(Number(button.dataset.board));
-    });
     document.getElementById('games-level').addEventListener('click', (e) => {
         const button = e.target.closest('button[data-level]');
         if (button) setLevel(button.dataset.level);
     });
     menuEl.addEventListener('click', onMenuClick);
+    menuEl.addEventListener('dblclick', (e) => {
+        if (e.target.closest('[data-game]')) start();
+    });
     renderMenu();
 }
 
@@ -126,31 +162,26 @@ export function handleKey(e) {
     if (e.ctrlKey || e.metaKey || e.altKey) return false;
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     if (view === 'menu') {
-        const game = Object.keys(GAMES).find((id) => GAMES[id].key === key);
-        if (game) {
-            start(game);
-            return true;
+        const at = ORDER.indexOf(selected);
+        // What a key does here, or nothing: only the options shown for this game count.
+        const actions = {
+            ArrowRight: () => choose(ORDER[(at + 1) % ORDER.length]),
+            ArrowDown: () => choose(ORDER[(at + 1) % ORDER.length]),
+            ArrowLeft: () => choose(ORDER[(at + ORDER.length - 1) % ORDER.length]),
+            ArrowUp: () => choose(ORDER[(at + ORDER.length - 1) % ORDER.length]),
+            Enter: () => start(),
+            l: () => setLevel(LEVELS[(LEVELS.indexOf(level) + 1) % LEVELS.length]),
+            s: () => setSide(SIDES[(SIDES.indexOf(side) + 1) % SIDES.length]),
+        };
+        for (const id of ORDER) actions[GAMES[id].key] = () => choose(id);
+        if (selected === 'xiangqi') actions.f = () => setPieces(!turnFoe);
+        if (selected === 'go') {
+            actions.v = () => cycleVariant();
+            if (variant !== 'gomoku') actions.b = () => cycleBoard();
         }
-        if (key === 'l') {
-            setLevel(LEVELS[(LEVELS.indexOf(level) + 1) % LEVELS.length]);
-            return true;
-        }
-        if (key === 's') {
-            setSide(SIDES[(SIDES.indexOf(side) + 1) % SIDES.length]);
-            return true;
-        }
-        if (key === 'v') {
-            cycleVariant();
-            return true;
-        }
-        if (key === 'b') {
-            cycleBoard();
-            return true;
-        }
-        return false; // Esc leaves command mode
-    }
-    if (key === 'p') {
-        session?.pass?.();
+        const action = actions[key];
+        if (!action) return false; // Esc leaves command mode
+        action();
         return true;
     }
     if (key === 'Escape') {
@@ -169,10 +200,14 @@ export function handleKey(e) {
         setLevel(LEVELS[(LEVELS.indexOf(level) + 1) % LEVELS.length]);
         return true;
     }
+    if (key === 'p') {
+        session?.pass?.();
+        return true;
+    }
     return false;
 }
 
-// --- The menu ----------------------------------------------------------------
+// --- The menu: pick a game, see only its settings --------------------------------
 
 function segment(options, current, attr) {
     return options
@@ -180,59 +215,72 @@ function segment(options, current, attr) {
         .join('');
 }
 
+function row(label, control, key) {
+    return `<div class="games-opt"><span>${label}</span>${control}<kbd>${key}</kbd></div>`;
+}
+
 function renderMenu() {
-    const cards = Object.entries(GAMES)
-        .map(
-            ([id, game]) =>
-                `<button type="button" class="games-card" data-game="${id}">` +
-                `<span class="games-card-art">${{ caro: caroArt, xiangqi: xiangqiArt, go: goArt }[id]()}</span>` +
-                `<strong>${game.name}</strong><small>${game.blurb}</small>` +
-                `<kbd>${game.key}</kbd></button>`,
-        )
-        .join('');
+    const art = { caro: caroArt, xiangqi: xiangqiArt, go: goArt, chess: chessArt };
+    const cards = ORDER.map(
+        (id) =>
+            `<button type="button" class="games-card${id === selected ? ' is-selected' : ''}" data-game="${id}" role="tab" aria-selected="${id === selected}">` +
+            `<span class="games-card-art">${art[id]()}</span><strong>${GAMES[id].name}</strong><kbd>${GAMES[id].key}</kbd></button>`,
+    ).join('');
+
+    const labels = sideLabels(selected);
+    const rows = [
+        row('Bot level', `<div class="games-seg">${segment(LEVELS.map((l) => [l, LEVEL_LABEL[l]]), level, 'data-level')}</div>`, 'L'),
+        row('You play', `<div class="games-seg">${segment(SIDES.map((s) => [s, labels[s]]), side, 'data-side')}</div>`, 'S'),
+    ];
+    if (selected === 'xiangqi') {
+        rows.push(
+            row(
+                'Pieces',
+                `<div class="games-seg">${segment(
+                    [
+                        ['up', 'All face me'],
+                        ['facing', 'Face their player'],
+                    ],
+                    turnFoe ? 'facing' : 'up',
+                    'data-pieces',
+                )}</div>`,
+                'F',
+            ),
+        );
+    }
+    if (selected === 'go') {
+        rows.push(row('Variant', `<div class="games-seg">${segment(VARIANTS, variant, 'data-variant')}</div>`, 'V'));
+        // Ngũ tử is always on 15 lines, so there is nothing to choose.
+        if (variant !== 'gomoku') {
+            rows.push(row('Board', `<div class="games-seg">${segment(SIZES.map((n) => [n, `${n} × ${n}`]), boardSize, 'data-board')}</div>`, 'B'));
+        }
+    }
+
     menuEl.innerHTML =
-        `<div class="games-cards">${cards}</div>` +
-        `<div class="games-options">` +
-        `<div class="games-opt"><span>Bot level</span><div class="games-seg" data-opt="level">${segment(
-            LEVELS.map((l) => [l, LEVEL_LABEL[l]]),
-            level,
-            'data-level',
-        )}</div><kbd>L</kbd></div>` +
-        `<div class="games-opt"><span>You play</span><div class="games-seg" data-opt="side">${segment(
-            SIDES.map((s) => [s, SIDE_LABEL[s]]),
-            side,
-            'data-side',
-        )}</div><kbd>S</kbd><small>first is X, Red or Black; random is a toss each game</small></div>` +
-        `<div class="games-opt"><span>Cờ vây</span><div class="games-seg" data-opt="variant">${segment(
-            VARIANTS,
-            variant,
-            'data-variant',
-        )}</div><kbd>V</kbd></div>` +
-        `<div class="games-opt"><span>Board</span><div class="games-seg ${variant === 'gomoku' ? 'is-off' : ''}" data-opt="board">${segment(
-            SIZES.map((n) => [n, `${n} × ${n}`]),
-            boardSize,
-            'data-board',
-        )}</div><kbd>B</kbd>${variant === 'gomoku' ? '<small>ngũ tử is 15 × 15</small>' : ''}</div>` +
-        `</div>` +
-        `<p class="games-hint">Click a game or press its number. In a game: <kbd>N</kbd> new, <kbd>U</kbd> undo, <kbd>P</kbd> pass (cờ vây), <kbd>Esc</kbd> back.</p>`;
+        `<div class="games-picker" role="tablist" aria-label="Games">${cards}</div>` +
+        `<div class="games-detail">` +
+        `<div class="games-detail-head"><strong>${GAMES[selected].name}</strong><span>${GAMES[selected].blurb}</span></div>` +
+        `<div class="games-options">${rows.join('')}</div>` +
+        `<div class="games-detail-foot"><button type="button" class="games-btn games-btn-primary" data-start>Play <kbd>Enter</kbd></button>` +
+        `<span class="games-hint"><kbd>←</kbd> <kbd>→</kbd> choose a game. In a game: <kbd>N</kbd> new, <kbd>U</kbd> undo, <kbd>Esc</kbd> back</span></div>` +
+        `</div>`;
 }
 
-function cycleVariant() {
-    const ids = VARIANTS.map(([id]) => id);
-    variant = ids[(ids.indexOf(variant) + 1) % ids.length];
-    save();
-    renderMenu();
-}
-
-function cycleBoard() {
-    boardSize = SIZES[(SIZES.indexOf(boardSize) + 1) % SIZES.length];
+function choose(id) {
+    if (id === selected) return;
+    collect();
+    selected = id;
+    adopt(id);
     save();
     renderMenu();
 }
 
 function onMenuClick(e) {
     const card = e.target.closest('[data-game]');
-    if (card) return start(card.dataset.game);
+    if (card) return choose(card.dataset.game);
+    if (e.target.closest('[data-start]')) return start();
+    const piecesButton = e.target.closest('[data-pieces]');
+    if (piecesButton) return setPieces(piecesButton.dataset.pieces === 'facing');
     const variantButton = e.target.closest('[data-variant]');
     if (variantButton) {
         variant = variantButton.dataset.variant;
@@ -255,8 +303,27 @@ function setSide(next) {
     if (!SIDES.includes(next)) return;
     side = next;
     save();
+    renderMenu();
+}
+
+function setPieces(facing) {
+    turnFoe = facing;
+    save();
     if (view === 'menu') renderMenu();
-    else newGame(); // a game already started is on the old side: begin again on the new one
+    else session?.draw?.();
+}
+
+function cycleVariant() {
+    const ids = VARIANTS.map(([id]) => id);
+    variant = ids[(ids.indexOf(variant) + 1) % ids.length];
+    save();
+    renderMenu();
+}
+
+function cycleBoard() {
+    boardSize = SIZES[(SIZES.indexOf(boardSize) + 1) % SIZES.length];
+    save();
+    renderMenu();
 }
 
 function setLevel(next) {
@@ -284,8 +351,9 @@ function showMenu() {
 
 // --- A game ------------------------------------------------------------------
 
-function start(id) {
-    view = id;
+/** Plays the selected game. */
+function start() {
+    view = selected;
     menuEl.hidden = true;
     playEl.hidden = false;
     refreshBar();
@@ -300,21 +368,7 @@ function refreshBar() {
     // Passing and resigning belong to the games with territory or captures.
     document.getElementById('games-pass').hidden = !stones || variant === 'atari';
     document.getElementById('games-resign').hidden = !stones;
-    // The size only matters where there is a choice of it: not ngũ tử, always 15.
-    document.getElementById('games-size').hidden = !stones;
-    for (const button of document.querySelectorAll('#games-side button')) button.classList.toggle('is-on', button.dataset.side === side);
-    for (const button of document.querySelectorAll('#games-size button')) {
-        button.classList.toggle('is-on', Number(button.dataset.board) === boardSize);
-    }
     markLevel();
-}
-
-function setBoard(next) {
-    if (!SIZES.includes(next) || next === boardSize) return;
-    boardSize = next;
-    save();
-    refreshBar();
-    newGame();
 }
 
 function newGame() {
@@ -325,6 +379,7 @@ function newGame() {
     refreshBar();
     if (view === 'caro') session = newFiveInRow(false);
     else if (view === 'xiangqi') session = newXiangqi();
+    else if (view === 'chess') session = newChess();
     else session = variant === 'gomoku' ? newFiveInRow(true) : newGo(variant === 'atari');
     session.draw();
     session.afterMove();
@@ -825,8 +880,9 @@ function newXiangqi() {
             group.appendChild(el('circle', { cx: x, cy: y, r: 23, class: 'xq-disc' }));
             group.appendChild(el('circle', { cx: x, cy: y, r: 19, class: 'xq-ring' }));
             const char = el('text', { x, y: y + 1, class: 'xq-char' }, xq.PIECE_CHARS[side][xq.kindOf(piece)]);
-            // As on a real board, the other player's pieces are written to face them.
-            if (side !== human) char.setAttribute('transform', `rotate(180 ${x} ${y})`);
+            // Every piece reads the right way up for you, unless the option writes the
+            // other player's to face them, as on a real board.
+            if (turnFoe && side !== human) char.setAttribute('transform', `rotate(180 ${x} ${y})`);
             group.appendChild(char);
             svg.appendChild(group);
         }
@@ -927,7 +983,226 @@ function newXiangqi() {
     return game;
 }
 
+// --- Cờ vua ------------------------------------------------------------------
+
+const CH_CELL = 60;
+const CH_PAD = 26;
+const CH_SPAN = 8 * CH_CELL + CH_PAD * 2;
+// The solid glyphs for both colours; white is the same shape filled light. The
+// text-presentation selector keeps a pawn from turning into an emoji.
+const CHESS_GLYPH = { [chess.KING]: '♚', [chess.QUEEN]: '♛', [chess.ROOK]: '♜', [chess.BISHOP]: '♝', [chess.KNIGHT]: '♞', [chess.PAWN]: '♟' };
+const PROMOTIONS = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT];
+
+function newChess() {
+    const human = second ? chess.BLACK : chess.WHITE;
+    const bot = -human;
+    const g = chess.Chess.fromFen();
+    let from = -1; // the square picked up
+    let options = []; // the moves from it
+    let asking = null; // a pawn move waiting to be told what to become: { from, to }
+    let over = false;
+
+    const svg = el('svg', { viewBox: `0 0 ${CH_SPAN} ${CH_SPAN}`, class: 'games-svg', role: 'img', 'aria-label': 'Chess board' });
+    boardEl.replaceChildren(svg);
+
+    // The human is always at the bottom, so playing black turns the board round.
+    const flip = human === chess.BLACK;
+    const at = (sq) => {
+        const row = flip ? 7 - chess.rowOf(sq) : chess.rowOf(sq);
+        const col = flip ? 7 - chess.fileOf(sq) : chess.fileOf(sq);
+        return [CH_PAD + col * CH_CELL, CH_PAD + row * CH_CELL];
+    };
+    const centre = (sq) => {
+        const [x, y] = at(sq);
+        return [x + CH_CELL / 2, y + CH_CELL / 2];
+    };
+
+    const lastMove = () => g.stack[g.stack.length - 1]?.m;
+
+    function drawBoard() {
+        svg.appendChild(el('rect', { x: 0, y: 0, width: CH_SPAN, height: CH_SPAN, rx: 10, class: 'chess-frame' }));
+        for (let sq = 0; sq < 64; sq++) {
+            const [x, y] = at(sq);
+            const light = (chess.rowOf(sq) + chess.fileOf(sq)) % 2 === 0;
+            svg.appendChild(el('rect', { x, y, width: CH_CELL, height: CH_CELL, class: light ? 'chess-light' : 'chess-dark' }));
+        }
+        // The names of the files along the bottom and the ranks down the left.
+        for (let i = 0; i < 8; i++) {
+            const file = flip ? 7 - i : i;
+            const rank = flip ? i + 1 : 8 - i;
+            svg.appendChild(el('text', { x: CH_PAD + i * CH_CELL + CH_CELL / 2, y: CH_SPAN - 8, class: 'chess-label' }, 'abcdefgh'[file]));
+            svg.appendChild(el('text', { x: 11, y: CH_PAD + i * CH_CELL + CH_CELL / 2 + 1, class: 'chess-label' }, String(rank)));
+        }
+    }
+
+    function drawMarks() {
+        const last = lastMove();
+        if (last !== undefined) {
+            for (const sq of [chess.moveFrom(last), chess.moveTo(last)]) {
+                const [x, y] = at(sq);
+                svg.appendChild(el('rect', { x, y, width: CH_CELL, height: CH_CELL, class: 'chess-last' }));
+            }
+        }
+        if (from >= 0) {
+            const [x, y] = at(from);
+            svg.appendChild(el('rect', { x, y, width: CH_CELL, height: CH_CELL, class: 'chess-selected' }));
+        }
+        if (g.inCheck()) {
+            const [x, y] = centre(g.turn === chess.WHITE ? g.wk : g.bk);
+            svg.appendChild(el('circle', { cx: x, cy: y, r: CH_CELL * 0.48, class: 'chess-check' }));
+        }
+    }
+
+    function drawPieces() {
+        for (let sq = 0; sq < 64; sq++) {
+            const piece = g.board[sq];
+            if (!piece) continue;
+            const [x, y] = centre(sq);
+            svg.appendChild(el('text', { x, y: y + 2, class: `chess-piece ${piece > 0 ? 'is-white' : 'is-black'}` }, `${CHESS_GLYPH[chess.kindOf(piece)]}︎`));
+        }
+        // Where the picked-up piece may go: a dot on a free square, a ring on a capture.
+        const seen = new Set();
+        for (const m of options) {
+            const to = chess.moveTo(m);
+            if (seen.has(to)) continue;
+            seen.add(to);
+            const [x, y] = centre(to);
+            const capture = g.board[to] || chess.moveFlag(m) === 2;
+            svg.appendChild(el('circle', { cx: x, cy: y, r: capture ? CH_CELL * 0.46 : 9, class: capture ? 'chess-capture' : 'chess-dot' }));
+        }
+    }
+
+    /** The four pieces a pawn may become, laid over the board for the player to click. */
+    function drawAsking() {
+        svg.appendChild(el('rect', { x: 0, y: 0, width: CH_SPAN, height: CH_SPAN, rx: 10, class: 'chess-veil' }));
+        const x0 = CH_PAD + 2 * CH_CELL;
+        const y0 = CH_PAD + 3.5 * CH_CELL - CH_CELL / 2;
+        svg.appendChild(el('rect', { x: x0 - 6, y: y0 - 6, width: 4 * CH_CELL + 12, height: CH_CELL + 12, rx: 10, class: 'chess-ask' }));
+        PROMOTIONS.forEach((kind, i) => {
+            svg.appendChild(el('rect', { x: x0 + i * CH_CELL, y: y0, width: CH_CELL, height: CH_CELL, rx: 6, class: 'chess-choice' }));
+            svg.appendChild(
+                el('text', { x: x0 + i * CH_CELL + CH_CELL / 2, y: y0 + CH_CELL / 2 + 2, class: `chess-piece ${human === chess.WHITE ? 'is-white' : 'is-black'}` }, `${CHESS_GLYPH[kind]}︎`),
+            );
+        });
+    }
+
+    const game = {
+        thinking: false,
+        draw() {
+            svg.replaceChildren();
+            drawBoard();
+            drawMarks();
+            drawPieces();
+            if (asking) drawAsking();
+        },
+        click(e) {
+            if (over || game.thinking || g.turn !== human) return;
+            const p = pointOf(svg, e);
+            if (asking) {
+                const x0 = CH_PAD + 2 * CH_CELL;
+                const y0 = CH_PAD + 3.5 * CH_CELL - CH_CELL / 2;
+                const index = Math.floor((p.x - x0) / CH_CELL);
+                if (p.y >= y0 && p.y <= y0 + CH_CELL && index >= 0 && index < 4) {
+                    const promo = PROMOTIONS[index];
+                    const move = options.find((m) => chess.moveTo(m) === asking.to && chess.movePromo(m) === promo);
+                    asking = null;
+                    if (move !== undefined) return play(move);
+                }
+                asking = null; // anywhere else takes the move back
+                from = -1;
+                options = [];
+                return game.draw();
+            }
+            let col = Math.floor((p.x - CH_PAD) / CH_CELL);
+            let row = Math.floor((p.y - CH_PAD) / CH_CELL);
+            if (col < 0 || row < 0 || col > 7 || row > 7) return;
+            if (flip) {
+                col = 7 - col;
+                row = 7 - row;
+            }
+            const sq = chess.squareOf(row, col);
+            const there = options.filter((m) => chess.moveTo(m) === sq);
+            if (from >= 0 && there.length) {
+                if (there.some((m) => chess.movePromo(m))) {
+                    asking = { from, to: sq };
+                    return game.draw();
+                }
+                return play(there[0]);
+            }
+            if (chess.sideOf(g.board[sq]) === human) {
+                from = sq;
+                options = g.movesFrom(sq);
+            } else {
+                from = -1;
+                options = [];
+            }
+            game.draw();
+        },
+        undo() {
+            if (game.thinking || g.stack.length === 0) return;
+            // Back to the human's turn: the bot's reply goes, then the human's move.
+            do g.takeBack();
+            while (g.stack.length && g.turn !== human);
+            from = -1;
+            options = [];
+            asking = null;
+            over = false;
+            game.draw();
+            game.afterMove();
+        },
+        afterMove() {
+            const result = g.status();
+            if (result.state === 'checkmate') {
+                over = true;
+                const mine = g.turn === bot;
+                game.draw();
+                say(mine ? 'Checkmate. You win!' : 'Checkmate. The bot wins', mine ? 'win' : 'lose');
+                return;
+            }
+            if (result.state === 'stalemate' || result.state === 'draw') {
+                over = true;
+                game.draw();
+                say(`A draw: ${result.state === 'stalemate' ? 'stalemate' : result.reason}`, 'draw');
+                return;
+            }
+            if (g.turn === human) {
+                say(result.check ? 'Check! Your move' : `Your move (${human === chess.WHITE ? 'White' : 'Black'})`, result.check ? 'warn' : '');
+                return;
+            }
+            game.thinking = true;
+            say(result.check ? 'Check. Bot is thinking…' : 'Bot is thinking…', 'busy');
+            const my = token;
+            later(my, () => {
+                const move = chess.chooseMove(g, level);
+                game.thinking = false;
+                if (move !== null) play(move);
+            });
+        },
+    };
+
+    function play(move) {
+        g.play(move);
+        from = -1;
+        options = [];
+        asking = null;
+        game.draw();
+        game.afterMove();
+    }
+
+    svg.addEventListener('click', game.click);
+    return game;
+}
+
 // --- Small pictures for the menu ---------------------------------------------
+
+function chessArt() {
+    return (
+        '<svg viewBox="0 0 64 64" width="44" height="44" aria-hidden="true">' +
+        '<rect width="64" height="64" rx="10" class="chess-dark"/>' +
+        '<path d="M0 0H32V32H0ZM32 32H64V64H32Z" class="chess-light"/>' +
+        '<text x="32" y="34" class="chess-piece is-white" style="font-size:40px">♞︎</text></svg>'
+    );
+}
 
 function caroArt() {
     return (

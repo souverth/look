@@ -34,10 +34,11 @@ kbd.games-key,
     display: none;
 }
 
-.games-cards {
+/* The games, one card each: the arrow keys move along them. */
+.games-picker {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
 }
 
 .games-card {
@@ -45,49 +46,74 @@ kbd.games-key,
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    padding: 18px 14px 14px;
+    gap: 5px;
+    padding: 12px 8px 10px;
     border: 1px solid var(--divider-color);
     border-radius: var(--bar-radius);
     background: var(--control-fill);
-    color: var(--font-color);
+    color: var(--font-secondary);
     cursor: pointer;
     transition:
         border-color 0.15s ease,
-        transform 0.15s ease;
+        background 0.15s ease,
+        color 0.15s ease;
 }
 
-.games-card:hover,
-.games-card:focus-visible {
+.games-card:hover {
     border-color: var(--accent-color);
-    transform: translateY(-2px);
-    outline: none;
+}
+
+.games-card.is-selected {
+    border-color: var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 16%, var(--control-fill));
+    color: var(--font-color);
+    box-shadow: 0 0 0 1px var(--accent-color);
 }
 
 .games-card strong {
-    font-size: calc(var(--font-size) + 3px);
-}
-
-.games-card small {
-    color: var(--font-secondary);
-    text-align: center;
+    font-size: calc(var(--font-size) + 1px);
 }
 
 .games-card kbd {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 6px;
+    right: 6px;
 }
 
 .games-card-art svg {
     display: block;
+    width: 44px;
+    height: 44px;
+}
+
+/* What is chosen: its name and only its own settings. */
+.games-detail {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--divider-color);
+    border-radius: var(--bar-radius);
+    background: var(--control-fill);
+}
+
+.games-detail-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.games-detail-head strong {
+    font-size: calc(var(--font-size) + 3px);
+}
+
+.games-detail-head span {
+    color: var(--font-secondary);
 }
 
 .games-options {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    margin-top: 18px;
 }
 
 .games-opt {
@@ -101,12 +127,94 @@ kbd.games-key,
     color: var(--font-secondary);
 }
 
+.games-detail-foot {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 16px;
+}
+
 .games-hint {
-    margin: 18px 0 0;
     color: var(--font-muted);
     font-size: calc(var(--font-size) - 2px);
 }
 
+/* --- Cờ vua -------------------------------------------------------------------- */
+.chess-frame {
+    fill: #5b4a36;
+}
+
+.chess-light {
+    fill: #f0d9b5;
+}
+
+.chess-dark {
+    fill: #b58863;
+}
+
+.chess-label {
+    fill: #e9dcc3;
+    font-size: 12px;
+    font-weight: 600;
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+
+.chess-last {
+    fill: rgba(255, 220, 60, 0.42);
+}
+
+.chess-selected {
+    fill: rgba(70, 150, 255, 0.5);
+}
+
+.chess-check {
+    fill: rgba(229, 72, 77, 0.55);
+}
+
+.chess-piece {
+    font-size: 50px;
+    font-family: 'Segoe UI Symbol', 'Noto Sans Symbols 2', 'DejaVu Sans', 'Arial Unicode MS', sans-serif;
+    text-anchor: middle;
+    dominant-baseline: central;
+    stroke-width: 1.4px;
+    paint-order: stroke;
+    stroke-linejoin: round;
+}
+
+.chess-piece.is-white {
+    fill: #fdfdfd;
+    stroke: #1f1f1f;
+}
+
+.chess-piece.is-black {
+    fill: #1c1c1c;
+    stroke: #f4f0e6;
+    stroke-width: 0.6px;
+}
+
+.chess-dot {
+    fill: rgba(30, 30, 30, 0.32);
+}
+
+.chess-capture {
+    fill: none;
+    stroke: rgba(229, 72, 77, 0.8);
+    stroke-width: 4;
+}
+
+.chess-veil {
+    fill: rgba(0, 0, 0, 0.55);
+}
+
+.chess-ask {
+    fill: #3b3228;
+}
+
+.chess-choice {
+    fill: #d9c29a;
+    cursor: pointer;
+}
 /* --- Buttons and the level switch ------------------------------------------- */
 .games-seg {
     display: inline-flex;
