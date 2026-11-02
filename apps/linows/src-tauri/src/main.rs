@@ -3,6 +3,7 @@
 
 mod commands;
 mod consts;
+mod deck;
 mod host;
 mod launcher_hotkey;
 mod notes;
@@ -661,6 +662,8 @@ fn main() {
             commands::activate_running_app,
             commands::todo_list,
             commands::todo_save,
+            deck::deck_set,
+            deck::deck_mode,
             water::water_status,
             water::water_drink,
             notes::notes_list,

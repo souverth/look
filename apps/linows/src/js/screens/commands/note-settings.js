@@ -8,6 +8,7 @@
 //                                          a theme the user saved)
 //   note_theme_colors=--var:#hex;...       colours changed on top of the theme (theme-colors.js)
 //   note_text_size=small|normal|large      the editor and preview text
+//   note_desktop_deck=true|false           the notes deck docked to the screen edge
 //
 // A missing or unreadable value is the default, never an error: a config
 // edited by hand should not be able to break the editor. Pure, so it runs under
@@ -38,6 +39,7 @@ export const KEYS = {
     theme: 'note_editor_theme',
     size: 'note_text_size',
     colors: 'note_theme_colors',
+    deck: 'note_desktop_deck',
 };
 
 export const DEFAULTS = Object.freeze({
@@ -48,6 +50,7 @@ export const DEFAULTS = Object.freeze({
     theme: 'look',
     size: 'normal',
     colors: Object.freeze({}),
+    deck: false,
 });
 
 const oneOf = (value, allowed, fallback) => {
@@ -77,6 +80,7 @@ export function parse(entries = []) {
         theme: themeId(config.get(KEYS.theme)),
         size: oneOf(config.get(KEYS.size), SIZES, DEFAULTS.size),
         colors: decodeColors(config.get(KEYS.colors), NOTE_COLORS),
+        deck: bool(config.get(KEYS.deck), DEFAULTS.deck),
     };
 }
 

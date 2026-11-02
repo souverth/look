@@ -24,7 +24,7 @@ pub const MAX_TAGS: usize = 8;
 pub const MAX_TAG_CHARS: usize = 24;
 /// Number of colours the client's tag palette offers; picks outside it are
 /// ignored rather than stored.
-pub const TAG_PALETTE_SIZE: i64 = 10;
+pub const TAG_PALETTE_SIZE: i64 = 26;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TagColor {

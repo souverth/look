@@ -16,6 +16,7 @@ import {
     notesTemplatesList,
     themesList,
     getConfig,
+    deckSet,
 } from '../../ipc.js';
 import {
     notebook,
@@ -108,6 +109,15 @@ let current = null; // note open in the editor, or null in list view
 let mode = 'edit'; // 'edit' | 'split' | 'preview'
 let lastWritingMode = 'edit'; // what Preview returns to
 let settings = { ...noteSettings.DEFAULTS };
+
+// The desktop deck follows the setting: told only when it changes, since the
+// settings event also fires for a colour or a theme.
+let deckOn = null;
+function syncDeck(on) {
+    if (on === deckOn) return;
+    deckOn = on;
+    void deckSet(on).catch((err) => console.warn('[note] could not change the deck:', err));
+}
 let previewTimer = null;
 let saveTimer = null;
 let pendingSave = Promise.resolve();
@@ -197,10 +207,15 @@ export function init() {
     Promise.all([getConfig(), themesList('note').catch(() => [])])
         .then(([cfg, saved]) => {
             userNoteThemes = saved;
-            applySettings(noteSettings.parse(cfg.entries));
+            const loaded = noteSettings.parse(cfg.entries);
+            applySettings(loaded);
+            syncDeck(loaded.deck);
         })
         .catch((err) => console.warn('[note] could not read its settings:', err));
-    document.addEventListener('look:note-settings-changed', (e) => applySettings(e.detail));
+    document.addEventListener('look:note-settings-changed', (e) => {
+        applySettings(e.detail);
+        syncDeck(e.detail.deck);
+    });
     // A theme was saved or deleted in Settings: the list the editor reads from changed.
     document.addEventListener('look:note-themes-changed', (e) => {
         userNoteThemes = e.detail;

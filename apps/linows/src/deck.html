@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Look notes</title>
+        <link rel="stylesheet" href="css/deck.css" />
+    </head>
+    <body>
+        <div id="deck" class="deck" data-mode="pill">
+            <section id="editor" class="deck-editor" hidden>
+                <header class="deck-editor-head">
+                    <span id="ed-dot" class="deck-dot"></span>
+                    <input id="ed-title" type="text" placeholder="Title" spellcheck="false" autocomplete="off" />
+                    <button id="ed-close" type="button" title="Close (Esc)" aria-label="Close note">&times;</button>
+                </header>
+                <textarea id="ed-body" placeholder="Write something" spellcheck="false"></textarea>
+                <footer class="deck-editor-foot">
+                    <span id="ed-tags" class="deck-tags"></span>
+                    <span id="ed-status" class="deck-status"></span>
+                </footer>
+            </section>
+            <aside id="rail" class="deck-rail">
+                <div id="pill" class="deck-pill"></div>
+                <div id="list" class="deck-list" hidden>
+                    <div class="deck-list-head">
+                        <span class="deck-list-title">Notes</span>
+                        <button id="new-note" type="button" title="New note" aria-label="New note">+</button>
+                    </div>
+                    <div id="tiles" class="deck-tiles"></div>
+                </div>
+            </aside>
+        </div>
+        <script type="module" src="js/deck.js"></script>
+    </body>
+</html>

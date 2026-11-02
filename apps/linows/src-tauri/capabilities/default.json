@@ -1,7 +1,7 @@
 {
   "identifier": "default",
   "description": "Default capabilities for Look",
-  "windows": ["main"],
+  "windows": ["main", "deck"],
   "permissions": [
     "core:default",
     "core:event:default",

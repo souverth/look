@@ -270,7 +270,8 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    width: 188px;
+    /* Eight to a row: 26 colours in four rows rather than a tall column. */
+    width: 266px;
     padding: 8px;
     background: var(--overlay-surface);
     border: 1px solid var(--divider-color);

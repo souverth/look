@@ -463,6 +463,17 @@ export async function notesSetTagColor(tag, color) {
     return invoke('notes_set_tag_color', { tag, color });
 }
 
+// The notes deck: a window docked to the screen edge. `deckSet` shows or hides
+// it; `deckMode` is 'pill' (the thin strip), 'list' (notes fanned out) or
+// 'note' (one open beside the list).
+export async function deckSet(enabled) {
+    return invoke('deck_set', { enabled });
+}
+
+export async function deckMode(mode) {
+    return invoke('deck_mode', { mode });
+}
+
 // Water widget: glasses today and whether one is overdue. `glasses` is +1 for a
 // drink, -1 to take one back.
 export async function waterStatus() {
