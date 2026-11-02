@@ -31,6 +31,78 @@ const VARIANT_NAME = { go: 'Cờ vây', atari: 'Atari Go', gomoku: 'Ngũ tử' }
 const SIZES = go.SIZES;
 const SIDES = ['first', 'second', 'random'];
 
+// --- How to play ---------------------------------------------------------------
+
+const list = (items) => `<ul>${items.map((item) => `<li>${item}</li>`).join('')}</ul>`;
+const part = (title, body) => `<h4>${title}</h4>${body}`;
+const para = (text) => `<p>${text}</p>`;
+
+const CHESS_PIECES = list([
+    '<b>King</b>: one step any way, never onto an attacked square.',
+    '<b>Queen</b>: any distance along a line or a diagonal.',
+    '<b>Rook</b>: any distance along a rank or a file.',
+    '<b>Bishop</b>: any distance on a diagonal.',
+    '<b>Knight</b>: an L, two squares then one. It is the only piece that jumps.',
+    '<b>Pawn</b>: one step forward (two from its start), and it takes one step diagonally forward.',
+]);
+
+const XIANGQI_PIECES = list([
+    '<b>General</b> 帥 將: one step along a line, inside its palace. The two generals may never face each other on an open file.',
+    '<b>Advisor</b> 仕 士: one step diagonally, inside the palace.',
+    '<b>Elephant</b> 相 象: two steps diagonally; it cannot jump (the point between must be empty) and cannot cross the river.',
+    '<b>Horse</b> 傌 馬: one step along a line, then one diagonally outward. It is blocked if the first point is occupied.',
+    '<b>Chariot</b> 俥 車: any distance along a line.',
+    '<b>Cannon</b> 炮 砲: moves like a chariot, but takes by jumping over exactly one piece.',
+    '<b>Soldier</b> 兵 卒: one step forward; after crossing the river it may also step sideways. Never backward.',
+]);
+
+/** The rules and the controls of a game, as HTML. Go shows only the way to play that is chosen. */
+export function rulesFor(game) {
+    if (game === 'caro') {
+        return (
+            part('Goal', para('Be the first to line up <b>five or more</b> of your marks in an unbroken row: across, down or diagonally.')) +
+            part('How', list(['X goes first, then you take turns. Click a square to put your mark in it. Marks never move or come off.', 'It is played in the squares, not on the crossings.'])) +
+            part('Tips', list(['Three in a row with both ends free (an open three) becomes an open four, which cannot be stopped. Block it early.', 'Look for a move that makes two threats at once: the bot can only answer one.']))
+        );
+    }
+    if (game === 'xiangqi') {
+        return (
+            part('Goal', para('Checkmate the other general: attack it so that it cannot escape. A side with no move at all also loses. Red moves first.')) +
+            part('Pieces', XIANGQI_PIECES) +
+            part('Playing', list(['Click one of your pieces to see where it may go: a dot is a free point, a red ring is a capture.', 'A red glow marks a general in check. You may not leave your own general attacked.', 'Perpetual check and repetition are not judged here.']))
+        );
+    }
+    if (game === 'chess') {
+        return (
+            part('Goal', para('Checkmate the other king: attack it so that it cannot escape. White moves first.')) +
+            part('Pieces', CHESS_PIECES) +
+            part('Special moves', list(['<b>Castling</b>: the king goes two steps toward a rook and the rook hops over it. Neither may have moved, nothing may stand between them, and the king may not be in, pass through or land in check.', '<b>En passant</b>: a pawn that has just advanced two squares may be taken by an adjacent pawn as if it had advanced one, but only on the very next move.', '<b>Promotion</b>: a pawn that reaches the far rank becomes a queen, rook, bishop or knight. You are asked which.'])) +
+            part('Draws', para('Stalemate (no legal move but not in check), the same position three times, fifty moves with no capture or pawn move, or too few pieces left to mate.')) +
+            part('Playing', list(['Click a piece to see its moves: a dot is a free square, a ring is a capture. Click a square to move.', 'The king glows red when in check.']))
+        );
+    }
+    // Go and its variants
+    if (variant === 'atari') {
+        return (
+            part('Goal', para('<b>Capture a stone first.</b> Atari Go is Go with one rule changed: the first player to take a stone wins, and nobody passes.')) +
+            part('How', list(['Black plays first. Take turns placing a stone on an empty crossing. Stones never move.', 'A stone\'s <b>liberties</b> are the empty points next to it; connected stones of one colour share them. A group with no liberties is captured.', '"Atari" is the warning that a group has one liberty left. Get the other side\'s groups into atari, and keep yours out of it.', 'A stone with no liberties may not be played unless it captures something, and a single stone may not be retaken at once if that repeats the position (ko).']))
+        );
+    }
+    if (variant === 'gomoku') {
+        return (
+            part('Goal', para('Be the first to line up <b>five or more</b> stones in an unbroken row: across, down or diagonally. This is caro played on the crossings of a Go board, with Go stones (ngũ tử, gomoku).')) +
+            part('How', list(['Black plays first, then you take turns. Click a crossing to place a stone. Stones never move or get captured.', 'The board is always 15 × 15.'])) +
+            part('Tips', list(['An open three (three with both ends free) becomes an unstoppable open four. Block it early.', 'Make two threats at once.']))
+        );
+    }
+    return (
+        part('Goal', para('Control more of the board than your opponent, by surrounding empty points and capturing stones.')) +
+        part('How', list(['Black plays first. Take turns placing a stone on an empty crossing. Stones never move.', 'A stone\'s <b>liberties</b> are the empty points next to it; connected stones of one colour share them. A group with no liberties is captured and taken off the board.', 'You may not play a stone that would have no liberties, unless it captures something.', '<b>Ko</b>: you may not at once retake a single stone if that repeats the position. Play elsewhere first.', 'Pass (<kbd>P</kbd>) when nothing is worth playing. The game ends when both players pass.'])) +
+        part('Counting', para('By area: your stones plus the empty points only you surround, with komi (7 on 9 × 9, 7.5 on the bigger boards) added for White. Dead stones are found by playing the position out many times at random, so a close or unusual position can be misjudged.')) +
+        part('Tips', list(['A group with two separate eyes cannot be captured.', 'Start near the corners and the edges, where territory is cheapest to claim.']))
+    );
+}
+
 /** What "first" and "second" are called in a game. */
 function sideLabels(game) {
     const names = {
@@ -60,6 +132,7 @@ let boardSize = 9; // the Go board's size (ngũ tử is always 15)
 let turnFoe = false; // xiangqi: write the other player's pieces facing them, as on a real board
 let second = false; // the human plays second in the game now being set up
 let session = null; // the game in progress
+let showRules = false; // the menu is showing how to play the selected game
 let token = 0; // bumped when a game ends or restarts, so a late bot reply is dropped
 
 // --- What is remembered between runs: each game's own settings ------------------
@@ -135,6 +208,10 @@ export function init() {
     document.getElementById('games-back').addEventListener('click', () => showMenu());
     document.getElementById('games-new').addEventListener('click', () => newGame());
     document.getElementById('games-undo').addEventListener('click', () => undo());
+    document.getElementById('games-help').addEventListener('click', () => toggleHowTo());
+    document.getElementById('games-howto').addEventListener('click', (e) => {
+        if (e.target.closest('[data-close]')) closeHowTo();
+    });
     document.getElementById('games-pass').addEventListener('click', () => session?.pass?.());
     document.getElementById('games-resign').addEventListener('click', () => session?.resign?.());
     document.getElementById('games-level').addEventListener('click', (e) => {
@@ -170,6 +247,7 @@ export function handleKey(e) {
             ArrowLeft: () => choose(ORDER[(at + ORDER.length - 1) % ORDER.length]),
             ArrowUp: () => choose(ORDER[(at + ORDER.length - 1) % ORDER.length]),
             Enter: () => start(),
+            h: () => toggleRules(),
             l: () => setLevel(LEVELS[(LEVELS.indexOf(level) + 1) % LEVELS.length]),
             s: () => setSide(SIDES[(SIDES.indexOf(side) + 1) % SIDES.length]),
         };
@@ -185,7 +263,12 @@ export function handleKey(e) {
         return true;
     }
     if (key === 'Escape') {
-        showMenu();
+        // The help over the board goes first; a second Esc leaves the game.
+        if (!closeHowTo()) showMenu();
+        return true;
+    }
+    if (key === 'h') {
+        toggleHowTo();
         return true;
     }
     if (key === 'n') {
@@ -262,8 +345,33 @@ function renderMenu() {
         `<div class="games-detail-head"><strong>${GAMES[selected].name}</strong><span>${GAMES[selected].blurb}</span></div>` +
         `<div class="games-options">${rows.join('')}</div>` +
         `<div class="games-detail-foot"><button type="button" class="games-btn games-btn-primary" data-start>Play <kbd>Enter</kbd></button>` +
-        `<span class="games-hint"><kbd>←</kbd> <kbd>→</kbd> choose a game. In a game: <kbd>N</kbd> new, <kbd>U</kbd> undo, <kbd>Esc</kbd> back</span></div>` +
+        `<button type="button" class="games-btn${showRules ? ' is-on' : ''}" data-rules aria-expanded="${showRules}">How to play <kbd>H</kbd></button>` +
+        `<span class="games-hint"><kbd>←</kbd> <kbd>→</kbd> choose a game. In a game: <kbd>N</kbd> new, <kbd>U</kbd> undo, <kbd>H</kbd> help, <kbd>Esc</kbd> back</span></div>` +
+        (showRules ? `<div class="games-rules">${rulesFor(selected)}</div>` : '') +
         `</div>`;
+}
+
+function toggleRules() {
+    showRules = !showRules;
+    renderMenu();
+}
+
+/** The rules laid over the board, to look something up without leaving the game. */
+function toggleHowTo() {
+    const howto = document.getElementById('games-howto');
+    howto.hidden = !howto.hidden;
+    boardEl.hidden = !howto.hidden; // the rules stand in for the board while open
+    if (!howto.hidden) {
+        howto.innerHTML = `<button type="button" class="games-btn" data-close>Close <kbd>H</kbd></button>${rulesFor(view)}`;
+    }
+}
+
+function closeHowTo() {
+    const howto = document.getElementById('games-howto');
+    const wasOpen = !howto.hidden;
+    howto.hidden = true;
+    boardEl.hidden = false;
+    return wasOpen;
 }
 
 function choose(id) {
@@ -279,6 +387,7 @@ function onMenuClick(e) {
     const card = e.target.closest('[data-game]');
     if (card) return choose(card.dataset.game);
     if (e.target.closest('[data-start]')) return start();
+    if (e.target.closest('[data-rules]')) return toggleRules();
     const piecesButton = e.target.closest('[data-pieces]');
     if (piecesButton) return setPieces(piecesButton.dataset.pieces === 'facing');
     const variantButton = e.target.closest('[data-variant]');
@@ -341,6 +450,7 @@ function markLevel() {
 }
 
 function showMenu() {
+    closeHowTo();
     token++;
     session = null;
     view = 'menu';

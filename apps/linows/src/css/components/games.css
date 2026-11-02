@@ -139,6 +139,95 @@ kbd.games-key,
     font-size: calc(var(--font-size) - 2px);
 }
 
+/* --- How to play ---------------------------------------------------------------- */
+.games-rules {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--divider-color);
+    font-size: calc(var(--font-size) - 1px);
+    line-height: 1.5;
+    color: var(--font-secondary);
+}
+
+.games-rules h4 {
+    margin: 12px 0 4px;
+    font-size: calc(var(--font-size) - 1px);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--font-muted);
+}
+
+.games-rules h4:first-child {
+    margin-top: 0;
+}
+
+.games-rules p {
+    margin: 0;
+}
+
+.games-rules ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.games-rules li + li {
+    margin-top: 3px;
+}
+
+.games-rules b {
+    color: var(--font-color);
+}
+
+.games-rules kbd {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    border: 1px solid var(--divider-color);
+    border-radius: 4px;
+    background: var(--control-fill);
+    font-family: inherit;
+    font-size: calc(var(--font-size) - 3px);
+    text-align: center;
+}
+
+.games-btn.is-on {
+    border-color: var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 16%, var(--control-fill));
+}
+
+.games-btn kbd {
+    margin-left: 4px;
+    padding: 0 4px;
+    border: 1px solid var(--divider-color);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: calc(var(--font-size) - 3px);
+    opacity: 0.8;
+}
+
+/* The rules take the place of the board while they are open. */
+.games-howto {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding: 14px 18px;
+    overflow-y: auto;
+    border: 1px solid var(--divider-color);
+    border-radius: var(--bar-radius);
+    background: var(--control-fill);
+}
+
+.games-board[hidden] {
+    display: none;
+}
+.games-howto[hidden] {
+    display: none;
+}
+
+.games-howto > .games-btn {
+    float: right;
+    margin: 0 0 8px 12px;
+}
 /* --- Cờ vua -------------------------------------------------------------------- */
 .chess-frame {
     fill: #5b4a36;
