@@ -329,17 +329,54 @@ mod winbt {
         } else {
             BLUETOOTH_SERVICE_DISABLE
         };
-        let mut any = false;
-        for guid in &guids {
-            if unsafe { BluetoothSetServiceState(Some(radio), info, guid, flag) } == ERROR_SUCCESS.0
-            {
-                any = true;
+        let (changed, mut codes) = set_all(radio, info, &guids, flag);
+        if changed > 0 {
+            return Ok(());
+        }
+        // A device Windows lists as paired but refuses every enable is usually
+        // stuck half-open after a drop or a sleep. Switching its services off and
+        // on again is what the Settings page does when it reconnects it.
+        if connect {
+            set_all(radio, info, &guids, BLUETOOTH_SERVICE_DISABLE);
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            let (changed, retry) = set_all(radio, info, &guids, BLUETOOTH_SERVICE_ENABLE);
+            if changed > 0 {
+                return Ok(());
+            }
+            codes = retry;
+        }
+        codes.sort_unstable();
+        codes.dedup();
+        let code = codes
+            .first()
+            .map(|c| format!(" (error {c})"))
+            .unwrap_or_default();
+        Err(if connect {
+            format!(
+                "Windows could not connect{code}. Check the device is on, in range and not \
+                 connected to something else"
+            )
+        } else {
+            format!("Windows could not disconnect{code}")
+        })
+    }
+
+    /// Applies `flag` to every service; how many took it, and the codes of the
+    /// ones that did not.
+    fn set_all(
+        radio: HANDLE,
+        info: &BLUETOOTH_DEVICE_INFO,
+        guids: &[GUID],
+        flag: u32,
+    ) -> (usize, Vec<u32>) {
+        let mut changed = 0;
+        let mut codes = Vec::new();
+        for guid in guids {
+            match unsafe { BluetoothSetServiceState(Some(radio), info, guid, flag) } {
+                code if code == ERROR_SUCCESS.0 => changed += 1,
+                code => codes.push(code),
             }
         }
-        if any {
-            Ok(())
-        } else {
-            Err("Windows could not change the connection".to_string())
-        }
+        (changed, codes)
     }
 }
