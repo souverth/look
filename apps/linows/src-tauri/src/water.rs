@@ -293,7 +293,10 @@ mod tests {
             ..Stored::default()
         };
         assert_eq!(s.goal, 0, "the default sets no goal");
-        assert!(at(&s, START + 5 * 3600, 13).due, "still asks after 20 glasses");
+        assert!(
+            at(&s, START + 5 * 3600, 13).due,
+            "still asks after 20 glasses"
+        );
     }
 
     #[test]

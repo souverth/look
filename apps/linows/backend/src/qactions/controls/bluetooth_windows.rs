@@ -377,7 +377,9 @@ mod winbt {
         // target and controller, HID.
         [0x110B, 0x1108, 0x111E, 0x110C, 0x110E, 0x1124]
             .into_iter()
-            .map(|short: u32| GUID::from_u128((u128::from(short) << 96) | 0x1000_8000_00805F9B34FB))
+            .map(|short: u32| {
+                GUID::from_u128((u128::from(short) << 96) | 0x1000_8000_0080_5F9B_34FB)
+            })
             .collect()
     }
 
