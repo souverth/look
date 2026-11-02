@@ -868,7 +868,11 @@ pub fn list_windows(query: String, limit: usize) -> Vec<backend::process::Window
     backend::process::list_windows(query, limit)
 }
 #[tauri::command]
-pub fn todo_search(query: String, since: String, limit: usize) -> Result<Vec<backend::look_todo::TodoHit>, String> {
+pub fn todo_search(
+    query: String,
+    since: String,
+    limit: usize,
+) -> Result<Vec<backend::look_todo::TodoHit>, String> {
     backend::todo::todo_search(query, since, limit)
 }
 

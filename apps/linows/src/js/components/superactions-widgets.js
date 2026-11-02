@@ -53,6 +53,16 @@ export function watchWater(fn) {
     });
 }
 
+/** Takes a glass back, for a press that should not have counted. */
+function undoWater() {
+    void waterDrink(-1)
+        .then((status) => {
+            water = status;
+            onWater?.();
+        })
+        .catch((err) => console.error('[water] undo failed:', err));
+}
+
 function drinkWater() {
     void waterDrink(1)
         .then((status) => {
@@ -77,9 +87,14 @@ function clockOf(seconds) {
     return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+/** "09:00": the time of day a unix time falls on. */
+const timeOf = (unixS) => new Date(unixS * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
 const waterCaption = (w) => {
     if (goalMet(w)) return 'Goal reached';
     if (w.due) return 'Time to drink';
+    // Outside the hours there is no countdown to run, only a time to wait for.
+    if (w.quiet && w.next_unix_s) return `Resting, next glass ${timeOf(w.next_unix_s)}`;
     const left = secondsToNext(w);
     return left === null ? 'Press to log a glass' : `Next glass in ${clockOf(left)}`;
 };
@@ -147,11 +162,23 @@ const WIDGETS = {
             if (!water) return { value: '--', caption: 'Water', lines: [] };
             const goal = water.goal;
             const left = secondsToNext(water);
+            // The rail along the foot counts down: full just after a glass, empty when the next is due.
+            const span = water.interval_min * 60;
+            const remaining = left === null || water.quiet ? null : water.due ? 0 : Math.min(1, left / span);
+            const chip = water.due
+                ? 'NOW'
+                : left === null
+                  ? ''
+                  : water.quiet
+                    ? timeOf(water.next_unix_s)
+                    : clockOf(left);
             return {
+                progress: remaining,
+                undo: water.count > 0,
                 // With no goal the count just runs on.
                 value: goal ? `${water.count}/${goal}` : String(water.count),
                 // One cell has no line for the caption, so the countdown rides on the chip.
-                unit: shape === 'compact' ? (water.due ? 'NOW' : left === null ? '' : clockOf(left)) : '',
+                unit: shape === 'compact' ? chip : '',
                 caption: waterCaption(water),
                 active: goalMet(water),
                 // The level follows the goal; with none it rests part-full once a glass is in.
@@ -168,6 +195,8 @@ const WIDGETS = {
             };
         },
         press: drinkWater,
+        // The small minus on the tile.
+        secondary: undoWater,
     },
 
     todo: {
@@ -292,6 +321,11 @@ export async function read(id, shape) {
         console.error(`[widget ${id}]`, err);
         return { value: '--', caption: 'Unavailable', lines: [] };
     }
+}
+
+/** Runs the widget's second action (the minus on Water), if it has one. */
+export function secondary(id) {
+    WIDGETS[id]?.secondary?.();
 }
 
 /** Runs the widget's press; false when it has none (a read-only widget). */

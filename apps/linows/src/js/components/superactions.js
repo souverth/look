@@ -1370,6 +1370,25 @@ function buildWidget(tile) {
     liquid.className = 'ctl-liquid';
     liquid.innerHTML = '<span class="ctl-liquid-body"><i class="ctl-wave"></i><i class="ctl-wave ctl-wave--back"></i></span>';
     el.appendChild(liquid);
+    // A second action some widgets have (Water: take a glass back). Shown only
+    // while the reading says there is something to undo.
+    const undo = document.createElement('button');
+    undo.type = 'button';
+    undo.className = 'ctl-undo';
+    undo.hidden = true;
+    undo.title = 'Take one back';
+    undo.setAttribute('aria-label', 'Take one back');
+    undo.textContent = '−';
+    // The tile itself presses on these; the minus must not.
+    for (const type of ['pointerdown', 'mousedown', 'mouseup']) {
+        undo.addEventListener(type, (e) => e.stopPropagation());
+    }
+    undo.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        widgets.secondary(tile.action_id);
+    });
+    el.appendChild(undo);
     // One cell shows the headline; a wide row adds a one-line summary; a tall
     // tile adds the caption and a short list.
     const shape = tile.row_span > 1 ? 'tall' : tile.col_span > 1 ? 'wide' : 'compact';
@@ -1395,10 +1414,6 @@ function buildWidget(tile) {
         el.appendChild(icon);
         el.appendChild(text);
     }
-    // Quota bars (the Agents widget) live in their own block, below the headline.
-    const bars = document.createElement('span');
-    bars.className = 'ctl-bars';
-    if (roomy) text.appendChild(bars);
     // A thin rail along the tile's foot: how far along (a list, a session, a quota).
     const rail = document.createElement('span');
     rail.className = 'ctl-progress';
@@ -1415,10 +1430,9 @@ function buildWidget(tile) {
         valueEl: text.querySelector('.ctl-value'),
         captionEl: text.querySelector('.ctl-custom-caption'),
         linesEl: text.querySelector('.ctl-custom-lines'),
-        barsEl: roomy ? bars : null,
         railEl: rail,
         liquidEl: liquid,
-        cols: tile.col_span,
+        undoEl: undo,
     });
     bindActionable(el, tile);
     return el;
@@ -1426,22 +1440,14 @@ function buildWidget(tile) {
 
 function applyReading(id, w, r) {
     if (!r) return;
-    // The headline, with the unit that says what the number is ("5h", "Week").
+    // The headline, with the unit that says what the number is ("42:15" until the next glass).
     w.valueEl.textContent = r.value ?? '--';
     if (r.unit) {
         const unit = document.createElement('small');
         unit.className = 'ctl-unit';
-        if (r.unitIcon) {
-            const mark = document.createElement('span');
-            mark.innerHTML = r.unitIcon; // our own SVG
-            if (mark.firstElementChild) unit.appendChild(mark.firstElementChild);
-        }
         unit.appendChild(document.createTextNode(r.unit));
         w.valueEl.appendChild(unit);
     }
-    w.el.classList.toggle('has-bars', Boolean(r.hideValue && w.barsEl));
-    // A tile two or more columns wide has room for each bar's reset time.
-    w.el.classList.toggle('has-cols', w.cols > 1);
     const has = typeof r.progress === 'number';
     w.railEl.classList.toggle('is-on', has);
     if (has) w.railEl.firstElementChild.style.width = `${Math.round(Math.max(0, Math.min(1, r.progress)) * 100)}%`;
@@ -1449,11 +1455,11 @@ function applyReading(id, w, r) {
     w.el.classList.toggle('has-liquid', filled);
     if (filled) w.el.style.setProperty('--fill', `${Math.round(Math.max(0, Math.min(1, r.fill)) * 100)}%`);
     w.el.classList.toggle('is-due', Boolean(r.due));
+    w.undoEl.hidden = !r.undo;
     if (r.splash && !w.el.classList.contains('is-splash')) {
         w.el.classList.add('is-splash');
         setTimeout(() => w.el.classList.remove('is-splash'), 900);
     }
-    if (w.barsEl) w.barsEl.replaceChildren(...(r.bars || []).map(barRow));
     if (w.captionEl) w.captionEl.textContent = r.caption ?? '';
     if (w.linesEl) {
         w.linesEl.replaceChildren(
@@ -1469,59 +1475,6 @@ function applyReading(id, w, r) {
     w.el.classList.toggle('is-warn', r.tone === 'warn');
     w.el.classList.toggle('is-danger', r.tone === 'danger');
     w.el.title = r.caption ? `${w.title}: ${r.caption}` : w.title;
-}
-
-// One row of the quota block: a heading (the agent) or a labelled bar.
-function barRow(b) {
-    const row = document.createElement('span');
-    if (b.heading) {
-        row.className = 'ctl-bars-head';
-        if (b.logo) {
-            const logo = document.createElement('span');
-            logo.innerHTML = b.logo; // our own SVG
-            row.appendChild(logo.firstElementChild);
-        }
-        const name = document.createElement('span');
-        name.className = 'ctl-bars-name';
-        name.textContent = b.heading;
-        row.appendChild(name);
-        if (b.badge) {
-            const badge = document.createElement('span');
-            badge.className = `ctl-source is-${b.badge.toLowerCase()}`;
-            badge.textContent = b.badge;
-            row.appendChild(badge);
-        }
-        return row;
-    }
-    row.className = `ctl-bar-row${b.tone ? ` is-${b.tone}` : ''}`;
-    if (b.title) row.title = b.title;
-    const label = document.createElement('span');
-    label.className = 'ctl-bar-label';
-    label.textContent = b.label;
-    row.appendChild(label);
-    if (b.text) {
-        const text = document.createElement('span');
-        text.className = 'ctl-bar-text';
-        text.textContent = b.text;
-        row.appendChild(text);
-        return row;
-    }
-    const track = document.createElement('span');
-    track.className = 'ctl-bar';
-    const fill = document.createElement('i');
-    fill.style.width = `${Math.max(3, Math.min(100, b.percent))}%`;
-    track.appendChild(fill);
-    const pct = document.createElement('span');
-    pct.className = 'ctl-bar-pct';
-    pct.textContent = `${b.percent}%`;
-    row.append(track, pct);
-    if (b.reset) {
-        const reset = document.createElement('span');
-        reset.className = 'ctl-bar-reset';
-        reset.textContent = b.reset;
-        row.appendChild(reset);
-    }
-    return row;
 }
 
 // Re-read the widgets (all, or the named ones).

@@ -5,10 +5,10 @@ mod commands;
 mod consts;
 mod host;
 mod launcher_hotkey;
-mod notes;
 mod note_assets;
-mod snippets;
+mod notes;
 mod pickers;
+mod snippets;
 mod water;
 mod window;
 
@@ -663,6 +663,8 @@ fn main() {
             commands::todo_save,
             water::water_status,
             water::water_drink,
+            water::water_config,
+            water::water_configure,
             notes::notes_list,
             snippets::snippets_search,
             snippets::snippets_expand,

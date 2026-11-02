@@ -605,6 +605,9 @@ mod tests {
         assert!(found.is_empty(), "{found:?}");
     }
 
+    // The next four name `awk`, `sed`, `mkdir`, `cat` and `touch` as programs that
+    // are installed, which only a Unix PATH promises.
+    #[cfg(unix)]
     #[test]
     fn a_path_argument_of_a_command_is_checked_too() {
         let home = TempDir::new("run-path");
@@ -665,6 +668,7 @@ mod tests {
         assert_eq!(marks, [false, true, false]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn nothing_is_missing_while_one_fallback_runs() {
         let home = TempDir::new("fallback");
@@ -715,6 +719,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_creating_step_does_not_report_the_path_it_creates() {
         let home = TempDir::new("creator");
@@ -741,6 +746,7 @@ mod tests {
         assert!(found.is_empty(), "{found:?}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_row_placeholder_is_never_checked() {
         let home = TempDir::new("placeholder");

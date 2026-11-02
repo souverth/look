@@ -934,6 +934,40 @@
                     </div>
                 </div>
 
+                <div class="settings-divider"></div>
+
+                <!-- The Water widget's reminder (components/watersettings.js) -->
+                <div class="settings-section-header">
+                    <span class="settings-section-arrow">&#9654;</span><span>Water Reminder</span>
+                    <span class="settings-hint-text">For the Water widget on the Super Actions strip</span>
+                </div>
+                <div class="settings-section" id="settings-water">
+                    <div class="settings-row" title="Send a system notification when a glass is due. Off still counts glasses">
+                        <label class="settings-label">Notify me</label>
+                        <label class="settings-toggle">
+                            <input type="checkbox" id="settings-water-reminders" aria-label="Water reminders" checked />
+                            <span class="settings-toggle-track"></span>
+                        </label>
+                    </div>
+                    <div class="settings-row" title="Glasses a day to aim for. 0 sets no goal: the count just runs on">
+                        <label class="settings-label">Daily goal</label>
+                        <input type="number" class="settings-text-input settings-number-input" id="settings-water-goal" min="0" max="100" step="1" />
+                        <span class="settings-hint-text">glasses, 0 for no goal</span>
+                    </div>
+                    <div class="settings-row" title="How long after a glass the next one is due, and between reminders">
+                        <label class="settings-label">Remind every</label>
+                        <input type="number" class="settings-text-input settings-number-input" id="settings-water-interval" min="1" max="720" step="1" />
+                        <span class="settings-hint-text">minutes</span>
+                    </div>
+                    <div class="settings-row" title="Reminders only come between these hours (24-hour clock)">
+                        <label class="settings-label">Active from</label>
+                        <input type="number" class="settings-text-input settings-number-input" id="settings-water-start" min="0" max="23" step="1" />
+                        <label class="settings-label settings-label-inline">to</label>
+                        <input type="number" class="settings-text-input settings-number-input" id="settings-water-end" min="1" max="24" step="1" />
+                        <span class="settings-hint-text">o'clock</span>
+                    </div>
+                </div>
+
                 <!-- About / update status. Advanced tab only, at the bottom of its
              scroll area - matches macOS (ThemeSettingsView+Advanced
              aboutSection). -->

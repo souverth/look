@@ -22,6 +22,7 @@ import { layoutGrid } from '../icons.js';
 import * as shortcutrecorder from '../components/shortcutrecorder.js';
 import * as shortcuts from '../shortcuts.js';
 import * as notesettings from '../components/notesettings.js';
+import * as watersettings from '../components/watersettings.js';
 import * as lookthemes from '../components/lookthemes.js';
 import * as noteSettings from './commands/note-settings.js';
 import {
@@ -235,6 +236,7 @@ export function init(exitFn) {
     screen = document.getElementById('settings-screen');
     shortcutrecorder.init(screen);
     notesettings.init(screen);
+    watersettings.init(screen);
     lookthemes.init(screen, lookHost());
     hydrateDefaults();
 
@@ -1099,6 +1101,7 @@ async function loadConfig() {
         for (const entry of cfg.entries) map[entry.key] = entry.value;
 
         notesettings.populate(map);
+        void watersettings.populate();
 
         // Theme dropdown (custom)
         setThemeDropdown(resolveThemeId(map));

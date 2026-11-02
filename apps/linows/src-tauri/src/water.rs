@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+#[cfg(not(windows))]
 use tauri_plugin_notification::NotificationExt;
 
 const EVENT_CHANGED: &str = "water-changed";
@@ -72,8 +73,11 @@ pub struct Status {
     /// A glass is overdue and the goal is not met.
     pub due: bool,
     /// When the next glass is expected, or 0 when no reminder is pending
-    /// (goal met, reminders off, or outside the active hours).
+    /// (goal met, or reminders off).
     pub next_unix_s: i64,
+    /// Outside the active hours: `next_unix_s` is then the first glass after
+    /// they open, and nothing is due until then.
+    pub quiet: bool,
 }
 
 /// The moment being judged, split out so the rules can be tested.
@@ -116,18 +120,33 @@ fn roll_over(s: &mut Stored, clock: &Clock) {
 fn evaluate(s: &Stored, clock: &Clock, started: i64) -> Status {
     let window_start = clock.midnight + i64::from(s.start_hour) * 3600;
     let interval = i64::from(s.interval_min.max(1)) * 60;
+    let window_end = clock.midnight + i64::from(s.end_hour) * 3600;
     let in_window = (s.start_hour..s.end_hour).contains(&clock.hour);
-    let pending = s.reminders && in_window && (s.goal == 0 || s.count < s.goal);
+    let wanted = s.reminders && (s.goal == 0 || s.count < s.goal);
     // The wait counts from the last glass, or from the start of the day's
     // window (or of this run, if later) when none has been drunk yet.
     let anchor = s.last_drink_unix_s.max(window_start).max(started);
-    let next = anchor + interval;
+    let mut next = anchor + interval;
+    // Outside the hours, or a wait that would only end after they close, the
+    // next glass is the first one once they open: this morning if it has not
+    // yet, otherwise tomorrow's. The tile counts down to that rather than
+    // showing nothing, and nothing is due before it.
+    let quiet = wanted && (!in_window || next >= window_end);
+    if quiet {
+        let opening = if clock.hour < s.start_hour {
+            window_start
+        } else {
+            window_start + 86_400
+        };
+        next = opening + interval;
+    }
     Status {
         count: s.count,
         goal: s.goal,
         interval_min: s.interval_min,
-        due: pending && clock.now >= next,
-        next_unix_s: if pending { next } else { 0 },
+        due: wanted && !quiet && clock.now >= next,
+        next_unix_s: if wanted { next } else { 0 },
+        quiet,
     }
 }
 
@@ -168,6 +187,65 @@ pub fn water_status() -> Status {
     status_of(&load(&clock), &clock)
 }
 
+/// What Settings edits: the part of the file that is a choice, not a count.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Config {
+    pub reminders: bool,
+    pub goal: u32,
+    pub interval_min: u32,
+    pub start_hour: u32,
+    pub end_hour: u32,
+}
+
+impl Config {
+    fn of(s: &Stored) -> Self {
+        Self {
+            reminders: s.reminders,
+            goal: s.goal,
+            interval_min: s.interval_min,
+            start_hour: s.start_hour,
+            end_hour: s.end_hour,
+        }
+    }
+
+    /// Brought into range rather than refused: a box that holds `99999` or an
+    /// end hour before the start should still leave something that works.
+    fn clamped(mut self) -> Self {
+        self.goal = self.goal.min(MAX_GOAL);
+        self.interval_min = self.interval_min.clamp(1, MAX_INTERVAL_MIN);
+        self.start_hour = self.start_hour.min(23);
+        self.end_hour = self.end_hour.clamp(self.start_hour + 1, 24);
+        self
+    }
+}
+
+const MAX_GOAL: u32 = 100;
+const MAX_INTERVAL_MIN: u32 = 12 * 60;
+
+#[tauri::command]
+pub fn water_config() -> Config {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    Config::of(&load(&Clock::local()))
+}
+
+/// Saves the settings and returns them as kept (after clamping).
+#[tauri::command]
+pub fn water_configure(app: AppHandle, config: Config) -> Result<Config, String> {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let clock = Clock::local();
+    let mut s = load(&clock);
+    let kept = config.clamped();
+    s.reminders = kept.reminders;
+    s.goal = kept.goal;
+    s.interval_min = kept.interval_min;
+    s.start_hour = kept.start_hour;
+    s.end_hour = kept.end_hour;
+    save(&s)?;
+    // The tile follows at once: a new goal or interval moves its level and timer.
+    let _ = app.emit(EVENT_CHANGED, &status_of(&s, &clock));
+    Ok(kept)
+}
+
 /// Logs `glasses` (negative to take one back after a mis-tap).
 #[tauri::command]
 pub fn water_drink(app: AppHandle, glasses: i32) -> Result<Status, String> {
@@ -194,6 +272,62 @@ pub fn start(app: AppHandle) {
             remind_if_due(&app);
         }
     });
+}
+
+/// The drop shown on the notification.
+const ICON: &[u8] = include_bytes!("../../icons/water.png");
+
+/// A toast takes its picture from a file, so the one built into the app is
+/// written out beside `water.json` the first time (and again if it went missing
+/// or differs, as after an update). `None` leaves the notification with the
+/// default icon.
+fn icon_path() -> Option<String> {
+    let path = default_db_path().with_file_name("water.png");
+    let current = std::fs::read(&path).ok();
+    if current.as_deref() != Some(ICON) {
+        std::fs::write(&path, ICON).ok()?;
+    }
+    path.to_str().map(str::to_owned)
+}
+
+/// Shows a system notification with the drop beside it.
+///
+/// Windows goes to the toast library directly: the plugin takes an icon but
+/// draws none there. A toast needs an app id Windows knows; an installed Look
+/// has one, a build run from `target/` does not and borrows PowerShell's, which
+/// is why it is labelled "Windows PowerShell" until installed.
+#[cfg(windows)]
+fn notify(app: &AppHandle, title: &str, body: &str, icon: Option<&str>) -> Result<(), String> {
+    use std::path::Path;
+    use tauri_winrt_notification::{IconCrop, Toast};
+
+    let from_target = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf))
+        .is_some_and(|dir| {
+            dir.ends_with(Path::new("target").join("debug"))
+                || dir.ends_with(Path::new("target").join("release"))
+        });
+    let id = &app.config().identifier;
+    let app_id = if from_target {
+        Toast::POWERSHELL_APP_ID
+    } else {
+        id.as_str()
+    };
+    let mut toast = Toast::new(app_id).title(title).text1(body);
+    if let Some(icon) = icon {
+        toast = toast.icon(Path::new(icon), IconCrop::Square, "Water");
+    }
+    toast.show().map_err(|e| e.to_string())
+}
+
+#[cfg(not(windows))]
+fn notify(app: &AppHandle, title: &str, body: &str, icon: Option<&str>) -> Result<(), String> {
+    let mut toast = app.notification().builder().title(title).body(body);
+    if let Some(icon) = icon {
+        toast = toast.icon(icon);
+    }
+    toast.show().map_err(|e| e.to_string())
 }
 
 /// Whether the drawing in `super-actions.toml` places the Water tile. The
@@ -225,7 +359,9 @@ fn remind_if_due(app: &AppHandle) {
                 s.count, s.goal
             )
         };
-        let _ = app.notification().builder().title("Look").body(body).show();
+        if let Err(err) = notify(app, "Time to drink", &body, icon_path().as_deref()) {
+            eprintln!("[water] could not send the reminder: {err}");
+        }
         s.last_remind_unix_s = clock.now;
         let _ = save(&s);
     }
@@ -276,14 +412,86 @@ mod tests {
     #[test]
     fn nothing_is_due_outside_the_hours_or_once_the_goal_is_met() {
         let s = Stored::default();
-        assert!(!at(&s, START + 20 * 3600, 23).due, "after the window");
-        assert_eq!(at(&s, START + 20 * 3600, 23).next_unix_s, 0);
+        let late = START + 15 * 3600; // 23:00
+        let status = at(&s, late, 23);
+        assert!(!status.due, "after the window");
+        assert!(status.quiet);
+        let tomorrow = MIDNIGHT + 86_400 + 8 * 3600 + 3600;
+        assert_eq!(
+            status.next_unix_s, tomorrow,
+            "counts down to the first glass tomorrow"
+        );
         let done = Stored {
             goal: 8,
             count: 8,
             ..Stored::default()
         };
-        assert!(!at(&done, START + 5 * 3600, 13).due, "goal met");
+        let status = at(&done, START + 5 * 3600, 13);
+        assert!(!status.due, "goal met");
+        assert_eq!(
+            status.next_unix_s, 0,
+            "nothing is pending, so nothing to count down to"
+        );
+    }
+
+    #[test]
+    fn before_the_hours_open_the_first_glass_is_this_morning() {
+        let s = Stored::default();
+        let early = MIDNIGHT + 5 * 3600; // 05:00
+        let status = at(&s, early, 5);
+        assert!(status.quiet && !status.due);
+        assert_eq!(
+            status.next_unix_s,
+            START + 3600,
+            "an interval after the window opens"
+        );
+    }
+
+    #[test]
+    fn a_wait_that_would_end_after_closing_time_rests_until_morning() {
+        // A glass at 21:30 would be due at 22:30, but the hours end at 22:00.
+        let s = Stored {
+            count: 1,
+            last_drink_unix_s: MIDNIGHT + 21 * 3600 + 1800,
+            ..Stored::default()
+        };
+        let status = at(&s, MIDNIGHT + 21 * 3600 + 1900, 21);
+        assert!(status.quiet && !status.due);
+        assert_eq!(status.next_unix_s, MIDNIGHT + 86_400 + 9 * 3600);
+    }
+
+    #[test]
+    fn settings_are_brought_into_range() {
+        let wild = Config {
+            reminders: true,
+            goal: 99_999,
+            interval_min: 0,
+            start_hour: 40,
+            end_hour: 3,
+        }
+        .clamped();
+        assert_eq!(wild.goal, MAX_GOAL);
+        assert_eq!(wild.interval_min, 1);
+        assert_eq!((wild.start_hour, wild.end_hour), (23, 24));
+
+        let backwards = Config {
+            start_hour: 18,
+            end_hour: 9,
+            ..Config::of(&Stored::default())
+        }
+        .clamped();
+        assert_eq!((backwards.start_hour, backwards.end_hour), (18, 19));
+        assert_eq!(
+            Config::of(&Stored::default()).clamped(),
+            Config::of(&Stored::default()),
+            "the defaults are already in range"
+        );
+    }
+
+    #[test]
+    fn taking_a_glass_back_never_goes_below_none() {
+        assert_eq!(0u32.saturating_add_signed(-1), 0);
+        assert_eq!(3u32.saturating_add_signed(-1), 2);
     }
 
     #[test]

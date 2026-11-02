@@ -371,6 +371,16 @@ html:not([data-os="linux"]) .settings-linux-only {
     border-color: var(--accent-color);
 }
 
+.settings-number-input {
+    width: 76px;
+    text-align: right;
+}
+
+.settings-label-inline {
+    min-width: 0;
+    margin: 0 4px;
+}
+
 /* Font autocomplete */
 .settings-font-wrapper {
     position: relative;

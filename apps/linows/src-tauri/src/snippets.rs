@@ -4,8 +4,8 @@
 //! on the next keystroke with nothing to reload. The first call writes the
 //! documented seed, so the file exists for the user to open.
 
-use look_snippets::{Context, Loaded, SnippetHit};
 use linows_backend::look_engine;
+use look_snippets::{Context, Loaded, SnippetHit};
 use std::path::PathBuf;
 
 /// Overrides the location, for dotfiles kept elsewhere and for tests.

@@ -473,6 +473,16 @@ export async function waterDrink(glasses = 1) {
     return invoke('water_drink', { glasses });
 }
 
+// The Water settings: { reminders, goal (0 = none), interval_min, start_hour,
+// end_hour }. `waterConfigure` returns them as kept, brought into range.
+export async function waterConfig() {
+    return invoke('water_config');
+}
+
+export async function waterConfigure(config) {
+    return invoke('water_configure', { config });
+}
+
 export async function onWaterChanged(callback) {
     return listen('water-changed', callback);
 }
